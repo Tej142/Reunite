@@ -4,8 +4,5 @@ flask
 flask-cors
 requests
 Flask
-<<<<<<< HEAD
 gunicorn
-=======
-gunicorn
->>>>>>> 46ff5972644d05767c1c32ed8ec788fa5a3e06d2
+
