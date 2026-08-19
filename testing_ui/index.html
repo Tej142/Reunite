@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LostConnect AI Tester</title>
+
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+    <div class="container">
+
+        <h1>LostConnect AI Tester</h1>
+
+        <div class="card">
+
+
+            <label>Description</label>
+            <textarea id="description"
+                placeholder="Describe the lost item..."></textarea>
+
+            <label>Upload Image</label>
+            <input type="file" id="image" accept="image/*">
+
+            <img id="preview">
+
+            <button id="analyzeBtn">
+                Analyze
+            </button>
+
+        </div>
+
+        <div class="result">
+
+            <h2>AI Response</h2>
+
+            <pre id="output"></pre>
+
+        </div>
+
+    </div>
+
+    <script src="script.js"></script>
+
+</body>
+
+</html>
