@@ -1,0 +1,321 @@
+/* ── Signup Card Layout ──────────────────────────────── */
+.signup-container {
+  max-width: 32rem;
+  margin: 3rem auto 5rem;
+  padding: 0 1.5rem;
+}
+
+.signup-card {
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: 1.5rem;
+  padding: 2.5rem;
+  box-shadow: 0 4px 24px rgba(28, 25, 23, 0.02);
+}
+
+@media (max-width: 640px) {
+  .signup-card {
+    padding: 1.5rem;
+  }
+}
+
+/* ── Heading ────────────────────────────────────────── */
+.signup-header {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+.signup-header h1 {
+  font-size: 2rem;
+  margin: 0 0 0.5rem;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+}
+
+.signup-header h1 em {
+  font-style: normal;
+  color: var(--accent);
+}
+
+.signup-header p {
+  color: var(--muted);
+  font-size: 0.875rem;
+  margin: 0;
+}
+
+/* ── Form Fields ─────────────────────────────────────── */
+.field {
+  margin-bottom: 1.25rem;
+  position: relative;
+}
+
+.field:last-of-type {
+  margin-bottom: 0;
+}
+
+.field-group-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+@media (max-width: 480px) {
+  .field-group-2 {
+    grid-template-columns: 1fr;
+    gap: 1.25rem;
+  }
+}
+
+label {
+  display: block;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--ink);
+  margin-bottom: 0.375rem;
+  letter-spacing: -0.01em;
+}
+
+input[type=text],
+input[type=date],
+input[type=password],
+select {
+  width: 100%;
+  font-family: inherit;
+  font-size: 0.9375rem;
+  color: var(--ink);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  padding: 0.75rem 1rem;
+  outline: none;
+  transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
+}
+
+input::placeholder {
+  color: var(--muted-2);
+}
+
+/* ── Input Statuses ──────────────────────────────────── */
+input:focus,
+select:focus {
+  border-color: var(--accent);
+  background: var(--white);
+  box-shadow: 0 0 0 3px rgba(196, 98, 45, 0.08);
+  transform: scale(1.005);
+}
+
+input.invalid,
+select.invalid {
+  border-color: #EF4444;
+  background: #FFF5F5;
+}
+
+input.invalid:focus,
+select.invalid:focus {
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1);
+  transform: scale(1.005);
+}
+
+input.valid,
+select.valid {
+  border-color: #10B981;
+}
+
+/* ── Password Toggle ─────────────────────────────────── */
+.password-wrapper {
+  position: relative;
+}
+
+.password-wrapper input {
+  padding-right: 2.75rem;
+}
+
+.toggle-password-btn {
+  position: absolute;
+  top: 50%;
+  right: 0.75rem;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.25rem;
+  border-radius: 0.25rem;
+  transition: color 0.15s, transform 0.15s ease;
+}
+
+.toggle-password-btn:hover {
+  color: var(--ink);
+  transform: translateY(-50%) scale(1.1);
+}
+
+.toggle-password-btn:active {
+  transform: translateY(-50%) scale(0.9);
+}
+
+.toggle-password-btn svg {
+  width: 1.15rem;
+  height: 1.15rem;
+}
+
+/* ── Dynamic Error Message ───────────────────────────── */
+.error-msg {
+  font-size: 0.75rem;
+  color: #EF4444;
+  margin-top: 0.35rem;
+  line-height: 1.4;
+  display: none;
+  align-items: center;
+  gap: 0.25rem;
+  animation: slideInDown 0.15s ease-out;
+}
+
+.error-msg.show {
+  display: flex;
+}
+
+@keyframes slideInDown {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ── Submit & Signin Footer ──────────────────────────── */
+.form-footer {
+  margin-top: 2rem;
+  text-align: center;
+}
+
+.btn-submit {
+  width: 100%;
+  background: var(--ink);
+  color: var(--bg);
+  border: none;
+  font-family: inherit;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  padding: 0.85rem;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: opacity 0.15s, transform 0.1s, box-shadow 0.15s ease;
+}
+
+.btn-submit:hover {
+  opacity: 0.95;
+  box-shadow: 0 4px 16px rgba(28, 25, 23, 0.12);
+  transform: translateY(-1px);
+}
+
+.btn-submit:active {
+  transform: translateY(1px) scale(0.99);
+}
+
+.btn-submit:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.signin-prompt {
+  margin-top: 1.5rem;
+  font-size: 0.875rem;
+  color: var(--muted);
+}
+
+.signin-prompt a {
+  color: var(--accent);
+  text-decoration: none;
+  font-weight: 600;
+  margin-left: 0.25rem;
+  transition: color 0.15s;
+}
+
+.signin-prompt a:hover {
+  color: var(--ink);
+}
+
+/* ── Success Screen ──────────────────────────────────── */
+.success {
+  display: none;
+  text-align: center;
+  padding: 2rem 1rem;
+}
+
+.success.show {
+  display: block;
+  animation: scaleUpCard 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.success-icon {
+  width: 4rem;
+  height: 4rem;
+  border-radius: 50%;
+  background: #D1FAE5;
+  color: #065F46;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 1.5rem;
+  animation: popIcon 0.5s 0.15s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+.success h2 {
+  font-size: 1.75rem;
+  font-weight: 500;
+  margin: 0 0 0.5rem;
+  letter-spacing: -0.02em;
+}
+
+.success p {
+  color: var(--muted);
+  font-size: 0.9375rem;
+  line-height: 1.6;
+  max-width: 32ch;
+  margin: 0 auto 1.5rem;
+}
+
+.btn-home {
+  display: inline-block;
+  background: var(--ink);
+  color: var(--bg);
+  font-weight: 600;
+  font-size: 0.875rem;
+  padding: 0.75rem 2rem;
+  border-radius: 999px;
+  text-decoration: none;
+  transition: opacity 0.15s, transform 0.15s ease;
+}
+
+.btn-home:hover {
+  opacity: 0.95;
+  transform: translateY(-1px);
+}
+
+@keyframes scaleUpCard {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes popIcon {
+  from {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}

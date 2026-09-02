@@ -1,0 +1,152 @@
+### Test Home API
+
+GET http://127.0.0.1:5000
+
+
+### Test New Report API
+
+POST http://127.0.0.1:5000/new-report
+Content-Type: application/json
+
+{
+    "report_id": 101,
+    "description": "I lost my orange iPhone near the IT Lab. It has a black screen guard.",
+    "image": "sample.jpg"
+}
+
+### =========================================================
+### TEST 1
+### Vivo Y31 5G - Description + Image -> Digital DNA
+### =========================================================
+
+POST http://127.0.0.1:5000/new-report
+Content-Type: application/json
+
+{
+    "report_id": "LC-1001",
+    "description": "I lost my Vivo Y31 5G smartphone. The phone has a pinkish rose-red back panel and a triple-camera setup arranged vertically near the top-left corner. The Vivo logo is visible on the lower-left side of the back. The front display has a centered punch-hole camera. The phone was last seen near Tirupati Bus Stand.",
+    "image_path": "temp_uploads/img1 copy.jpg"
+}
+
+### =========================================================
+### TEST 1.1
+### Vivo Y31 5G - Description + Image -> Digital DNA
+### =========================================================
+
+POST http://127.0.0.1:5000/new-report
+Content-Type: application/json
+
+{
+    "report_id": "LC-1001",
+    "description": "I have lost my watch which has a scratch on it's left side of dial.",
+    "image_path": "temp_uploads/img2.jpg"
+}
+
+### =========================================================
+### TEST 1.2
+### Vivo Y31 5G - Description + Image -> Digital DNA
+### =========================================================
+
+POST http://127.0.0.1:5000/new-report
+Content-Type: application/json
+
+{
+    "report_id": "LC-1001",
+    "description": " I have lost my phone, my phone wallpaper is a samuroi with a knife, and my phone password is 9876 Last seen near Tirupati Bus Stand.",
+    "image_path": "temp_uploads/img1.2.jpg"
+}
+
+
+### =========================================================
+### TEST 2
+### Existing Digital DNAs -> Matching
+### Current DNA is retrieved from temporary storage
+### =========================================================
+
+POST http://127.0.0.1:5000/compare-report
+Content-Type: application/json
+
+{
+    "existing_dnas": [
+
+        {
+            "report_id": "LC-2001",
+            "object_type": "Smartphone",
+            "attributes": {
+                "brand": "Vivo",
+                "model": "Y31 5G",
+                "material": "Glass/Plastic",
+                "color": "Pink"
+            },
+            "location": "Railway Station",
+            "visible_features": [
+                "Dual rear camera",
+                "Vertical camera arrangement",
+                "Vivo logo on back",
+                "Centered punch-hole display"
+            ],
+            "private_features": [
+                "Small scratch near the camera module"
+            ]
+        },
+
+        {
+            "report_id": "LC-2002",
+            "object_type": "Smartphone",
+            "attributes": {
+                "brand": "Vivo",
+                "model": "Y31 5G",
+                "material": "Glass/Plastic",
+                "color": "Red"
+            },
+            "location": "Tirupati Bus Stand",
+            "visible_features": [
+                "Dual rear camera",
+                "Vertical camera arrangement",
+                "Vivo logo on back"
+            ],
+            "private_features": [
+                "Small scratch near the camera module"
+            ]
+        },
+
+        {
+            "report_id": "LC-2003",
+            "object_type": "Smartphone",
+            "attributes": {
+                "brand": "Vivo",
+                "model": "Y31 5G",
+                "material": "Glass/Plastic",
+                "color": "Black"
+            },
+            "location": "College Canteen",
+            "visible_features": [
+                "Dual rear camera",
+                "Vertical camera arrangement",
+                "Vivo logo on back"
+            ],
+            "private_features": [
+                "Blue sticker near the bottom"
+            ]
+        },
+
+        {
+            "report_id": "LC-2004",
+            "object_type": "Smartphone",
+            "attributes": {
+                "brand": "Samsung",
+                "model": "Galaxy A15",
+                "material": "Plastic",
+                "color": "Blue"
+            },
+            "location": "Railway Station",
+            "visible_features": [
+                "Triple rear camera",
+                "Samsung logo"
+            ],
+            "private_features": [
+                "Black protective case"
+            ]
+        }
+    ]
+}
