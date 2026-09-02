@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # ⚡ Reunite: AI-Powered Lost & Found Item Matchmaker
 
 **Reunite** is a modern, community-powered Lost & Found web platform integrated with a multimodal **AI Vision & Multimodal Matching Engine**. It automatically processes lost/found item descriptions and photos to extract a standardized **"Digital DNA"** of each item and calculates similarity confidence scores to match lost items with found items.
@@ -145,3 +146,7 @@ curl -X POST http://127.0.0.1:5000/new-report \
     "image_path": "AI_Module/temp_uploads/img1 copy.jpg"
   }'
 ```
+=======
+# team-project
+LOST CONNECT - AI - driven Digital DNA platform for intelligent Lost item Recovery
+>>>>>>> 3aecc700bc039ef4b242e2dc31f720c21fd9b7bb
