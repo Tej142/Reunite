@@ -3,5 +3,6 @@ python-dotenv
 flask
 flask-cors
 requests
-mistralai
+mistralai>=1.0.0
 pillow
+
