@@ -12,6 +12,9 @@
 
 <?php include 'components/nav.php'; ?>
 
+
+
+
 <main>
   <div class="header-row">
     <div>
@@ -31,7 +34,7 @@
       Select Reporting Method
     </div>
     <div class="mode-selector-grid">
-      
+      <!-- hello -->
       <!-- Option 1: Image + Description -->
       <div class="mode-card active" data-mode="mode1" id="tabMode1">
         <div class="mode-card-header">
