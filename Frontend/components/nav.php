@@ -13,7 +13,7 @@ $is_profile = ($current_page === 'profile.php');
 <script>
   // Global Flask AI Backend URL Configuration
   // Set this to your public cloud API URL (e.g. 'https://your-app.onrender.com') or tunnel URL when sharing
-  window.FLASK_BACKEND_URL = window.FLASK_BACKEND_URL || 'http://127.0.0.1:5000';
+  window.FLASK_BACKEND_URL = window.FLASK_BACKEND_URL || 'https://reunite-ai-backend.onrender.com';
 </script>
 <nav>
   <div class="nav-inner">
