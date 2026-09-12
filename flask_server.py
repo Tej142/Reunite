@@ -31,9 +31,14 @@ def new_report():
         uploaded_by_file = False
         image_path = None
 
+        where_val = ""
+        when_val = ""
+
         if request.is_json:
             data = request.get_json() or {}
             description = str(data.get("description") or "").strip()
+            where_val = str(data.get("where") or data.get("location") or "").strip()
+            when_val = str(data.get("when") or data.get("time") or "").strip()
             img_val = data.get("image_path") or data.get("image")
             if img_val:
                 candidate = Path(img_val)
@@ -47,6 +52,8 @@ def new_report():
                     image_path = Path(__file__).parent / "AI_Module" / candidate
         else:
             description = request.form.get("description", "").strip()
+            where_val = (request.form.get("where") or request.form.get("location") or "").strip()
+            when_val = (request.form.get("when") or request.form.get("time") or "").strip()
             image = request.files.get("image")
 
             if image:
@@ -72,6 +79,16 @@ def new_report():
             return jsonify(result), 400
 
         digital_dna = result.get("digital_dna", result) if isinstance(result, dict) else result
+
+        # Ensure location is populated if provided in form/meta
+        if isinstance(digital_dna, dict):
+            if not digital_dna.get("location") and where_val:
+                digital_dna["location"] = where_val
+            
+            # Ensure time/when is captured in attributes if provided
+            if when_val and "attributes" in digital_dna and isinstance(digital_dna["attributes"], dict):
+                if not digital_dna["attributes"].get("Date / Time") and not digital_dna["attributes"].get("Date/Time"):
+                    digital_dna["attributes"]["Date / Time"] = when_val
 
         # ==================================================
         # [TEMP LOG] Easy to remove later

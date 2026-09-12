@@ -4,6 +4,14 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Report a lost item — Reunite</title>
+  <script>
+    (function(){
+      var t = localStorage.getItem('reunite_theme');
+      if (t === 'dark' || (!t && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+        document.documentElement.setAttribute('data-theme', 'dark');
+      }
+    })();
+  </script>
   <link rel="stylesheet" href="css/variables.css?v=<?php echo time(); ?>" />
   <link rel="stylesheet" href="css/report-lost-item.css?v=<?php echo time(); ?>" />
   <link rel="stylesheet" href="css/reporting-modes.css?v=<?php echo time(); ?>" />
@@ -11,9 +19,6 @@
 <body>
 
 <?php include 'components/nav.php'; ?>
-
-
-
 
 <main>
   <div class="header-row">
@@ -34,7 +39,7 @@
       Select Reporting Method
     </div>
     <div class="mode-selector-grid">
-      <!-- hello -->
+      
       <!-- Option 1: Image + Description -->
       <div class="mode-card active" data-mode="mode1" id="tabMode1">
         <div class="mode-card-header">
@@ -351,9 +356,9 @@
   </div>
 </footer>
 
-<script src="js/flask-ai-service.js"></script>
-<script src="js/report-lost-item.js"></script>
-<script src="js/reporting-modes.js"></script>
+<script src="js/flask-ai-service.js?v=<?php echo time(); ?>"></script>
+<script src="js/report-lost-item.js?v=<?php echo time(); ?>"></script>
+<script src="js/reporting-modes.js?v=<?php echo time(); ?>"></script>
 
 </body>
 </html>

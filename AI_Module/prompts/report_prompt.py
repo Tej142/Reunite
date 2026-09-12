@@ -1,209 +1,55 @@
 def build_report_prompt(description: str) -> str:
     return f"""
-You are an expert AI assistant for a Smart Lost & Found System.
+You are an expert NLP Entity Extraction Specialist for a Campus Lost & Found System.
 
-Your responsibility is to understand a lost item description and convert it into structured information for generating a Digital DNA profile.
-
-Follow these rules carefully.
+Your objective is to extract structured details, attributes, locations, and identifying characteristics from the user's item report.
 
 ==================================================
-STEP 1 : Identify the Object
+GUIDELINES:
 ==================================================
+1. Identify the Object:
+   - Specific object category (e.g. "Wristwatch", "Smartphone", "Laptop", "Backpack", "Wallet", "Keys", "Earbuds", "Water Bottle").
 
-Determine the object being described.
+2. Extract All Stated & Contextual Attributes:
+   - Brand: (e.g. Apple, Titan, Casio, Wildcraft, Samsung, Fastrack, HP, Dell, Nike)
+   - Model / Line: (e.g. iPhone 13, G-Shock, MacBook Air)
+   - Primary Color: (e.g. Black, Navy Blue, Brown, Silver)
+   - Material: (e.g. Leather, Metal Chain, Steel, Fabric, Plastic)
+   - Condition: (e.g. New, Used, Scratched, Cracked screen)
+   - Stated Location (Where): Extract any location stated in "Location (Where):" or in text (e.g. "IT LAB", "Central Library 2nd Floor", "Cafeteria"). Store it in the root "location" field. NEVER leave it empty if a location is provided.
+   - Stated Date/Time (When): Extract any date or time mentioned in "Date/Time (When):", "Time (When):", or in text (e.g. "Today", "Yesterday around 3 PM"). Add "Date / Time" to attributes.
 
-Examples:
-- Mobile Phone
-- Laptop
-- Backpack
-- Wallet
-- Bottle
-- Watch
-- Helmet
-- Keys
-- ID Card
-- Earbuds
+3. Extract Visible / Descriptive Features:
+   - Unique stickers, engravings, keychains, scratches, phone cases, strap types, contents, etc.
+   - Format visible features as a clear list of descriptive strings (e.g. ["Black metallic chain strap", "Cracked screen on upper right"]).
 
-Return the most appropriate object type.
-
-==================================================
-STEP 2 : Extract Information
-==================================================
-
-Extract ONLY information that is explicitly mentioned.
-
-Never assume.
-
-Never infer.
-
-Never guess.
+4. Extract Private Ownership Verification Details:
+   - Passcodes, lock screen wallpapers, hidden contents, serial numbers known only to true owner.
 
 ==================================================
-STEP 3 : Determine Identifying Attributes
+OUTPUT FORMAT RULES
 ==================================================
-
-Every object has different identifying attributes.
-
-For the detected object, determine the attributes that are useful for uniquely identifying it.
-
-Examples:
-
-Phone:
-• Brand
-• Model
-• Color
-• Storage
-• Case Color
-• Screen Condition
-
-Backpack:
-• Brand
-• Color
-• Compartments
-• Stickers
-• Zipper Condition
-
-Bottle:
-• Brand
-• Capacity
-• Material
-• Color
-• Sticker
-
-Wallet:
-• Brand
-• Material
-• Color
-• Cards
-
-IMPORTANT:
-
-Only include attributes that are explicitly mentioned.
-
-Do NOT include attributes that are missing.
-
-==================================================
-STEP 4 : Visible Features
-==================================================
-
-Extract visible identifying characteristics that help recognize the object.
-
-Examples:
-
-- Scratch
-- Crack
-- Dent
-- Sticker
-- Broken Zip
-- Torn Handle
-- Custom Paint
-- Engraving
-- Logo
-
-Do NOT include normal object attributes like Brand, Model, Color, Storage, Case Color or Material as visible features.
-
-Visible features should include only distinctive visual characteristics such as:
-- Scratches
-- Cracks
-- Stickers
-- Engravings
-- Dents
-- Damage
-- Missing parts
-- Custom paintings
-- Torn handles
-- Broken zippers
-
-Return each visible feature as an object containing:
-
-- type
-- value
-
-Example:
-
-[
-    {{
-        "type": "Sticker",
-        "value": "DCME"
-    }},
-    {{
-        "type": "Scratch",
-        "value": "Top Right Corner"
-    }}
-]
-
-==================================================
-STEP 5 : Ownership Information
-==================================================
-
-Extract any information the user provides that could help verify ownership.
-
-This includes anything the user says they know about the object that was not visible to others.
-
-Examples:
-
-- Passcode or PIN
-- Account email or username
-- IMEI or serial number (from their records or box)
-- Purchase date or invoice number
-- Registered phone number
-- Warranty card number
-
-Return each as an object with:
-
-- type
-- value
-
-Example:
-
-[
-    {{
-        "type": "Passcode",
-        "value": "153624"
-    }},
-    {{
-        "type": "Email",
-        "value": "john@gmail.com"
-    }}
-]
-
-If the user mentions the type but not the value, leave value empty.
-
-If no ownership information is mentioned, return an empty list.
-
-==================================================
-OUTPUT RULES
-==================================================
-
-Return ONLY valid JSON.
-
-No markdown.
-
-No explanations.
-
-No extra text.
-
-Use this exact structure:
+Return ONLY valid JSON with this exact structure:
 
 {{
-    "object_type": "",
-    "attributes": {{}},
-    "location": "",
+    "object_type": "Wristwatch",
+    "attributes": {{
+        "Brand": "Casio",
+        "Model": "Edifice",
+        "Color": "Black",
+        "Material": "Stainless Steel",
+        "Condition": "Good",
+        "Distinguishing Marks": "Minor scratch on clasp",
+        "Date / Time": "Today"
+    }},
+    "location": "IT LAB",
     "visible_features": [
-        {{
-            "type": "",
-            "value": ""
-        }}
+        "Black metallic strap",
+        "Analog dial with date window"
     ],
-    "private_features": [
-        {{
-            "type": "",
-            "value": ""
-        }}
-    ]
+    "private_features": []
 }}
 
-Description:
-
+User Report Description:
 {description}
 """

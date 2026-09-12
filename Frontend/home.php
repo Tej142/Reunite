@@ -11,6 +11,14 @@ $user = get_current_user_data();
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Reunite — Student Homepage Dashboard</title>
   <meta name="description" content="Reunite Student Dashboard — Report lost items, upload found items, and browse active community listings." />
+  <script>
+    (function(){
+      var t = localStorage.getItem('reunite_theme');
+      if (t === 'dark' || (!t && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+        document.documentElement.setAttribute('data-theme', 'dark');
+      }
+    })();
+  </script>
   <link rel="stylesheet" href="css/variables.css?v=<?php echo time(); ?>" />
   <link rel="stylesheet" href="css/home.css?v=<?php echo time(); ?>" />
 </head>

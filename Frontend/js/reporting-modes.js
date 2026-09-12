@@ -345,11 +345,16 @@ document.addEventListener('DOMContentLoaded', () => {
   const btnDraftSubmit = document.getElementById('btnDraftSubmit');
   if (btnDraftSubmit) {
     btnDraftSubmit.addEventListener('click', () => {
-      showSuccessState('Talk to AI report auto-extracted and submitted.');
+      const summaryText = `${draftData.title || ''} ${draftData.category || ''} at ${draftData.location || ''}. Verification: ${draftData.verification || ''}`;
+      showSuccessState(summaryText, {
+        title: draftData.title,
+        where: draftData.location,
+        verification: draftData.verification
+      });
     });
   }
 
-  function showSuccessState(info) {
+  function showSuccessState(info, extraMeta = {}) {
     const id = (reportType === 'found' ? 'RF-' : 'RL-') + Math.random().toString(36).slice(2, 8).toUpperCase();
     
     // Hide active forms/containers
@@ -364,10 +369,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const successState = document.getElementById('successState');
     const reportId = document.getElementById('reportId');
+    const aiDnaResultsContainer = document.getElementById('aiDnaResults');
 
     if (reportId) {
       reportId.textContent = 'Report ID ' + id;
     }
+
+    if (window.FlaskAIService && aiDnaResultsContainer) {
+      const dna = window.FlaskAIService.extractClientDna(info, extraMeta);
+      window.FlaskAIService.renderAiDnaCard(dna, aiDnaResultsContainer, { location: extraMeta.where || guidedState.where || draftData.location });
+    }
+
     if (successState) {
       successState.classList.add('show');
       successState.style.display = 'block';

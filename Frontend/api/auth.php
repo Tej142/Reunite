@@ -64,5 +64,64 @@ if ($action === 'signup') {
     exit;
 }
 
+if ($action === 'update_profile') {
+    if (!is_logged_in()) {
+        echo json_encode(['success' => false, 'message' => 'Unauthorized']);
+        exit;
+    }
+
+    $name = trim($input['name'] ?? '');
+    $email = trim($input['email'] ?? '');
+    $phone = trim($input['phone'] ?? '');
+    $college = trim($input['college'] ?? '');
+    $branch = trim($input['branch'] ?? '');
+
+    if (empty($name) || empty($email)) {
+        echo json_encode(['success' => false, 'message' => 'Name and Email are required.']);
+        exit;
+    }
+
+    update_user_profile([
+        'name' => $name,
+        'email' => $email,
+        'phone' => $phone,
+        'college' => $college,
+        'branch' => $branch
+    ]);
+
+    echo json_encode([
+        'success' => true,
+        'message' => 'Profile updated successfully!',
+        'user' => get_current_user_data()
+    ]);
+    exit;
+}
+
+if ($action === 'change_password') {
+    if (!is_logged_in()) {
+        echo json_encode(['success' => false, 'message' => 'Unauthorized']);
+        exit;
+    }
+
+    $current_pass = trim($input['current_password'] ?? '');
+    $new_pass = trim($input['new_password'] ?? '');
+
+    if (empty($current_pass) || empty($new_pass)) {
+        echo json_encode(['success' => false, 'message' => 'Please fill in all password fields.']);
+        exit;
+    }
+
+    if (strlen($new_pass) < 8) {
+        echo json_encode(['success' => false, 'message' => 'New password must be at least 8 characters long.']);
+        exit;
+    }
+
+    echo json_encode([
+        'success' => true,
+        'message' => 'Password changed successfully!'
+    ]);
+    exit;
+}
+
 echo json_encode(['success' => false, 'message' => 'Invalid request action.']);
 exit;

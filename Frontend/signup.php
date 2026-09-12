@@ -4,6 +4,14 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Student Registration — Reunite</title>
+<script>
+  (function(){
+    var t = localStorage.getItem('reunite_theme');
+    if (t === 'dark' || (!t && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+      document.documentElement.setAttribute('data-theme', 'dark');
+    }
+  })();
+</script>
 <link rel="stylesheet" href="css/variables.css?v=<?php echo time(); ?>" />
 <link rel="stylesheet" href="css/signup.css?v=<?php echo time(); ?>" />
 </head>
@@ -104,7 +112,7 @@
       </div>
 
       <div class="form-footer">
-        <button type="submit" class="btn-submit" id="submitBtn" disabled>Create account</button>
+        <button type="submit" class="btn-submit" id="submitBtn">Create account</button>
         <p class="signin-prompt">Already have an account?<a href="login.php">Signin</a></p>
       </div>
     </form>

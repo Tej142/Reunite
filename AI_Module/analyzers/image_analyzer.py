@@ -10,14 +10,14 @@ from config import client, GEMINI_MODEL
 from prompts.image_prompt import build_image_prompt
 from utils.json_validator import validate_response
 
-MAX_SIZE = 512
-JPEG_QUALITY = 60
+MAX_SIZE = 1024
+JPEG_QUALITY = 85
 
 
 def _compress_image(image_path: str) -> bytes:
-    """Resize and compress image to reduce size."""
+    """Resize and compress image preserving fine visual details."""
     img = Image.open(image_path)
-    img.thumbnail((MAX_SIZE, MAX_SIZE))
+    img.thumbnail((MAX_SIZE, MAX_SIZE), Image.Resampling.LANCZOS)
 
     if img.mode in ("RGBA", "P"):
         img = img.convert("RGB")

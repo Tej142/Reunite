@@ -25,17 +25,6 @@ document.addEventListener('DOMContentLoaded', () => {
     confirmPassword: document.getElementById('confirmPasswordError')
   };
 
-  // State
-  const validationState = {
-    name: false,
-    dob: false,
-    pin: false,
-    college: false,
-    branch: false,
-    password: false,
-    confirmPassword: false
-  };
-
   // ── Password Visibility Toggles ─────────────────────────
   const setupPasswordToggle = (toggleBtnId, inputId) => {
     const btn = document.getElementById(toggleBtnId);
@@ -58,7 +47,7 @@ document.addEventListener('DOMContentLoaded', () => {
         btn.innerHTML = `
           <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
             <path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
-            <circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.5" />
+            <circle cx="12" cy="12" r="3" fill="white"/>
           </svg>
         `;
       }
@@ -69,56 +58,54 @@ document.addEventListener('DOMContentLoaded', () => {
   setupPasswordToggle('toggleConfirmPassword', 'confirmPassword');
 
   // ── Validation Helpers ─────────────────────────────────
-  function setValid(fieldKey) {
-    fields[fieldKey].classList.remove('invalid');
-    fields[fieldKey].classList.add('valid');
-    errors[fieldKey].classList.remove('show');
-    errors[fieldKey].textContent = '';
-    validationState[fieldKey] = true;
-    checkFormValidity();
+  function clearFieldWarning(fieldKey) {
+    if (fields[fieldKey]) {
+      fields[fieldKey].classList.remove('invalid');
+      fields[fieldKey].classList.remove('valid');
+    }
+    if (errors[fieldKey]) {
+      errors[fieldKey].classList.remove('show');
+      errors[fieldKey].textContent = '';
+    }
   }
 
   function setInvalid(fieldKey, message) {
-    fields[fieldKey].classList.remove('valid');
-    fields[fieldKey].classList.add('invalid');
-    errors[fieldKey].textContent = message;
-    errors[fieldKey].classList.add('show');
-    validationState[fieldKey] = false;
-    checkFormValidity();
-  }
-
-  function checkFormValidity() {
-    const allValid = Object.values(validationState).every(val => val === true);
-    submitBtn.disabled = !allValid;
+    if (fields[fieldKey]) {
+      fields[fieldKey].classList.remove('valid');
+      fields[fieldKey].classList.add('invalid');
+    }
+    if (errors[fieldKey]) {
+      errors[fieldKey].textContent = message;
+      errors[fieldKey].classList.add('show');
+    }
+    return false;
   }
 
   // ── Individual Validators ──────────────────────────────
   function validateName() {
-    const val = fields.name.value.trim();
+    const val = fields.name ? fields.name.value.trim() : '';
     if (!val) {
-      setInvalid('name', 'Name is required.');
+      return setInvalid('name', 'Name is required.');
     } else if (val.length < 2) {
-      setInvalid('name', 'Name must be at least 2 characters long.');
-    } else {
-      setValid('name');
+      return setInvalid('name', 'Name must be at least 2 characters long.');
     }
+    clearFieldWarning('name');
+    return true;
   }
 
   function validateDob() {
-    const val = fields.dob.value;
+    const val = fields.dob ? fields.dob.value : '';
     if (!val) {
-      setInvalid('dob', 'Date of birth is required.');
-      return;
+      return setInvalid('dob', 'Date of birth is required.');
     }
 
     const birthDate = new Date(val);
     const today = new Date();
     if (birthDate >= today) {
-      setInvalid('dob', 'Date of birth must be in the past.');
-      return;
+      return setInvalid('dob', 'Date of birth must be in the past.');
     }
 
-    // Minimum age check (e.g. 15 years old for college)
+    // Minimum age check (15 years)
     let age = today.getFullYear() - birthDate.getFullYear();
     const m = today.getMonth() - birthDate.getMonth();
     if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
@@ -126,104 +113,93 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     if (age < 15) {
-      setInvalid('dob', 'You must be at least 15 years old to register.');
-    } else {
-      setValid('dob');
+      return setInvalid('dob', 'You must be at least 15 years old to register.');
     }
+    clearFieldWarning('dob');
+    return true;
   }
 
   function validatePin() {
-    const val = fields.pin.value.trim();
+    const val = fields.pin ? fields.pin.value.trim() : '';
     const pinRegex = /^[a-zA-Z0-9-]{4,15}$/; // e.g. 24155-cm-002
     if (!val) {
-      setInvalid('pin', 'College PIN is required.');
+      return setInvalid('pin', 'College PIN is required.');
     } else if (!pinRegex.test(val)) {
-      setInvalid('pin', 'PIN must be 4 to 15 characters, numbers, or hyphens (e.g. 24155-cm-002).');
-    } else {
-      setValid('pin');
+      return setInvalid('pin', 'PIN must be 4 to 15 characters, numbers, or hyphens (e.g. 24155-cm-002).');
     }
+    clearFieldWarning('pin');
+    return true;
   }
 
   function validateCollege() {
-    const val = fields.college.value;
+    const val = fields.college ? fields.college.value : '';
     if (!val) {
-      setInvalid('college', 'Please select your college.');
-    } else {
-      setValid('college');
+      return setInvalid('college', 'Please select your college.');
     }
+    clearFieldWarning('college');
+    return true;
   }
 
   function validateBranch() {
-    const val = fields.branch.value;
+    const val = fields.branch ? fields.branch.value : '';
     if (!val) {
-      setInvalid('branch', 'Please select your academic branch.');
-    } else {
-      setValid('branch');
+      return setInvalid('branch', 'Please select your academic branch.');
     }
+    clearFieldWarning('branch');
+    return true;
   }
 
   function validatePassword() {
-    const val = fields.password.value;
+    const val = fields.password ? fields.password.value : '';
     if (!val) {
-      setInvalid('password', 'Password is required.');
+      return setInvalid('password', 'Password is required.');
     } else if (val.length < 8) {
-      setInvalid('password', 'Password must be at least 8 characters long.');
-    } else {
-      setValid('password');
-      // Revalidate confirm password if it contains text
-      if (fields.confirmPassword.value) {
-        validateConfirmPassword();
-      }
+      return setInvalid('password', 'Password must be at least 8 characters long.');
     }
+    clearFieldWarning('password');
+    return true;
   }
 
   function validateConfirmPassword() {
-    const val = fields.confirmPassword.value;
-    const pass = fields.password.value;
+    const val = fields.confirmPassword ? fields.confirmPassword.value : '';
+    const pass = fields.password ? fields.password.value : '';
     if (!val) {
-      setInvalid('confirmPassword', 'Please confirm your password.');
+      return setInvalid('confirmPassword', 'Please confirm your password.');
     } else if (val !== pass) {
-      setInvalid('confirmPassword', 'Passwords do not match.');
-    } else {
-      setValid('confirmPassword');
+      return setInvalid('confirmPassword', 'Passwords do not match.');
     }
+    clearFieldWarning('confirmPassword');
+    return true;
   }
 
-  // ── Input Action Bindings ──────────────────────────────
-  // Real-time dynamic checks as user types
-  fields.name.addEventListener('input', validateName);
-  fields.dob.addEventListener('change', validateDob);
-  fields.pin.addEventListener('input', validatePin);
-  fields.college.addEventListener('change', validateCollege);
-  fields.branch.addEventListener('change', validateBranch);
-  fields.password.addEventListener('input', validatePassword);
-  fields.confirmPassword.addEventListener('input', validateConfirmPassword);
-
-  // Checks on focus out / blur
-  fields.name.addEventListener('blur', validateName);
-  fields.dob.addEventListener('blur', validateDob);
-  fields.pin.addEventListener('blur', validatePin);
-  fields.college.addEventListener('blur', validateCollege);
-  fields.branch.addEventListener('blur', validateBranch);
-  fields.password.addEventListener('blur', validatePassword);
-  fields.confirmPassword.addEventListener('blur', validateConfirmPassword);
+  // ── Clear warning as soon as user modifies/types in the field ──
+  Object.keys(fields).forEach(key => {
+    const el = fields[key];
+    if (el) {
+      el.addEventListener('input', () => clearFieldWarning(key));
+      el.addEventListener('change', () => clearFieldWarning(key));
+    }
+  });
 
   // ── Form Submission Handler ────────────────────────────
   if (form) {
     form.addEventListener('submit', (e) => {
       e.preventDefault();
 
-      // Final checks
-      validateName();
-      validateDob();
-      validatePin();
-      validateCollege();
-      validateBranch();
-      validatePassword();
-      validateConfirmPassword();
+      // Validate all fields on submit
+      const isNameValid = validateName();
+      const isDobValid = validateDob();
+      const isPinValid = validatePin();
+      const isCollegeValid = validateCollege();
+      const isBranchValid = validateBranch();
+      const isPasswordValid = validatePassword();
+      const isConfirmValid = validateConfirmPassword();
 
-      const allValid = Object.values(validationState).every(val => val === true);
-      if (!allValid) return;
+      const allValid = isNameValid && isDobValid && isPinValid && isCollegeValid && isBranchValid && isPasswordValid && isConfirmValid;
+
+      if (!allValid) {
+        return;
+      }
 
       // Simulate registration submission
       submitBtn.disabled = true;

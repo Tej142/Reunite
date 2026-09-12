@@ -7,7 +7,14 @@ from google import genai
 from mistralai import Mistral
 
 ENV_PATH = Path(__file__).parent / ".env"
-load_dotenv(dotenv_path=ENV_PATH, override=True)
+PARENT_ENV_PATH = Path(__file__).parent.parent / ".env"
+
+if ENV_PATH.exists():
+    load_dotenv(dotenv_path=ENV_PATH, override=True)
+elif PARENT_ENV_PATH.exists():
+    load_dotenv(dotenv_path=PARENT_ENV_PATH, override=True)
+else:
+    load_dotenv(override=True)
 
 # ==========================================
 # Gemini

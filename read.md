@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # ⚡ Reunite: AI-Powered Lost & Found Item Matchmaker
 
 **Reunite** is a modern, community-powered Lost & Found web platform integrated with a multimodal **AI Vision & Multimodal Matching Engine**. It automatically processes lost/found item descriptions and photos to extract a standardized **"Digital DNA"** of each item and calculates similarity confidence scores to match lost items with found items.
@@ -7,18 +6,32 @@
 
 ## 🌟 Architecture & Component Overview
 
-The repository is organized into three decoupled layers:
+The repository is organized into decoupled layers:
 
 ```
-c:\xampp\htdocs\Reunite\
+reunitel/
 ├── Frontend/                 # PHP / JS / CSS Web Application (Served via XAMPP/Apache)
+│   ├── api/
+│   │   └── auth.php            # Async auth, profile updates, and password change API
+│   ├── components/
+│   │   └── nav.php             # Modern dynamic navbar with active indicator, notifications, and avatar badge
 │   ├── js/
+│   │   ├── profile.js          # Profile dashboard tabs, activity filters & AJAX updates
+│   │   ├── search.js           # Live search, faceted filters, AI match & claim modal
 │   │   ├── flask-ai-service.js # Dedicated JS Service for Flask REST API communication
-│   │   ├── report-lost-item.js  # Lost item form handler & AI DNA UI renderer
-│   │   ├── report-found-item.js # Found item form handler
-│   │   └── ...
-│   ├── css/                  # Custom styling & glassmorphism UI components
-│   └── report-lost-item.php  # User submission interfaces
+│   │   ├── report-lost-item.js # Lost item form handler & AI DNA UI renderer
+│   │   ├── report-found-item.js# Found item form handler
+│   │   └── home.js             # Community board feeds and filter pills
+│   ├── css/
+│   │   ├── profile.css         # Profile hero, stats, tab panels & security form styles
+│   │   ├── search.css          # Search page styles, filter bars, cards & modals
+│   │   ├── variables.css       # Design tokens (colors, typography, spacing) & navbar styles
+│   │   └── home.css            # Dashboard styles
+│   ├── profile.php           # User Profile Management Dashboard
+│   ├── search.php            # Dedicated Search & Discovery interface for lost reporters
+│   ├── report-lost-item.php  # Lost item reporting interface
+│   ├── report-found-item.php # Found item submission interface
+│   └── home.php              # Student dashboard & community board
 ├── AI_Module/                # Core AI Engine (Analyzers, Prompts, Config, Utilities)
 │   ├── analyzers/            # Gemini Vision & Text feature extractors
 │   ├── compare/              # Gemini similarity & DNA match evaluation
@@ -38,11 +51,28 @@ c:\xampp\htdocs\Reunite\
 
 ### 1. 🌐 Frontend Layer (`Frontend/`)
 * **Technology**: PHP, HTML5, Vanilla CSS, JavaScript (ES6+).
-* **Role**: Provides interactive user interfaces for registering, logging in, reporting lost items, and reporting found items.
+* **Role**: Provides interactive user interfaces for registering, logging in, profile management, searching items, reporting lost items, and reporting found items.
+* **👤 User Profile Management System (`Frontend/profile.php`, `Frontend/js/profile.js`, `Frontend/css/profile.css`)**:
+  * **Hero Identity Card**: Features student avatar initial badge, verified ID tag, institution & branch info, and quick reporting shortcuts.
+  * **Activity Metrics Bar**: Displays live counters for filed reports, AI matches, claims verified, and reunited items.
+  * **Interactive Tabs**: Tab switching across *Personal Info* (with AJAX live update & header avatar sync), *My Reports* (with Lost/Found filter chips & match alerts), *Security & Password* (with validation), and *Notification Preferences*.
+* **🧭 Modern Top Navigation Bar (`Frontend/components/nav.php`)**:
+  * **Active Underline Bar**: Solid terracotta bottom bar under current active page links.
+  * **Notification Bell**: Bell icon with unread badge dot and instant dropdown preview of match alerts.
+  * **Circular Initial Avatar Badge**: Soft peach circle (`#F5DCD0`) displaying user's first name initial, linking to profile.
+  * **Adjacent Logout Link**: Clean text button for rapid session sign-out.
+  * **Responsive Hamburger Drawer**: Provides full mobile navigation including quick access to profile.
+* **Search & Discovery Engine (`Frontend/search.php`, `Frontend/js/search.js`, `Frontend/css/search.css`)**:
+  * Provides a dedicated search page for lost item reporters to search across campus found items.
+  * Multi-faceted filtering by item status (Found/Lost/Reunited), categories (Electronics, Wallets & Bags, Keys, IDs, Books, Accessories), and campus locations (Library, Cafeteria, Computer Labs, Workshops, Parking).
+  * **AI Smart Match**: Live text analysis and confidence ranking against found items based on physical attributes and Digital DNA.
+  * **Interactive Item Details & Claim Modal**: Allows students to view complete item specs and submit verification claims for safe handoffs.
 * **JS Service Bridge (`Frontend/js/flask-ai-service.js`)**:
   * Acts as a dedicated service layer connecting the web browser directly to the Flask backend.
   * Sends `FormData` requests (`description` + `image` file) via `fetch` to `http://127.0.0.1:5000/new-report`.
   * Contains `renderAiDnaCard()` to dynamically render the extracted AI Digital DNA card into the UI upon successful analysis.
+* **📱 Responsive Cross-Device UI**:
+  * Fully adaptive mobile, tablet, laptop, and desktop layouts across all pages with touch-optimized controls, auto-scrolling category pill bars, fluid typography (`clamp()`), and adaptive modal dialogs.
 
 ---
 
@@ -81,28 +111,22 @@ c:\xampp\htdocs\Reunite\
 sequenceDiagram
     autonumber
     actor User
-    participant UI as Frontend Web Page
-    participant JS as flask-ai-service.js
+    participant UI as Frontend Web Page (search.php / report-lost-item.php)
+    participant JS as search.js & flask-ai-service.js
     participant Flask as flask_server.py (Port 5000)
     participant AI as ai_controller.py & AI_Module
 
-    User->>UI: Fills Lost/Found Form & Uploads Photo
-    UI->>JS: Form Submit Event
-    JS->>Flask: POST /new-report (FormData: description + photo)
-    Flask->>AI: Calls process_report(description, image_path)
-    
-    par Concurrent AI Execution
-        AI->>AI: Gemini Vision analyzes Image Pixels
-        AI->>AI: Gemini NLP parses Description Text
+    User->>UI: Searches keyword or uploads lost item details
+    UI->>JS: Triggers Filter / Search Query
+    JS->>JS: Real-time faceted filter & keyword match
+    opt AI Smart Match Activated
+        JS->>Flask: POST /new-report or /compare-report
+        Flask->>AI: Extracts Digital DNA & calculates similarity
+        AI-->>Flask: Returns ranked candidate matches
+        Flask-->>JS: JSON match results
     end
-    
-    AI->>AI: Mistral AI synthesizes outputs into "Digital DNA"
-    AI-->>Flask: Returns Digital DNA JSON
-    Flask-->>JS: HTTP 200 OK Response
-    JS->>UI: Renders Live "AI Analysis & Digital DNA Card" in Success State
-    
-    Flask->>AI: Trigger compare_reports(current_dna, existing_dnas)
-    AI-->>Flask: Returns similarity scores & matches (Threshold: >=85%)
+    JS->>UI: Renders matching item cards with confidence scores
+    User->>UI: Clicks card & submits claim verification
 ```
 
 ---
@@ -129,13 +153,16 @@ python flask_server.py
 
 ### 4. Serve the Frontend
 Host the `Frontend/` folder using **XAMPP / Apache**:
-* Access in browser: `http://localhost/Reunite/Frontend/report-lost-item.php`
+* **Search Page**: `http://localhost/pw/reunitel/Frontend/search.php`
+* **Student Dashboard**: `http://localhost/pw/reunitel/Frontend/home.php`
+* **Report Lost Item**: `http://localhost/pw/reunitel/Frontend/report-lost-item.php`
+* **Report Found Item**: `http://localhost/pw/reunitel/Frontend/report-found-item.php`
 
 ---
 
 ## 🧪 Testing the API
 
-You can test backend endpoints directly using the included [`test.http`](file:///c:/xampp/htdocs/Reunite/test.http) file or cURL:
+You can test backend endpoints directly using the included [`test.http`](file:///c:/xampp/htdocs/pw/reunitel/test.http) file or cURL:
 
 ```bash
 curl -X POST http://127.0.0.1:5000/new-report \
@@ -146,7 +173,3 @@ curl -X POST http://127.0.0.1:5000/new-report \
     "image_path": "AI_Module/temp_uploads/img1 copy.jpg"
   }'
 ```
-=======
-# team-project
-LOST CONNECT - AI - driven Digital DNA platform for intelligent Lost item Recovery
->>>>>>> 3aecc700bc039ef4b242e2dc31f720c21fd9b7bb

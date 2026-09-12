@@ -5,6 +5,14 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Report a found item — Reunite</title>
+  <script>
+    (function(){
+      var t = localStorage.getItem('reunite_theme');
+      if (t === 'dark' || (!t && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+        document.documentElement.setAttribute('data-theme', 'dark');
+      }
+    })();
+  </script>
   <link rel="stylesheet" href="css/variables.css?v=<?php echo time(); ?>" />
   <link rel="stylesheet" href="css/report-found-item.css?v=<?php echo time(); ?>" />
   <link rel="stylesheet" href="css/reporting-modes.css?v=<?php echo time(); ?>" />
@@ -374,9 +382,9 @@
     </div>
   </footer>
 
-  <script src="js/flask-ai-service.js"></script>
-  <script src="js/report-found-item.js"></script>
-  <script src="js/reporting-modes.js"></script>
+  <script src="js/flask-ai-service.js?v=<?php echo time(); ?>"></script>
+  <script src="js/report-found-item.js?v=<?php echo time(); ?>"></script>
+  <script src="js/reporting-modes.js?v=<?php echo time(); ?>"></script>
 </body>
 
 </html>

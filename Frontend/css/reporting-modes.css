@@ -4,6 +4,54 @@
   margin-bottom: 2rem;
 }
 
+.preview-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.thumb, .dz-thumb {
+  position: relative;
+  width: 6.5rem;
+  height: 6.5rem;
+  border-radius: 0.75rem;
+  overflow: hidden;
+  border: 1.5px solid var(--border);
+  background: var(--bg-alt);
+  flex-shrink: 0;
+  box-shadow: var(--shadow-sm);
+}
+
+.thumb img, .dz-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.thumb button, .dz-thumb button {
+  position: absolute;
+  top: 0.35rem;
+  right: 0.35rem;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 50%;
+  border: none;
+  background: rgba(28, 25, 23, 0.85);
+  color: #fff;
+  font-size: 0.875rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s;
+}
+
+.thumb button:hover, .dz-thumb button:hover {
+  background: #EF4444;
+}
+
 .mode-selector-title {
   font-size: 0.8125rem;
   font-weight: 600;
@@ -22,9 +70,10 @@
   gap: 1rem;
 }
 
-@media (max-width: 768px) {
+@media (max-width: 860px) {
   .mode-selector-grid {
     grid-template-columns: 1fr;
+    gap: 0.75rem;
   }
 }
 
@@ -53,6 +102,12 @@
   border-color: var(--accent);
   background: linear-gradient(180deg, #FFFDFB 0%, #FDF7F2 100%);
   box-shadow: 0 10px 30px rgba(196, 98, 45, 0.12);
+}
+
+[data-theme="dark"] .mode-card.active {
+  background: #231B15;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1.5px var(--accent), 0 8px 26px rgba(224, 112, 64, 0.2);
 }
 
 .mode-card-header {
@@ -126,6 +181,13 @@
   animation: fadeIn 0.3s ease;
 }
 
+[data-theme="dark"] .ai-status-banner {
+  background: #1C1612;
+  border-color: #38261D;
+  color: var(--ink-soft);
+  box-shadow: 0 2px 16px rgba(0, 0, 0, 0.4);
+}
+
 .ai-status-left {
   display: flex;
   align-items: center;
@@ -156,6 +218,10 @@
 .ai-status-text em {
   color: #9A4215;
   font-style: italic;
+}
+
+[data-theme="dark"] .ai-status-text em {
+  color: var(--muted);
 }
 
 /* Mode Container Toggle Visibility */
@@ -271,9 +337,17 @@
 /* Visual Option Tiles */
 .option-tiles-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
   gap: 1rem;
   margin-bottom: 2rem;
+}
+
+@media (max-width: 480px) {
+  .option-tiles-grid {
+    grid-template-columns: repeat(auto-fill, minmax(105px, 1fr));
+    gap: 0.65rem;
+    margin-bottom: 1.5rem;
+  }
 }
 
 .option-tile {
@@ -441,8 +515,12 @@
   display: flex;
   flex-direction: column;
   gap: 1rem;
-  background: #FAF8F6;
+  background: var(--bg);
   scroll-behavior: smooth;
+}
+
+[data-theme="dark"] .chat-messages {
+  background: #15110E;
 }
 
 .chat-bubble {
@@ -663,8 +741,8 @@
 .ai-dna-results {
   margin-top: 2rem;
   text-align: left;
-  background: var(--bg-alt, #FBF6F0);
-  border: 1px solid var(--border, #E6DDD4);
+  background: var(--bg-alt);
+  border: 1px solid var(--border);
   border-radius: 1.25rem;
   padding: 1.75rem;
 }
@@ -673,7 +751,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  border-bottom: 1px dashed #D9C8B8;
+  border-bottom: 1px dashed var(--border);
   padding-bottom: 0.85rem;
   margin-bottom: 1.2rem;
 }
@@ -681,7 +759,7 @@
 .ai-dna-title {
   font-weight: 600;
   font-size: 1rem;
-  color: var(--ink, #1C1917);
+  color: var(--ink);
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -698,6 +776,11 @@
   text-transform: uppercase;
 }
 
+[data-theme="dark"] .ai-dna-badge {
+  background: #0D3320;
+  color: #4ADE80;
+}
+
 .ai-dna-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
@@ -706,15 +789,15 @@
 }
 
 .ai-dna-card-item {
-  background: #FFFFFF;
-  border: 1px solid #E6DDD4;
+  background: var(--white);
+  border: 1px solid var(--border);
   border-radius: 0.75rem;
   padding: 0.65rem 0.9rem;
 }
 
 .ai-dna-label {
   font-size: 0.7rem;
-  color: #78716C;
+  color: var(--muted);
   text-transform: uppercase;
   letter-spacing: 0.05em;
   font-weight: 600;
@@ -724,13 +807,13 @@
 .ai-dna-val {
   font-size: 0.9rem;
   font-weight: 700;
-  color: #1C1917;
+  color: var(--ink);
 }
 
 .ai-dna-section-title {
   font-size: 0.75rem;
   font-weight: 700;
-  color: #78716C;
+  color: var(--muted);
   margin: 1rem 0 0.5rem;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -742,14 +825,118 @@
   gap: 0.5rem;
 }
 
-.ai-dna-chip {
-  background: #FFFFFF;
-  border: 1px solid #D6C7B8;
-  color: #292524;
-  font-size: 0.825rem;
-  padding: 0.35rem 0.75rem;
-  border-radius: 0.6rem;
-  font-weight: 500;
-  box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+.ai-dynamic-form-wrap {
+  display: flex;
+  flex-direction: column;
+}
+
+.ai-dna-intro {
+  font-size: 0.875rem;
+  color: var(--muted);
+  line-height: 1.5;
+  margin-bottom: 1.25rem;
+}
+
+.ai-dynamic-fields-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 0.875rem;
+  margin-bottom: 1.25rem;
+}
+
+.ai-form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  padding: 0.75rem 0.9rem;
+  transition: border-color 0.2s;
+}
+
+.ai-form-field:focus-within {
+  border-color: var(--accent);
+}
+
+.ai-form-field.full-width {
+  grid-column: 1 / -1;
+}
+
+.ai-form-field label {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+}
+
+.ai-field-input {
+  border: none;
+  background: transparent;
+  font-family: inherit;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--ink);
+  outline: none;
+  width: 100%;
+  padding: 0;
+}
+
+.ai-field-input::placeholder {
+  color: var(--muted-2);
+  font-weight: 400;
+}
+
+.ai-dynamic-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.875rem;
+  margin-top: 1.5rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--border-soft);
+}
+
+.btn-confirm-dna {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  font-family: inherit;
+  font-size: 0.875rem;
+  font-weight: 600;
+  padding: 0.65rem 1.25rem;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: opacity 0.2s, transform 0.15s;
+}
+
+.btn-confirm-dna:hover {
+  opacity: 0.92;
+  transform: translateY(-1px);
+}
+
+.btn-confirm-dna.confirmed {
+  background: #10B981;
+  cursor: default;
+  transform: none;
+}
+
+.btn-search-dna {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--accent);
+  text-decoration: none;
+  padding: 0.65rem 1rem;
+  transition: color 0.15s;
+}
+
+.btn-search-dna:hover {
+  text-decoration: underline;
 }
 

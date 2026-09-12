@@ -46,3 +46,16 @@ function require_login() {
         exit;
     }
 }
+
+function update_user_profile($updatedData) {
+    init_session();
+    if (!isset($_SESSION['user'])) {
+        return false;
+    }
+    foreach ($updatedData as $key => $val) {
+        if ($key !== 'logged_in_at' && $key !== 'pin') { // keep pin protected as unique identifier
+            $_SESSION['user'][$key] = $val;
+        }
+    }
+    return true;
+}
