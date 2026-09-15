@@ -1,0 +1,57 @@
+import sys
+from pathlib import Path
+
+# Ensure AI_Module directory is in Python module search path
+AI_MODULE_DIR = Path(__file__).parent / "AI_Module"
+if str(AI_MODULE_DIR) not in sys.path:
+    sys.path.insert(0, str(AI_MODULE_DIR))
+
+from concurrent.futures import ThreadPoolExecutor
+from AI_Module import time_log
+from AI_Module.analyzers.report_analyzer import analyze_report
+from AI_Module.analyzers.image_analyzer import analyze_image
+from AI_Module.analyzers.digital_dna_generator import generate_digital_dna
+
+
+def process_report(description: str, image: str = None) -> dict:
+
+    # If no image provided, run only description analysis
+    if not image:
+        report_result = analyze_report(description)
+
+        if report_result.get("success") is False:
+            time_log.print_logs()
+            return report_result
+
+        # Wrap report analysis as the digital DNA directly
+        result = {
+            "success": True,
+            "same_object": True,
+            "digital_dna": report_result.get("digital_dna", report_result)
+        }
+        time_log.print_logs()
+        return result
+
+    # Run description and image analysis in parallel using threads
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        future_report = executor.submit(analyze_report, description)
+        future_image = executor.submit(analyze_image, image)
+
+        report_result = future_report.result()
+        image_result = future_image.result()
+
+    if report_result.get("success") is False:
+        time_log.print_logs()
+        return report_result
+
+    if image_result.get("success") is False:
+        time_log.print_logs()
+        return image_result
+
+    result = generate_digital_dna(
+        report_result,
+        image_result
+    )
+
+    time_log.print_logs()
+    return result
