@@ -177,7 +177,7 @@
 
         <div class="form-footer">
           <p class="footer-note">By submitting, this item is indexed in active searches. We will alert you immediately if any lost report matches it.</p>
-          <button type="submit" class="btn-submit">Submit report</button>
+          <button type="submit" class="btn-submit">⚡ Analyze with AI &amp; Review Details &rarr;</button>
         </div>
       </form>
     </div>
@@ -291,15 +291,34 @@
             <div class="chat-avatar-title">
               <div class="chat-avatar">🤖</div>
               <div>
-                <div class="chat-name">Reunite AI Assistant</div>
-                <div class="chat-sub">Demo Mode &middot; No backend connected yet</div>
+                <div class="chat-name">Reunite AI Voice &amp; Chat Copilot</div>
+                <div class="chat-sub" id="talkAiSubStatus">⚡ Powered by Google Gemini Live Voice WebSocket</div>
               </div>
             </div>
+            <div class="voice-header-badge" id="voiceLiveBadge">
+              <span class="live-dot"></span>
+              <span id="voiceBadgeText">Ready to Talk</span>
+            </div>
+          </div>
+
+          <!-- Voice Live Visualizer Bar -->
+          <div class="voice-live-bar" id="voiceLiveBar">
+            <div class="voice-visualizer-wrap">
+              <canvas id="voiceVisualizer" width="180" height="28"></canvas>
+            </div>
+            <button type="button" class="btn-voice-toggle" id="btnVoiceToggle" title="Click to start/stop live voice conversation">
+              <svg class="mic-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/>
+                <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                <line x1="12" y1="19" x2="12" y2="22"/>
+              </svg>
+              <span id="voiceToggleLabel">Start Voice Mode</span>
+            </button>
           </div>
 
           <div class="chat-messages" id="chatMessages">
             <div class="chat-bubble ai">
-              Hello! 👋 I'm your AI Reporting Assistant. <em>(Note: No AI backend server is connected yet — operating in interactive client mode).</em> Simply tell me what item you found and where, and I'll draft your report live!
+              Hello! 👋 I'm your AI Reporting Copilot. Click <strong>Start Voice Mode</strong> to describe the found item naturally by voice, or type in the box below.
             </div>
           </div>
 
@@ -310,7 +329,14 @@
           </div>
 
           <div class="chat-input-bar">
-            <input type="text" id="chatInput" placeholder="Type or describe what you found..." />
+            <button type="button" class="btn-mic-inline" id="btnMicInline" title="Toggle microphone">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/>
+                <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                <line x1="12" y1="19" x2="12" y2="22"/>
+              </svg>
+            </button>
+            <input type="text" id="chatInput" placeholder="Speak or type what you found..." />
             <button type="button" class="btn-send" id="btnSendChat" aria-label="Send message">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
             </button>
@@ -319,36 +345,19 @@
 
         <!-- Right: Live Report Draft Sidebar -->
         <div class="live-draft-card">
-          <div>
-            <div class="draft-header">
-              <div class="draft-title">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-                Live Report Draft
-              </div>
-              <span class="mode-badge">AI Syncing</span>
+          <div class="draft-header">
+            <div class="draft-title">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+              Live Report Draft
             </div>
+            <span class="mode-badge" id="draftLiveStatusBadge">AI Syncing</span>
+          </div>
 
-            <div class="draft-fields-list">
-              <div class="draft-item">
-                <div class="draft-label">Item Title</div>
-                <div class="draft-value empty" id="draftTitleVal">Not specified yet</div>
-              </div>
-              <div class="draft-item">
-                <div class="draft-label">Category</div>
-                <div class="draft-value empty" id="draftCatVal">Not specified yet</div>
-              </div>
-              <div class="draft-item">
-                <div class="draft-label">Found Location</div>
-                <div class="draft-value empty" id="draftLocVal">Not specified yet</div>
-              </div>
-              <div class="draft-item">
-                <div class="draft-label">Verification Detail</div>
-                <div class="draft-value empty" id="draftVerifVal">Not specified yet</div>
-              </div>
-              <div class="draft-item">
-                <div class="draft-label">Contact Email</div>
-                <div class="draft-value empty" id="draftEmailVal">Not specified yet</div>
-              </div>
+          <div class="draft-fields-list" id="dynamicDraftContainer">
+            <div class="draft-empty-state" id="draftEmptyState">
+              <div class="draft-empty-icon">✨</div>
+              <div class="draft-empty-text"><strong>Live Attributes Extractor</strong></div>
+              <div class="draft-empty-sub">Speak or type your conversation. The AI will dynamically extract and display all item attributes, location, and marks here in real time.</div>
             </div>
           </div>
 
@@ -358,6 +367,21 @@
         </div>
 
       </div>
+    </div>
+
+    <!-- ───────────────────────────────────────────────────────────── -->
+    <!-- AI REVIEW & EDIT STEP CONTAINER -->
+    <!-- ───────────────────────────────────────────────────────────── -->
+    <div class="ai-review-container" id="aiReviewContainer" style="display:none;">
+      <div class="ai-review-step-badge">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+        Step 2 of 2: Review &amp; Edit Details
+      </div>
+      <h2 class="serif ai-review-title">Verify &amp; Fine-Tune Extracted Information</h2>
+      <p class="ai-review-subtitle">
+        Our AI analyzed the found item description and photo. <strong>You can edit any field below or add/remove tags</strong> to ensure all details are 100% accurate before final submission.
+      </p>
+      <div id="aiReviewFormWrap"></div>
     </div>
 
     <!-- ───────────────────────────────────────────────────────────── -->

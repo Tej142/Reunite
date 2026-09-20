@@ -1,6 +1,6 @@
 import json
 
-from question_engine.question_schema import (
+from questions.question_schema import (
     Question,
     QuestionSet,
 )

@@ -11,9 +11,12 @@ $is_home = ($current_page === 'home.php');
 $is_profile = ($current_page === 'profile.php');
 ?>
 <script>
-  // Global Flask AI Backend URL Configuration
-  // Set this to your public cloud API URL (e.g. 'https://your-app.onrender.com') or tunnel URL when sharing
-  window.FLASK_BACKEND_URL = window.FLASK_BACKEND_URL || 'http://127.0.0.1:5000';
+  // Dynamically match the current host IP/domain (e.g. 10.224.95.152, localhost, or 127.0.0.1)
+  (function() {
+    var host = (window.location && window.location.hostname) ? window.location.hostname : '127.0.0.1';
+    window.FLASK_BACKEND_URL = window.FLASK_BACKEND_URL || ('http://' + host + ':5000');
+    console.log('⚡ [Reunite] Connected Flask Backend URL:', window.FLASK_BACKEND_URL);
+  })();
 </script>
 <script src="js/microinteractions.js"></script>
 <nav>

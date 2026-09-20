@@ -4,8 +4,8 @@ import time_log
 from google.genai import types
 
 from config import client, GEMINI_MODEL
-from prompts.question_prompt import build_question_prompt
-from question_engine.question_validator import validate_question_response
+from questions.question_prompt import build_question_prompt
+from questions.question_validator import validate_question_response
 
 
 def generate_questions(category: str, report_type: str) -> dict:
