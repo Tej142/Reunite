@@ -27,16 +27,30 @@
     </div>
 
     <form id="loginForm" novalidate>
+      <!-- Top Dynamic Alert (Above College PIN) -->
+      <div class="login-top-alert" id="loginTopAlert" role="alert">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="alert-icon">
+          <circle cx="12" cy="12" r="10"></circle>
+          <line x1="12" y1="8" x2="12" y2="12"></line>
+          <line x1="12" y1="16" x2="12.01" y2="16"></line>
+        </svg>
+        <span id="loginTopAlertText"></span>
+      </div>
+
       <!-- College PIN -->
       <div class="field">
         <label for="pin">College PIN</label>
-        <input type="text" id="pin" placeholder="e.g. 24155-cm-002" required />
+        <?php $rememberedPin = htmlspecialchars($_GET['pin'] ?? ($_COOKIE['reunite_remembered_pin'] ?? '')); ?>
+        <input type="text" id="pin" placeholder="e.g. 24155-cm-002" value="<?php echo $rememberedPin; ?>" required <?php echo !empty($rememberedPin) ? '' : 'autofocus'; ?> />
         <span class="error-msg" id="pinError"></span>
       </div>
 
       <!-- Password -->
       <div class="field">
-        <label for="password">Password</label>
+        <div class="field-label-row">
+          <label for="password">Password</label>
+          <a href="forgot-password.php" class="forgot-password-link">Forgot password?</a>
+        </div>
         <div class="password-wrapper">
           <input type="password" id="password" placeholder="Enter your password" required />
           <button type="button" class="toggle-password-btn" id="togglePassword" aria-label="Toggle password visibility">

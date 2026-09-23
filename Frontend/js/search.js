@@ -167,7 +167,7 @@ let aiMatchScores = {};
 let isListView = false;
 
 // DOM Elements
-let searchInput, clearBtn, resultsGrid, resultsCount, catChips, typeSelect, categorySelect, locationSelect, sortSelect;
+let searchInput, clearBtn, searchSpinner, resultsGrid, resultsCount, catChips, typeSelect, categorySelect, locationSelect, sortSelect;
 let modalOverlay, aiDrawer, aiMatchBtn, aiTextarea, aiTagsDetected;
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -179,6 +179,7 @@ document.addEventListener('DOMContentLoaded', () => {
 function initDomElements() {
   searchInput   = document.getElementById('searchInput');
   clearBtn      = document.getElementById('clearSearchBtn');
+  searchSpinner = document.getElementById('searchBarSpinner');
   resultsGrid   = document.getElementById('searchResultsGrid');
   resultsCount  = document.getElementById('resultsCount');
   catChips      = document.querySelectorAll('.cat-chip');
@@ -194,17 +195,20 @@ function initDomElements() {
 }
 
 function bindEvents() {
-  // Keyword Search with debounce
+  // Keyword Search with debounce & inline spinner
   if (searchInput) {
     let debounceTimer;
     searchInput.addEventListener('input', (e) => {
       clearTimeout(debounceTimer);
       const query = e.target.value.trim();
       if (clearBtn) clearBtn.classList.toggle('visible', query.length > 0);
+      if (searchSpinner) searchSpinner.classList.add('active');
+
       debounceTimer = setTimeout(() => {
         currentSearchQuery = query.toLowerCase();
         if (isAiMatchActive) calculateLocalAiScores(currentSearchQuery);
         renderResults();
+        if (searchSpinner) searchSpinner.classList.remove('active');
       }, 250);
     });
   }
@@ -215,6 +219,7 @@ function bindEvents() {
       if (searchInput) searchInput.value = '';
       clearBtn.classList.remove('visible');
       currentSearchQuery = '';
+      if (searchSpinner) searchSpinner.classList.remove('active');
       renderResults();
     });
   }
@@ -471,12 +476,21 @@ function renderResults() {
     return;
   }
 
-  // Render Grid Cards
+  // Render Grid Cards with Microinteractions
   resultsGrid.innerHTML = filtered.map(item => {
     const matchScore = aiMatchScores[item.id];
     const matchBadgeHtml = (isAiMatchActive && matchScore) 
       ? `<span class="card-badge-match">${matchScore}% Match</span>` 
       : '';
+
+    const scoreBarHtml = (isAiMatchActive && matchScore) ? `
+      <div class="match-score-bar-wrap" title="AI Match Confidence Score: ${matchScore}%">
+        <span class="match-score-text">${matchScore}% Confidence</span>
+        <div class="match-score-track">
+          <div class="match-score-fill" style="width: ${matchScore}%;"></div>
+        </div>
+      </div>
+    ` : '';
 
     const badgeClass = item.status === 'found' ? 'badge-found' : item.status === 'lost' ? 'badge-lost' : 'badge-reunited';
     const badgeLabel = item.status === 'found' ? 'Found Item' : item.status === 'lost' ? 'Lost Item' : 'Reunited';
@@ -485,17 +499,23 @@ function renderResults() {
       ? item.dna.features.slice(0, 2).map(f => `<span class="dna-mini-tag">✨ ${f}</span>`).join('') 
       : '';
 
+    const isSaved = window.ReuniteBookmarks ? window.ReuniteBookmarks.isSaved(item.id) : false;
+
     return `
       <article class="search-item-card" data-id="${item.id}" onclick="openItemModal('${item.id}')">
         <div class="card-img-wrap">
-          <img src="${item.img}" alt="${item.title}" class="card-img" loading="lazy" />
+          <img src="${item.img}" alt="${item.title}" class="card-img" loading="lazy" onload="this.classList.add('loaded')" />
           <span class="card-badge-status ${badgeClass}">${badgeLabel}</span>
+          <button type="button" class="btn-bookmark card-bookmark-btn ${isSaved ? 'active' : ''}" data-id="${item.id}" onclick="handleCardBookmark(event, '${item.id}', '${item.title.replace(/'/g, "\\'")}')" aria-label="Save item" title="${isSaved ? 'Remove from saved' : 'Save this item'}">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/></svg>
+          </button>
           ${matchBadgeHtml}
         </div>
         <div class="card-body">
           <span class="card-category">${item.category}</span>
           <h3 class="card-title">${item.title}</h3>
           <p class="card-desc">${item.desc}</p>
+          ${scoreBarHtml}
           <div class="card-dna-tags">${miniTags}</div>
           <div class="card-foot">
             <div class="card-foot-meta">
@@ -515,6 +535,13 @@ function renderResults() {
     `;
   }).join('');
 }
+
+window.handleCardBookmark = function(e, itemId, itemTitle) {
+  e.stopPropagation();
+  if (window.ReuniteBookmarks) {
+    window.ReuniteBookmarks.toggle(itemId, itemTitle);
+  }
+};
 
 /**
  * Opens detailed modal for an item
@@ -544,7 +571,7 @@ window.openItemModal = function(itemId) {
     <div class="modal-card">
       <button type="button" class="modal-close-btn" aria-label="Close modal">&times;</button>
       <div class="modal-img-wrap">
-        <img src="${item.img}" alt="${item.title}" />
+        <img src="${item.img}" alt="${item.title}" class="modal-img" />
       </div>
       <div class="modal-content">
         <div class="modal-header-meta">
@@ -578,14 +605,14 @@ window.openItemModal = function(itemId) {
           ${item.status === 'found' ? `<button type="button" class="btn-modal-claim" onclick="toggleClaimForm('${item.id}')">Claim This Item &rarr;</button>` : ''}
         </div>
 
-        <div class="claim-form-wrap" id="claimFormWrap">
+        <div class="claim-form-wrap" id="claimFormWrap" aria-live="polite">
           <div class="claim-form-title">🛡️ Submit Ownership Verification</div>
           <p class="claim-form-sub">To claim this item, please provide a unique detail only the owner would know (e.g. wallpaper description, unique scratch, serial number, or exact contents).</p>
           <form id="itemClaimForm" onsubmit="handleClaimSubmit(event, '${item.id}')">
-            <input type="text" class="claim-input" placeholder="Your Full Name / Student PIN" required />
-            <input type="email" class="claim-input" placeholder="Your College Email Address" required />
-            <textarea class="claim-input" rows="3" placeholder="Provide proof of ownership (e.g. specific scratches, passcode hint, unique items inside)" required></textarea>
-            <button type="submit" class="btn-modal-claim" style="width: 100%;">Submit Claim Request</button>
+            <input type="text" id="claimName" class="claim-input" placeholder="Your Full Name / Student PIN" required />
+            <input type="email" id="claimEmail" class="claim-input" placeholder="Your College Email Address" required />
+            <textarea id="claimProof" class="claim-input" rows="3" placeholder="Provide proof of ownership (e.g. specific scratches, passcode hint, unique items inside)" required></textarea>
+            <button type="submit" id="btnClaimSubmitAction" class="btn-modal-claim" style="width: 100%;">Submit Claim Request</button>
           </form>
         </div>
       </div>
@@ -605,27 +632,46 @@ window.closeModal = function() {
 
 window.toggleClaimForm = function(itemId) {
   const formWrap = document.getElementById('claimFormWrap');
-  const actionsRow = document.getElementById('modalActionsRow');
   if (formWrap) {
     formWrap.classList.toggle('active');
+    if (formWrap.classList.contains('active')) {
+      const input = formWrap.querySelector('input');
+      if (input) input.focus();
+    }
   }
 };
 
 window.handleClaimSubmit = function(e, itemId) {
   e.preventDefault();
   const formWrap = document.getElementById('claimFormWrap');
-  if (formWrap) {
-    formWrap.innerHTML = `
-      <div style="text-align: center; padding: 1.5rem 0;">
-        <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">🎉</div>
-        <h4 style="font-size: 1.15rem; margin-bottom: 0.5rem; color: var(--ink);">Claim Request Submitted!</h4>
-        <p style="font-size: 0.875rem; color: var(--muted); line-height: 1.5; margin-bottom: 1rem;">
-          Your verification details for <strong>${itemId}</strong> have been forwarded to the campus lost & found coordinator. You will receive an email confirmation for collection at the designated campus hub.
-        </p>
-        <button type="button" class="btn-empty-primary" onclick="closeModal()">Done</button>
-      </div>
-    `;
+  const submitBtn = document.getElementById('btnClaimSubmitAction');
+  
+  if (submitBtn && window.setButtonLoading) {
+    window.setButtonLoading(submitBtn, true, 'Verifying claim...');
   }
+
+  setTimeout(() => {
+    if (formWrap) {
+      formWrap.innerHTML = `
+        <div class="claim-success-box">
+          <div class="claim-checkmark-circle" aria-hidden="true">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="20 6 9 17 4 12"></polyline>
+            </svg>
+          </div>
+          <h4 style="font-size: 1.15rem; font-weight: 600; margin-bottom: 0.5rem; color: var(--ink);">Claim Request Submitted</h4>
+          <p style="font-size: 0.875rem; color: var(--muted); line-height: 1.55; margin-bottom: 1.25rem;">
+            Your verification details for <strong>${itemId}</strong> have been forwarded to the campus lost &amp; found coordinator. You will receive an email confirmation for collection at the designated campus hub.
+          </p>
+          <button type="button" class="btn-empty-primary" onclick="closeModal()">Done</button>
+        </div>
+      `;
+    }
+    if (window.ReuniteToast) {
+      window.ReuniteToast.success('Claim Submitted', `Verification request for ${itemId} received.`, 4000);
+    }
+  }, 600);
 };
 
 window.resetAllFilters = resetAllFilters;
+

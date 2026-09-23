@@ -109,21 +109,27 @@ document.addEventListener('DOMContentLoaded', () => {
     foundForm.addEventListener('submit', async function (e) {
       e.preventDefault();
       const submitBtn = foundForm.querySelector('button[type="submit"]');
-      const originalBtnHtml = submitBtn ? submitBtn.innerHTML : 'Submit Report';
 
       const descEl = document.getElementById('description') || foundForm.querySelector('textarea');
       const descriptionText = descEl ? descEl.value.trim() : '';
       const imageFile = uploadedFiles.length > 0 ? uploadedFiles[0] : null;
 
-      if (submitBtn) {
-        submitBtn.disabled = true;
-        submitBtn.innerHTML = '⚡ Analyzing with Gemini &amp; Mistral AI...';
-      }
-
       const titleEl = document.getElementById('title');
       const whereEl = document.getElementById('where');
       const whenEl = document.getElementById('when');
       const verifEl = document.getElementById('verification_detail');
+
+      if (!descriptionText && (!titleEl || !titleEl.value.trim())) {
+        if (descEl) window.shakeElement(descEl);
+        if (window.ReuniteToast) {
+          window.ReuniteToast.error('Description Required', 'Please provide a brief description or title of the found item.');
+        }
+        return;
+      }
+
+      if (submitBtn && window.setButtonLoading) {
+        window.setButtonLoading(submitBtn, true, 'Analyzing with AI...');
+      }
 
       const meta = {
         title: titleEl ? titleEl.value.trim() : '',
@@ -153,18 +159,25 @@ document.addEventListener('DOMContentLoaded', () => {
           dna = window.FlaskAIService.extractClientDna(descriptionText, meta);
         }
 
+        if (window.ReuniteToast) {
+          window.ReuniteToast.success('Report Registered', `Found item report ${finalReportId} indexed successfully.`, 4000);
+        }
+
         transitionToSuccess(finalReportId, dna, meta.where, meta.when);
       } catch (err) {
         console.error('Error in AI report processing:', err);
         const fallbackId = 'RF-' + Math.random().toString(36).slice(2, 8).toUpperCase();
         const dna = window.FlaskAIService ? window.FlaskAIService.extractClientDna(descriptionText, meta) : null;
+        if (window.ReuniteToast) {
+          window.ReuniteToast.info('Report Saved Locally', `Saved report ${fallbackId}. AI server offline.`, 4000);
+        }
         transitionToSuccess(fallbackId, dna, meta.where, meta.when);
       } finally {
-        if (submitBtn) {
-          submitBtn.disabled = false;
-          submitBtn.innerHTML = originalBtnHtml;
+        if (submitBtn && window.setButtonLoading) {
+          window.setButtonLoading(submitBtn, false);
         }
       }
     });
   }
 });
+

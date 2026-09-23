@@ -10,7 +10,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const modeDescriptions = {
     mode1: '⚡ <strong>AI Vision & Text Parser:</strong> Upload photos & describe your item directly. AI will parse details and index tags automatically.',
     mode2: '🎯 <strong>Guided Choice Assistant:</strong> Step-by-step interactive questionnaire with AI smart prompts tailored for rapid input.',
-    mode3: '⚠️ <strong>Talk to AI (No Backend Connected):</strong> <em>No AI server backend is connected yet. Running in client interactive simulation mode.</em>'
+    mode3: '🎙️ <strong>Talk to AI Live Copilot:</strong> Natural voice & chat intake assistant. Dynamically understands natural slang, asks tailored item-specific questions, and extracts attributes in real time.'
   };
 
   modeCards.forEach(card => {
@@ -200,24 +200,37 @@ document.addEventListener('DOMContentLoaded', () => {
     showSuccessState(summaryText);
   }
 
-  // 4. Mode 3 Talk to AI Chat Logic
+  // 4. Mode 3 Talk to AI Chat & Dynamic Attribute Extractor Logic
   const chatMessages = document.getElementById('chatMessages');
   const chatInput = document.getElementById('chatInput');
   const btnSendChat = document.getElementById('btnSendChat');
   const promptChips = document.querySelectorAll('.prompt-chip');
+  const dynamicDraftContainer = document.getElementById('dynamicDraftContainer');
+  const btnDraftSubmit = document.getElementById('btnDraftSubmit');
+  const btnVoiceToggle = document.getElementById('btnVoiceToggle');
+  const btnMicInline = document.getElementById('btnMicInline');
+  const voiceLiveBadge = document.getElementById('voiceLiveBadge');
+  const voiceBadgeText = document.getElementById('voiceBadgeText');
+  const voiceVisualizer = document.getElementById('voiceVisualizer');
+  const voiceToggleLabel = document.getElementById('voiceToggleLabel');
 
-  const draftData = {
+  let chatHistory = [];
+  let isAiResponding = false;
+  let isVoiceModeActive = false;
+  let isAiSpeaking = false;
+  let currentDraft = {
     title: '',
     category: '',
-    description: '',
     location: '',
     time: '',
-    verification: '',
-    email: ''
+    dynamic_attributes: {},
+    verification_secret: '',
+    contact: '',
+    raw_summary: ''
   };
 
   if (btnSendChat && chatInput) {
-    btnSendChat.addEventListener('click', handleUserChat);
+    btnSendChat.addEventListener('click', () => handleUserChat());
     chatInput.addEventListener('keypress', (e) => {
       if (e.key === 'Enter') handleUserChat();
     });
@@ -225,23 +238,93 @@ document.addEventListener('DOMContentLoaded', () => {
 
   promptChips.forEach(chip => {
     chip.addEventListener('click', () => {
-      const text = chip.textContent.replace(/^"|"$/g, '');
+      const text = chip.textContent.replace(/^"|"$/g, '').trim();
       if (chatInput) chatInput.value = text;
-      handleUserChat();
+      handleUserChat(text);
     });
   });
 
-  function handleUserChat() {
-    const msg = chatInput ? chatInput.value.trim() : '';
+  async function handleUserChat(directMessage) {
+    if (isAiResponding) return;
+    const msg = directMessage || (chatInput ? chatInput.value.trim() : '');
     if (!msg) return;
 
+    // Temporarily pause recognition while processing/speaking AI reply
+    pauseRecognition();
+
+    // Add user bubble
     addChatBubble(msg, 'user');
+    chatHistory.push({ role: 'user', text: msg });
     if (chatInput) chatInput.value = '';
 
-    // Simulate AI response & extraction
-    setTimeout(() => {
-      processAiResponse(msg);
-    }, 500);
+    // Show AI thinking bubble
+    const thinkingBubble = showThinkingIndicator();
+    isAiResponding = true;
+    updateVoiceBadgeState();
+
+    const flaskBaseUrl = window.FLASK_BACKEND_URL || (window.location.protocol + '//' + (window.location.hostname || '127.0.0.1') + ':5000');
+
+    try {
+      const response = await fetch(`${flaskBaseUrl}/report/talk_to_ai/chat`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          message: msg,
+          history: chatHistory,
+          report_type: isFoundPage ? 'found' : 'lost',
+          current_draft: currentDraft
+        })
+      });
+
+      const result = await response.json();
+      removeThinkingIndicator(thinkingBubble);
+      isAiResponding = false;
+
+      if (result.success && result.reply) {
+        addChatBubble(result.reply, 'ai');
+        chatHistory.push({ role: 'assistant', text: result.reply });
+
+        if (result.draft) {
+          currentDraft = {
+            ...currentDraft,
+            ...result.draft,
+            dynamic_attributes: {
+              ...(currentDraft.dynamic_attributes || {}),
+              ...(result.draft.dynamic_attributes || {})
+            }
+          };
+          renderDynamicDraft(currentDraft, result.is_ready_to_submit);
+        }
+
+        // If Voice Mode is active, speak the reply aloud and resume listening after
+        if (isVoiceModeActive) {
+          speakAiReply(result.reply);
+        } else {
+          updateVoiceBadgeState();
+        }
+      } else {
+        const fallbackReply = result.error || "I've noted that! Could you tell me more about the item or where you last saw it?";
+        addChatBubble(fallbackReply, 'ai');
+        if (isVoiceModeActive) {
+          speakAiReply(fallbackReply);
+        } else {
+          updateVoiceBadgeState();
+        }
+      }
+    } catch (err) {
+      console.error('Error connecting to Talk to AI endpoint:', err);
+      removeThinkingIndicator(thinkingBubble);
+      isAiResponding = false;
+      const errReply = "I've noted that in your report draft. Please continue describing the item!";
+      addChatBubble(errReply, 'ai');
+      if (isVoiceModeActive) {
+        speakAiReply(errReply);
+      } else {
+        updateVoiceBadgeState();
+      }
+    }
   }
 
   function addChatBubble(text, sender) {
@@ -253,109 +336,451 @@ document.addEventListener('DOMContentLoaded', () => {
     chatMessages.scrollTop = chatMessages.scrollHeight;
   }
 
-  function processAiResponse(userMsg) {
-    const lower = userMsg.toLowerCase();
-
-    // Extract item details
-    if (lower.includes('wallet') || lower.includes('phone') || lower.includes('iphone') || lower.includes('keys') || lower.includes('bag') || lower.includes('jacket') || lower.includes('watch')) {
-      if (lower.includes('wallet')) { draftData.title = 'Wallet'; draftData.category = 'Wallets & Bags'; }
-      else if (lower.includes('phone') || lower.includes('iphone')) { draftData.title = 'Smartphone'; draftData.category = 'Electronics'; }
-      else if (lower.includes('keys')) { draftData.title = 'Set of Keys'; draftData.category = 'Keys'; }
-      else if (lower.includes('bag')) { draftData.title = 'Bag / Backpack'; draftData.category = 'Wallets & Bags'; }
-      else if (lower.includes('jacket')) { draftData.title = 'Jacket'; draftData.category = 'Clothing'; }
-      else if (lower.includes('watch')) { draftData.title = 'Watch'; draftData.category = 'Electronics'; }
-      
-      draftData.description = userMsg;
-    }
-
-    if (lower.includes('park') || lower.includes('subway') || lower.includes('street') || lower.includes('cafe') || lower.includes('bus') || lower.includes('station') || lower.includes('train') || lower.includes('library')) {
-      draftData.location = userMsg;
-    }
-
-    if (lower.includes('today') || lower.includes('yesterday') || lower.includes('pm') || lower.includes('am') || lower.includes('morning') || lower.includes('afternoon') || lower.includes('night')) {
-      draftData.time = userMsg;
-    }
-
-    if (lower.includes('@') && lower.includes('.')) {
-      const emailMatch = userMsg.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
-      if (emailMatch) draftData.email = emailMatch[0];
-    }
-
-    if (lower.includes('sticker') || lower.includes('code') || lower.includes('photo') || lower.includes('card') || lower.includes('wallpaper') || lower.includes('scratch') || lower.includes('initials')) {
-      draftData.verification = userMsg;
-    }
-
-    updateDraftCard();
-
-    // Build reply explicitly stating no backend is connected
-    const disclaimerHeader = `<div class="backend-notice-badge">⚠️ No AI Backend Connected (Demo Mode)</div>`;
-    
-    let aiReply = '';
-    if (lower === 'hi' || lower === 'hello' || lower === 'hey') {
-      aiReply = `${disclaimerHeader}Backend Connect cheyyi ayya!`
-    } else if (!draftData.category) {
-      aiReply = `${disclaimerHeader}Got it! <em>(Simulated AI Response)</em> Could you tell me what specific item you ${isFoundPage ? 'found' : 'lost'} (e.g., iPhone, Wallet, Keys)?`;
-    } else if (!draftData.location) {
-      aiReply = `${disclaimerHeader}Recorded <strong>${draftData.title}</strong> in your draft! Where did you ${isFoundPage ? 'find' : 'lose'} it? (e.g., subway, park, cafe)`;
-    } else if (!draftData.verification) {
-      aiReply = `${disclaimerHeader}Location updated! What is a ${isFoundPage ? 'verification question for the owner' : 'private detail only you know'}?`;
-    } else if (!draftData.email) {
-      aiReply = `${disclaimerHeader}Almost complete! Please enter your email address so we can register this report draft.`;
-    } else {
-      aiReply = `${disclaimerHeader}Awesome! All report details have been extracted into your Live Report Draft on the right panel. Click <strong>Submit Report</strong> to finish!`;
-    }
-
-    addChatBubble(aiReply, 'ai');
+  function showThinkingIndicator() {
+    if (!chatMessages) return null;
+    const thinking = document.createElement('div');
+    thinking.className = 'chat-bubble thinking';
+    thinking.innerHTML = '<span class="dot"></span><span class="dot"></span><span class="dot"></span>';
+    chatMessages.appendChild(thinking);
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+    return thinking;
   }
 
-  function updateDraftCard() {
-    const elTitle = document.getElementById('draftTitleVal');
-    const elCat = document.getElementById('draftCatVal');
-    const elDesc = document.getElementById('draftDescVal');
-    const elLoc = document.getElementById('draftLocVal');
-    const elVerif = document.getElementById('draftVerifVal');
-    const elEmail = document.getElementById('draftEmailVal');
-    const btnDraftSubmit = document.getElementById('btnDraftSubmit');
+  function removeThinkingIndicator(bubble) {
+    if (bubble && bubble.parentNode) {
+      bubble.parentNode.removeChild(bubble);
+    }
+  }
 
-    if (elTitle) updateDraftField(elTitle, draftData.title || draftData.description);
-    if (elCat) updateDraftField(elCat, draftData.category);
-    if (elDesc) updateDraftField(elDesc, draftData.description);
-    if (elLoc) updateDraftField(elLoc, draftData.location);
-    if (elVerif) updateDraftField(elVerif, draftData.verification);
-    if (elEmail) updateDraftField(elEmail, draftData.email);
+  // Fully dynamic right-side attribute card renderer
+  function renderDynamicDraft(draft, isReady) {
+    if (!dynamicDraftContainer) return;
 
+    const attributes = draft.dynamic_attributes || {};
+    const hasCore = Boolean(draft.title || draft.category || draft.location || draft.time || draft.verification_secret || draft.contact || Object.keys(attributes).length > 0);
+
+    if (!hasCore) {
+      dynamicDraftContainer.innerHTML = `
+        <div class="draft-empty-state" id="draftEmptyState">
+          <div class="draft-empty-icon">✨</div>
+          <div class="draft-empty-text"><strong>Live Attributes Extractor</strong></div>
+          <div class="draft-empty-sub">Speak or type your conversation. The AI will dynamically extract and display all item attributes, location, and marks here in real time.</div>
+        </div>
+      `;
+      if (btnDraftSubmit) btnDraftSubmit.disabled = true;
+      return;
+    }
+
+    let html = '';
+
+    // 1. Title / Item Type Card
+    if (draft.title) {
+      html += `
+        <div class="draft-item updated">
+          <div class="draft-item-header">
+            <span class="draft-label"><span class="draft-label-icon">🏷️</span> ${isFoundPage ? 'Found Item' : 'Lost Item'}</span>
+            <span class="draft-tag-badge">Identified</span>
+          </div>
+          <div class="draft-value">${escapeHtml(draft.title)}</div>
+        </div>
+      `;
+    }
+
+    // 2. Category Card
+    if (draft.category) {
+      html += `
+        <div class="draft-item">
+          <div class="draft-item-header">
+            <span class="draft-label"><span class="draft-label-icon">📂</span> Category</span>
+          </div>
+          <div class="draft-value">${escapeHtml(draft.category)}</div>
+        </div>
+      `;
+    }
+
+    // 3. Location Card
+    if (draft.location) {
+      html += `
+        <div class="draft-item updated">
+          <div class="draft-item-header">
+            <span class="draft-label"><span class="draft-label-icon">📍</span> ${isFoundPage ? 'Found Location' : 'Lost Location'}</span>
+            <span class="draft-tag-badge">Location</span>
+          </div>
+          <div class="draft-value">${escapeHtml(draft.location)}</div>
+        </div>
+      `;
+    }
+
+    // 4. Time Card
+    if (draft.time) {
+      html += `
+        <div class="draft-item">
+          <div class="draft-item-header">
+            <span class="draft-label"><span class="draft-label-icon">🕒</span> Date / Time Context</span>
+          </div>
+          <div class="draft-value">${escapeHtml(draft.time)}</div>
+        </div>
+      `;
+    }
+
+    // 5. Dynamic Discovered Attributes (e.g. Brand, Dial Color, Strap, Scratches, Engravings, etc.)
+    for (const [key, value] of Object.entries(attributes)) {
+      if (value && String(value).trim() !== '') {
+        const icon = getAttributeIcon(key);
+        html += `
+          <div class="draft-item updated">
+            <div class="draft-item-header">
+              <span class="draft-label"><span class="draft-label-icon">${icon}</span> ${escapeHtml(key)}</span>
+              <span class="draft-tag-badge">Detail</span>
+            </div>
+            <div class="draft-value">${escapeHtml(String(value))}</div>
+          </div>
+        `;
+      }
+    }
+
+    // 6. Verification Detail Card
+    if (draft.verification_secret) {
+      html += `
+        <div class="draft-item updated">
+          <div class="draft-item-header">
+            <span class="draft-label"><span class="draft-label-icon">🔐</span> Private Verification Detail</span>
+            <span class="draft-tag-badge">Private</span>
+          </div>
+          <div class="draft-value">${escapeHtml(draft.verification_secret)}</div>
+        </div>
+      `;
+    }
+
+    // 7. Contact Card
+    if (draft.contact) {
+      html += `
+        <div class="draft-item">
+          <div class="draft-item-header">
+            <span class="draft-label"><span class="draft-label-icon">📧</span> Contact Info</span>
+          </div>
+          <div class="draft-value">${escapeHtml(draft.contact)}</div>
+        </div>
+      `;
+    }
+
+    // 8. Summary Pill
+    if (draft.raw_summary) {
+      html += `
+        <div class="draft-summary-pill">
+          💡 <em>"${escapeHtml(draft.raw_summary)}"</em>
+        </div>
+      `;
+    }
+
+    dynamicDraftContainer.innerHTML = html;
+    dynamicDraftContainer.scrollTop = dynamicDraftContainer.scrollHeight;
+
+    // Enable submit if sufficient details captured
     if (btnDraftSubmit) {
-      const isReady = (draftData.category || draftData.title) && (draftData.email || draftData.location);
-      btnDraftSubmit.disabled = !isReady;
+      const ready = isReady || (draft.title && (draft.location || Object.keys(attributes).length > 0));
+      btnDraftSubmit.disabled = !ready;
     }
   }
 
-  function updateDraftField(element, value) {
-    if (!element) return;
-    if (value && value.trim() !== '') {
-      element.textContent = value;
-      element.classList.remove('empty');
-      element.parentElement.classList.add('updated');
+  function getAttributeIcon(key) {
+    const k = (key || '').toLowerCase();
+    if (k.includes('color') || k.includes('dial')) return '🎨';
+    if (k.includes('brand') || k.includes('model') || k.includes('make')) return '🏷️';
+    if (k.includes('strap') || k.includes('case') || k.includes('material')) return '⚙️';
+    if (k.includes('scratch') || k.includes('mark') || k.includes('dent') || k.includes('damage') || k.includes('engrav')) return '🔍';
+    if (k.includes('key') || k.includes('chain') || k.includes('tag')) return '🔑';
+    if (k.includes('serial') || k.includes('imei') || k.includes('number')) return '🔢';
+    return '✨';
+  }
+
+  function escapeHtml(str) {
+    if (!str) return '';
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  // -------------------------------------------------------------
+  // Continuous Voice Input & Speech Synthesis Loop
+  // -------------------------------------------------------------
+  let recognition = null;
+  let isRecognitionRunning = false;
+  let animFrameId = null;
+  let restartTimeoutId = null;
+
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (SpeechRecognition) {
+    recognition = new SpeechRecognition();
+    recognition.continuous = true;
+    recognition.interimResults = false;
+    recognition.lang = 'en-US';
+
+    recognition.onstart = () => {
+      isRecognitionRunning = true;
+      updateVoiceBadgeState();
+      startVisualizerAnimation();
+    };
+
+    recognition.onresult = (event) => {
+      const lastResultIndex = event.results.length - 1;
+      const transcript = event.results[lastResultIndex][0].transcript.trim();
+      if (transcript) {
+        if (chatInput) chatInput.value = transcript;
+        handleUserChat(transcript);
+      }
+    };
+
+    recognition.onerror = (event) => {
+      console.warn('Speech recognition status:', event.error);
+      if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+        stopVoiceMode();
+        alert('Microphone access was blocked. Please allow microphone permissions in your browser.');
+      }
+    };
+
+    recognition.onend = () => {
+      isRecognitionRunning = false;
+      // If voice mode is still enabled and AI is not speaking/processing, auto-restart
+      if (isVoiceModeActive && !isAiResponding && !isAiSpeaking) {
+        clearTimeout(restartTimeoutId);
+        restartTimeoutId = setTimeout(() => {
+          startRecognitionSafe();
+        }, 300);
+      } else {
+        updateVoiceBadgeState();
+        if (!isAiSpeaking) stopVisualizerAnimation();
+      }
+    };
+  }
+
+  function toggleVoiceMode() {
+    if (!recognition) {
+      alert('Speech Recognition is not supported in this browser. Please use Chrome, Edge, or Safari.');
+      return;
+    }
+
+    if (isVoiceModeActive) {
+      stopVoiceMode();
     } else {
-      element.textContent = 'Not specified yet';
-      element.classList.add('empty');
+      startVoiceMode();
     }
   }
 
-  const btnDraftSubmit = document.getElementById('btnDraftSubmit');
+  function startVoiceMode() {
+    isVoiceModeActive = true;
+    if (voiceToggleLabel) voiceToggleLabel.textContent = 'Stop Voice Mode';
+    if (btnVoiceToggle) btnVoiceToggle.classList.add('active');
+    startRecognitionSafe();
+  }
+
+  function stopVoiceMode() {
+    isVoiceModeActive = false;
+    clearTimeout(restartTimeoutId);
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+    }
+    isAiSpeaking = false;
+    pauseRecognition();
+    if (voiceToggleLabel) voiceToggleLabel.textContent = 'Start Voice Mode';
+    if (btnVoiceToggle) btnVoiceToggle.classList.remove('active');
+    updateVoiceBadgeState();
+    stopVisualizerAnimation();
+  }
+
+  function startRecognitionSafe() {
+    if (!recognition || !isVoiceModeActive || isRecognitionRunning || isAiResponding || isAiSpeaking) return;
+    try {
+      recognition.start();
+    } catch (e) {
+      // Ignore if already starting/active
+    }
+  }
+
+  function pauseRecognition() {
+    clearTimeout(restartTimeoutId);
+    if (recognition && isRecognitionRunning) {
+      try {
+        recognition.stop();
+      } catch (e) {}
+    }
+    isRecognitionRunning = false;
+  }
+
+  function speakAiReply(text) {
+    if (!('speechSynthesis' in window)) {
+      if (isVoiceModeActive) startRecognitionSafe();
+      return;
+    }
+
+    window.speechSynthesis.cancel(); // Cancel any previous speech
+    isAiSpeaking = true;
+    updateVoiceBadgeState();
+    startVisualizerAnimation();
+
+    // Clean markdown/HTML if any from spoken text
+    const cleanText = text.replace(/<[^>]*>?/gm, '').replace(/[*_#`~]/g, '');
+    const utterance = new SpeechSynthesisUtterance(cleanText);
+    utterance.rate = 1.0;
+    utterance.pitch = 1.0;
+
+    // Pick pleasant English voice if available
+    const voices = window.speechSynthesis.getVoices();
+    const naturalVoice = voices.find(v => v.lang.startsWith('en') && (v.name.includes('Natural') || v.name.includes('Google') || v.name.includes('Samantha')));
+    if (naturalVoice) utterance.voice = naturalVoice;
+
+    const onSpeechFinished = () => {
+      isAiSpeaking = false;
+      updateVoiceBadgeState();
+      stopVisualizerAnimation();
+      if (isVoiceModeActive) {
+        // Automatically listen for user's next response!
+        setTimeout(() => {
+          startRecognitionSafe();
+        }, 400);
+      }
+    };
+
+    utterance.onend = onSpeechFinished;
+    utterance.onerror = onSpeechFinished;
+
+    window.speechSynthesis.speak(utterance);
+  }
+
+  function updateVoiceBadgeState() {
+    if (!voiceBadgeText || !voiceLiveBadge) return;
+
+    if (isAiSpeaking) {
+      voiceBadgeText.textContent = 'AI Speaking...';
+      voiceLiveBadge.classList.add('active');
+    } else if (isAiResponding) {
+      voiceBadgeText.textContent = 'AI Thinking...';
+      voiceLiveBadge.classList.add('active');
+    } else if (isVoiceModeActive && isRecognitionRunning) {
+      voiceBadgeText.textContent = 'Listening (Voice Active)';
+      voiceLiveBadge.classList.add('active');
+    } else if (isVoiceModeActive) {
+      voiceBadgeText.textContent = 'Voice Mode Ready';
+      voiceLiveBadge.classList.add('active');
+    } else {
+      voiceBadgeText.textContent = 'Ready to Talk';
+      voiceLiveBadge.classList.remove('active');
+    }
+  }
+
+  if (btnVoiceToggle) btnVoiceToggle.addEventListener('click', toggleVoiceMode);
+  if (btnMicInline) btnMicInline.addEventListener('click', toggleVoiceMode);
+
+  function startVisualizerAnimation() {
+    if (!voiceVisualizer || animFrameId) return;
+    const ctx = voiceVisualizer.getContext('2d');
+    const width = voiceVisualizer.width;
+    const height = voiceVisualizer.height;
+
+    function renderFrame() {
+      ctx.clearRect(0, 0, width, height);
+      const numBars = 16;
+      const barWidth = 4;
+      const gap = (width - numBars * barWidth) / (numBars - 1);
+
+      for (let i = 0; i < numBars; i++) {
+        const barHeight = Math.random() * (height - 4) + 4;
+        const x = i * (barWidth + gap);
+        const y = (height - barHeight) / 2;
+
+        ctx.fillStyle = isAiSpeaking ? '#E27D60' : '#C4622D';
+        ctx.beginPath();
+        ctx.roundRect(x, y, barWidth, barHeight, 2);
+        ctx.fill();
+      }
+
+      if (isRecognitionRunning || isAiSpeaking) {
+        animFrameId = requestAnimationFrame(renderFrame);
+      } else {
+        animFrameId = null;
+        ctx.clearRect(0, 0, width, height);
+      }
+    }
+
+    renderFrame();
+  }
+
+  function stopVisualizerAnimation() {
+    if (animFrameId) {
+      cancelAnimationFrame(animFrameId);
+      animFrameId = null;
+    }
+    if (voiceVisualizer) {
+      const ctx = voiceVisualizer.getContext('2d');
+      ctx.clearRect(0, 0, voiceVisualizer.width, voiceVisualizer.height);
+    }
+  }
+
+  // -------------------------------------------------------------
+  // Submit Final Report from Talk to AI
+  // -------------------------------------------------------------
   if (btnDraftSubmit) {
-    btnDraftSubmit.addEventListener('click', () => {
-      const summaryText = `${draftData.title || ''} ${draftData.category || ''} at ${draftData.location || ''}. Verification: ${draftData.verification || ''}`;
-      showSuccessState(summaryText, {
-        title: draftData.title,
-        where: draftData.location,
-        verification: draftData.verification
-      });
+    btnDraftSubmit.addEventListener('click', async () => {
+      btnDraftSubmit.disabled = true;
+      btnDraftSubmit.textContent = 'Submitting & Extracting DNA...';
+
+      let combinedDescription = currentDraft.raw_summary || `${currentDraft.title || 'Item'} lost at ${currentDraft.location || 'unknown'}.`;
+      
+      const attrList = [];
+      for (const [k, v] of Object.entries(currentDraft.dynamic_attributes || {})) {
+        attrList.push(`${k}: ${v}`);
+      }
+      if (attrList.length > 0) {
+        combinedDescription += ` (${attrList.join(', ')})`;
+      }
+
+      const flaskBaseUrl = window.FLASK_BACKEND_URL || (window.location.protocol + '//' + (window.location.hostname || '127.0.0.1') + ':5000');
+
+      try {
+        const response = await fetch(`${flaskBaseUrl}/new-report`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            description: combinedDescription,
+            location: currentDraft.location,
+            where: currentDraft.location,
+            when: currentDraft.time,
+            title: currentDraft.title,
+            category: currentDraft.category
+          })
+        });
+
+        const resData = await response.json();
+        if (resData.success) {
+          showSuccessState(combinedDescription, {
+            title: currentDraft.title,
+            where: currentDraft.location,
+            verification: currentDraft.verification_secret,
+            reportId: resData.report_id,
+            dna: resData.digital_dna
+          });
+        } else {
+          showSuccessState(combinedDescription, {
+            title: currentDraft.title,
+            where: currentDraft.location,
+            verification: currentDraft.verification_secret
+          });
+        }
+      } catch (e) {
+        console.error('Error submitting report to backend:', e);
+        showSuccessState(combinedDescription, {
+          title: currentDraft.title,
+          where: currentDraft.location,
+          verification: currentDraft.verification_secret
+        });
+      }
     });
   }
 
   function showSuccessState(info, extraMeta = {}) {
-    const id = (reportType === 'found' ? 'RF-' : 'RL-') + Math.random().toString(36).slice(2, 8).toUpperCase();
+    const id = extraMeta.reportId || ((reportType === 'found' ? 'RF-' : 'RL-') + Math.random().toString(36).slice(2, 8).toUpperCase());
     
     // Hide active forms/containers
     const mainForm = document.getElementById(reportType === 'found' ? 'foundForm' : 'lostForm');
@@ -376,8 +801,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     if (window.FlaskAIService && aiDnaResultsContainer) {
-      const dna = window.FlaskAIService.extractClientDna(info, extraMeta);
-      window.FlaskAIService.renderAiDnaCard(dna, aiDnaResultsContainer, { location: extraMeta.where || guidedState.where || draftData.location });
+      const dna = extraMeta.dna || window.FlaskAIService.extractClientDna(info, extraMeta);
+      window.FlaskAIService.renderAiDnaCard(dna, aiDnaResultsContainer, { location: extraMeta.where || draftData?.location || currentDraft?.location });
     }
 
     if (successState) {
@@ -386,3 +811,4 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 });
+

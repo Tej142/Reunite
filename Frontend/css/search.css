@@ -926,3 +926,147 @@
 @media (max-width: 480px) {
   .search-grid { grid-template-columns: 1fr; }
 }
+
+/* ══════════════════════════════════════════════════════
+   SEARCH & ITEM CARD MICROINTERACTIONS
+   ══════════════════════════════════════════════════════ */
+
+/* ── Inline Search Bar Spinner ───────────────────────── */
+.search-bar-spinner {
+  display: none;
+  width: 1rem;
+  height: 1rem;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: searchSpin 0.6s linear infinite;
+  margin-right: 0.5rem;
+  flex-shrink: 0;
+}
+
+.search-bar-spinner.active {
+  display: inline-block;
+}
+
+@keyframes searchSpin {
+  to { transform: rotate(360deg); }
+}
+
+/* ── Search Results Grid Reflow Transition ───────────── */
+.search-grid {
+  transition: opacity 0.2s ease;
+}
+
+.search-grid.is-filtering {
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+.search-item-card {
+  animation: cardFadePop 0.28s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes cardFadePop {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Card bookmark button */
+.card-bookmark-btn {
+  position: absolute;
+  top: 0.65rem;
+  right: 0.65rem;
+  z-index: 3;
+}
+
+/* Card image lazy-load fade-in */
+.card-img {
+  opacity: 0;
+  transition: opacity 0.35s ease, transform 0.35s ease;
+}
+
+.card-img.loaded {
+  opacity: 1;
+}
+
+/* ── AI Match Score Indicator ────────────────────────── */
+.match-score-bar-wrap {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.35rem;
+  background: var(--bg-alt);
+  padding: 0.3rem 0.6rem;
+  border-radius: 0.5rem;
+  border: 1px solid var(--border);
+}
+
+.match-score-track {
+  flex: 1;
+  height: 6px;
+  background: var(--border);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.match-score-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #10B981, #059669);
+  transition: width 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.match-score-text {
+  font-size: 0.725rem;
+  font-weight: 700;
+  color: #10B981;
+}
+
+/* ── Claim Success Serene Checkmark ──────────────────── */
+.claim-success-box {
+  text-align: center;
+  padding: 1.5rem 0.5rem;
+  animation: claimSuccessIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes claimSuccessIn {
+  from { opacity: 0; transform: scale(0.96) translateY(6px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.claim-checkmark-circle {
+  width: 54px;
+  height: 54px;
+  border-radius: 50%;
+  background: #DCFCE7;
+  border: 2px solid #86EFAC;
+  color: #15803D;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 1rem;
+  animation: checkmarkPop 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+@keyframes checkmarkPop {
+  0% { transform: scale(0.4); opacity: 0; }
+  70% { transform: scale(1.15); }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+.claim-checkmark-circle svg {
+  stroke-dasharray: 40;
+  stroke-dashoffset: 40;
+  animation: checkmarkDraw 0.45s 0.2s ease forwards;
+}
+
+@keyframes checkmarkDraw {
+  to { stroke-dashoffset: 0; }
+}
+

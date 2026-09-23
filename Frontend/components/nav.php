@@ -2,19 +2,24 @@
 require_once __DIR__ . '/../includes/auth.php';
 $current_page = basename($_SERVER['PHP_SELF']);
 $logged_in = is_logged_in();
-$is_auth_page = in_array($current_page, ['login.php', 'signup.php']);
+$is_auth_page = in_array($current_page, ['login.php', 'signup.php', 'forgot-password.php', 'reset-password.php']);
 $user = get_current_user_data();
-$user_initial = !empty($user['name']) ? strtoupper(substr(trim($user['name']), 0, 1)) : 'U';
+$u_name = $user['full_name'] ?? $user['name'] ?? ($_SESSION['full_name'] ?? '');
+$user_initial = !empty(trim($u_name)) ? strtoupper(substr(trim($u_name), 0, 1)) : 'S';
 
 $is_search = ($current_page === 'search.php');
 $is_home = ($current_page === 'home.php');
 $is_profile = ($current_page === 'profile.php');
 ?>
 <script>
-  // Global Flask AI Backend URL Configuration
-  // Set this to your public cloud API URL (e.g. 'https://your-app.onrender.com') or tunnel URL when sharing
-  window.FLASK_BACKEND_URL = window.FLASK_BACKEND_URL || 'https://reunite-ai-backend.onrender.com';
+  // AI Backend Service URL (Render cloud backend in production, local fallback in dev)
+  (function() {
+    var isLocal = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+    window.FLASK_BACKEND_URL = window.FLASK_BACKEND_URL || (isLocal ? 'http://127.0.0.1:5000' : 'https://reunite-ai-backend.onrender.com');
+    console.log('⚡ [Reunite] Connected Flask Backend URL:', window.FLASK_BACKEND_URL);
+  })();
 </script>
+<script src="js/microinteractions.js"></script>
 <nav>
   <div class="nav-inner">
     <a href="<?php echo $logged_in ? 'home.php' : 'index.php'; ?>" class="brand">

@@ -2,6 +2,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const form = document.getElementById('loginForm');
   const submitBtn = document.getElementById('submitBtn');
   const successState = document.getElementById('successState');
+  const topAlert = document.getElementById('loginTopAlert');
+  const topAlertText = document.getElementById('loginTopAlertText');
 
   // Input Elements
   const fields = {
@@ -14,6 +16,39 @@ document.addEventListener('DOMContentLoaded', () => {
     pin: document.getElementById('pinError'),
     password: document.getElementById('passwordError')
   };
+
+  // ── Top Dynamic Alert Helpers ───────────────────────────
+  function showTopAlert(message, isSuccess = false) {
+    if (topAlert && topAlertText) {
+      topAlertText.textContent = message;
+      topAlert.style.borderColor = isSuccess ? 'rgba(34, 197, 94, 0.4)' : 'rgba(239, 68, 68, 0.4)';
+      topAlert.style.backgroundColor = isSuccess ? 'rgba(34, 197, 94, 0.1)' : 'rgba(239, 68, 68, 0.1)';
+      topAlert.style.color = isSuccess ? '#22C55E' : '#EF4444';
+      const icon = topAlert.querySelector('.alert-icon');
+      if (icon) icon.style.stroke = isSuccess ? '#22C55E' : '#EF4444';
+      topAlert.classList.remove('show');
+      // Trigger reflow to restart CSS animation
+      void topAlert.offsetWidth;
+      topAlert.classList.add('show');
+    }
+  }
+
+  function hideTopAlert() {
+    if (topAlert) {
+      topAlert.classList.remove('show');
+    }
+  }
+
+  // ── Check for Password Reset Success Params ─────────────
+  const urlParams = new URLSearchParams(window.location.search);
+  if (urlParams.get('reset') === 'success') {
+    showTopAlert('Password reset successful! Please sign in with your new password.', true);
+    const pinParam = urlParams.get('pin');
+    if (pinParam && fields.pin) {
+      fields.pin.value = pinParam;
+      if (fields.password) fields.password.focus();
+    }
+  }
 
   // ── Password Visibility Toggle ─────────────────────────
   const setupPasswordToggle = (toggleBtnId, inputId) => {
@@ -63,7 +98,7 @@ document.addEventListener('DOMContentLoaded', () => {
       fields[fieldKey].classList.remove('valid');
       fields[fieldKey].classList.add('invalid');
     }
-    if (errors[fieldKey]) {
+    if (errors[fieldKey] && message) {
       errors[fieldKey].textContent = message;
       errors[fieldKey].classList.add('show');
     }
@@ -98,7 +133,10 @@ document.addEventListener('DOMContentLoaded', () => {
   ['pin', 'password'].forEach(key => {
     const el = fields[key];
     if (el) {
-      el.addEventListener('input', () => clearFieldWarning(key));
+      el.addEventListener('input', () => {
+        clearFieldWarning(key);
+        hideTopAlert();
+      });
     }
   });
 
@@ -106,6 +144,7 @@ document.addEventListener('DOMContentLoaded', () => {
   if (form) {
     form.addEventListener('submit', (e) => {
       e.preventDefault();
+      hideTopAlert();
 
       // Validate all fields on submit
       const isPinValid = validatePin();
@@ -127,9 +166,21 @@ document.addEventListener('DOMContentLoaded', () => {
           password: fields.password.value
         })
       })
-      .then(res => res.json())
-      .then(data => {
+      .then(res => res.text())
+      .then(text => {
+        let data;
+        try {
+          data = JSON.parse(text);
+        } catch(parseErr) {
+          console.error('Login Raw Server Output:', text);
+          submitBtn.disabled = false;
+          submitBtn.textContent = 'Sign in';
+          showTopAlert(text ? 'Server Error: ' + text.substring(0, 100) : 'Empty response from server.');
+          return;
+        }
+
         if (data.success) {
+          hideTopAlert();
           form.classList.add('hide');
           form.style.display = 'none';
           if (successState) {
@@ -137,18 +188,30 @@ document.addEventListener('DOMContentLoaded', () => {
           }
           setTimeout(() => {
             window.location.href = data.redirect || 'home.php';
-          }, 1000);
+          }, 800);
         } else {
           submitBtn.disabled = false;
           submitBtn.textContent = 'Sign in';
-          setInvalid('pin', data.message || 'Invalid credentials. Please try again.');
-          if (fields.pin) fields.pin.focus();
+          const errMsg = data.message || 'Invalid credentials. Please try again.';
+          
+          // Display dynamically above College PIN
+          showTopAlert(errMsg);
+
+          // Highlight the relevant field
+          if (errMsg.toLowerCase().includes('pin') || errMsg.toLowerCase().includes('account')) {
+            setInvalid('pin', '');
+            if (fields.pin) fields.pin.focus();
+          } else {
+            setInvalid('password', '');
+            if (fields.password) fields.password.focus();
+          }
         }
       })
       .catch(err => {
+        console.error('Login Network Error:', err);
         submitBtn.disabled = false;
         submitBtn.textContent = 'Sign in';
-        window.location.href = 'home.php';
+        showTopAlert(err.message || 'Unable to reach the server. Please check your connection.');
       });
     });
   }

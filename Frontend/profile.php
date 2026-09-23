@@ -3,13 +3,14 @@ require_once __DIR__ . '/includes/auth.php';
 // Protected page: require student to be logged in
 require_login();
 $user = get_current_user_data();
-$user_name = $user['name'] ?? 'Alex Johnson';
-$user_pin = $user['pin'] ?? '24155-cm-002';
-$user_email = $user['email'] ?? 'alex.johnson@college.edu';
-$user_phone = $user['phone'] ?? '+91 98765 43210';
-$user_college = $user['college'] ?? 'Sri Venkateswara Govt Polytechnic';
-$user_branch = $user['branch'] ?? 'Computer Science & Engineering';
-$user_initial = strtoupper(substr(trim($user_name), 0, 1));
+$user_name = $user['full_name'] ?? $user['name'] ?? ($_SESSION['full_name'] ?? 'Student');
+$user_pin = $user['pin'] ?? ($_SESSION['pin'] ?? '');
+$user_email = $user['email_raw'] ?? $user['email'] ?? ($_SESSION['email'] ?? '');
+$user_phone = $user['phone_raw'] ?? $user['phone'] ?? ($_SESSION['phone'] ?? '');
+$user_college = $user['college'] ?? ($_SESSION['college'] ?? '');
+$user_branch = $user['branch'] ?? ($_SESSION['branch'] ?? '');
+$user_branch_display = function_exists('get_branch_name') ? get_branch_name($user_branch) : $user_branch;
+$user_initial = !empty(trim($user_name)) ? strtoupper(substr(trim($user_name), 0, 1)) : 'S';
 ?>
 <!doctype html>
 <html lang="en">
@@ -72,7 +73,7 @@ $user_initial = strtoupper(substr(trim($user_name), 0, 1));
         </div>
         <p class="profile-meta-text">
           <span>🏛️ <?php echo htmlspecialchars($user_college); ?></span> &bull; 
-          <span>💻 <?php echo htmlspecialchars($user_branch); ?></span>
+          <span>💻 <?php echo htmlspecialchars($user_branch_display); ?></span>
         </p>
         <p class="profile-joined-text">Student Member &bull; Active Session</p>
       </div>
@@ -172,7 +173,7 @@ $user_initial = strtoupper(substr(trim($user_name), 0, 1));
             <!-- Branch / Department -->
             <div class="form-group">
               <label for="profBranch">Branch / Department</label>
-              <input type="text" id="profBranch" name="branch" value="<?php echo htmlspecialchars($user_branch); ?>" required />
+              <input type="text" id="profBranch" name="branch" value="<?php echo htmlspecialchars($user_branch_display); ?>" required />
             </div>
           </div>
 

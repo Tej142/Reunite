@@ -66,13 +66,19 @@ document.addEventListener('DOMContentLoaded', () => {
       const branch = document.getElementById('profBranch').value.trim();
 
       if (!name || !email) {
+        if (!name) window.shakeElement(document.getElementById('profName'));
+        if (!email) window.shakeElement(document.getElementById('profEmail'));
+        if (window.ReuniteToast) {
+          window.ReuniteToast.error('Validation Error', 'Name and Email are required.');
+        }
         showStatus(saveStatus, 'Name and Email are required.', 'error');
         return;
       }
 
-      saveBtn.disabled = true;
-      saveBtn.innerHTML = '<span>Saving...</span>';
-      saveStatus.textContent = '';
+      if (saveBtn && window.setButtonLoading) {
+        window.setButtonLoading(saveBtn, true, 'Saving...');
+      }
+      if (saveStatus) saveStatus.textContent = '';
 
       try {
         const response = await fetch('api/auth.php', {
@@ -92,6 +98,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (data.success) {
           showStatus(saveStatus, '✓ Profile updated successfully!', 'success');
+          if (window.ReuniteToast) {
+            window.ReuniteToast.success('Profile Updated', 'Your profile details were saved successfully.');
+          }
           if (profileDisplayName) {
             profileDisplayName.textContent = name;
           }
@@ -102,12 +111,19 @@ document.addEventListener('DOMContentLoaded', () => {
           });
         } else {
           showStatus(saveStatus, data.message || 'Error updating profile.', 'error');
+          if (window.ReuniteToast) {
+            window.ReuniteToast.error('Update Failed', data.message || 'Error updating profile.');
+          }
         }
       } catch (err) {
         showStatus(saveStatus, 'Network error. Please try again.', 'error');
+        if (window.ReuniteToast) {
+          window.ReuniteToast.error('Network Error', 'Could not reach server. Please try again.');
+        }
       } finally {
-        saveBtn.disabled = false;
-        saveBtn.innerHTML = '<span>Save Changes</span>';
+        if (saveBtn && window.setButtonLoading) {
+          window.setButtonLoading(saveBtn, false);
+        }
       }
     });
   }
@@ -126,23 +142,36 @@ document.addEventListener('DOMContentLoaded', () => {
       const confirmPass = document.getElementById('confirmNewPassword').value.trim();
 
       if (!currPass || !newPass || !confirmPass) {
+        window.shakeElement(passForm);
         showStatus(passStatus, 'Please fill in all password fields.', 'error');
+        if (window.ReuniteToast) {
+          window.ReuniteToast.error('Form Incomplete', 'Please fill in all password fields.');
+        }
         return;
       }
 
       if (newPass !== confirmPass) {
+        window.shakeElement(document.getElementById('confirmNewPassword'));
         showStatus(passStatus, 'New passwords do not match.', 'error');
+        if (window.ReuniteToast) {
+          window.ReuniteToast.error('Mismatch', 'New passwords do not match.');
+        }
         return;
       }
 
       if (newPass.length < 8) {
+        window.shakeElement(document.getElementById('newPassword'));
         showStatus(passStatus, 'Password must be at least 8 characters.', 'error');
+        if (window.ReuniteToast) {
+          window.ReuniteToast.error('Weak Password', 'Password must be at least 8 characters.');
+        }
         return;
       }
 
-      passBtn.disabled = true;
-      passBtn.innerHTML = '<span>Updating...</span>';
-      passStatus.textContent = '';
+      if (passBtn && window.setButtonLoading) {
+        window.setButtonLoading(passBtn, true, 'Updating...');
+      }
+      if (passStatus) passStatus.textContent = '';
 
       try {
         const response = await fetch('api/auth.php', {
@@ -159,15 +188,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (data.success) {
           showStatus(passStatus, '✓ Password changed successfully!', 'success');
+          if (window.ReuniteToast) {
+            window.ReuniteToast.success('Password Changed', 'Your password has been securely updated.');
+          }
           passForm.reset();
         } else {
           showStatus(passStatus, data.message || 'Error changing password.', 'error');
+          if (window.ReuniteToast) {
+            window.ReuniteToast.error('Password Update Failed', data.message || 'Current password incorrect.');
+          }
         }
       } catch (err) {
         showStatus(passStatus, 'Network error. Please try again.', 'error');
       } finally {
-        passBtn.disabled = false;
-        passBtn.innerHTML = '<span>Update Password</span>';
+        if (passBtn && window.setButtonLoading) {
+          window.setButtonLoading(passBtn, false);
+        }
       }
     });
   }
@@ -183,3 +219,4 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
 });
+

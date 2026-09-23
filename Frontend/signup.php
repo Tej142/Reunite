@@ -48,6 +48,51 @@
         </div>
       </div>
 
+      <!-- Email Address (Full Width clean input) -->
+      <div class="field">
+        <div class="field-label-row">
+          <label for="email">Email Address</label>
+          <span class="email-verified-badge" id="emailVerifiedBadge" style="display:none;">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="20 6 9 17 4 12"></polyline>
+            </svg>
+            Verified
+          </span>
+        </div>
+        <input type="email" id="email" placeholder="e.g. alex@college.edu" required />
+        <span class="error-msg" id="emailError"></span>
+      </div>
+
+      <!-- Inline OTP Verification Box (Directly below Email) -->
+      <div class="otp-verification-card" id="otpSection" style="display:none;">
+        <div class="otp-header">
+          <div class="otp-title">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#C4622D" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
+              <polyline points="22,6 12,13 2,6"></polyline>
+            </svg>
+            <span>Enter 6-Digit Email Code</span>
+          </div>
+          <span class="otp-timer" id="otpTimerText">10:00</span>
+        </div>
+        <p class="otp-desc">We sent a verification code to <strong id="otpTargetEmail">your email</strong>. Enter it below:</p>
+        <div class="otp-input-row">
+          <input type="text" id="otpCode" placeholder="000000" maxlength="6" inputmode="numeric" autocomplete="one-time-code" />
+          <button type="button" class="btn-verify-otp" id="btnVerifyOtp">Verify Code</button>
+        </div>
+        <div class="otp-footer">
+          <span class="error-msg" id="otpError"></span>
+          <button type="button" class="btn-resend-otp" id="btnResendOtp">Resend Code</button>
+        </div>
+      </div>
+
+      <!-- Phone Number -->
+      <div class="field">
+        <label for="phone">Phone Number</label>
+        <input type="tel" id="phone" placeholder="e.g. 9876543210" required />
+        <span class="error-msg" id="phoneError"></span>
+      </div>
+
       <!-- College Select -->
       <div class="field">
         <label for="college">College / University</label>
@@ -70,49 +115,56 @@
         <label for="branch">Academic Branch / Department</label>
         <select id="branch" required>
           <option value="" disabled selected>Select your branch...</option>
-          <option value="cs">Computer Science &amp; Engineering</option>
-          <option value="ee">Electrical &amp; Electronics Engineering</option>
+          <option value="cme">Computer Engineering</option>
+          <option value="cse">Computer Science &amp; Engineering</option>
+          <option value="ece">Electronics &amp; Communication Engineering</option>
+          <option value="eee">Electrical &amp; Electronics Engineering</option>
           <option value="me">Mechanical Engineering</option>
           <option value="ce">Civil Engineering</option>
           <option value="che">Chemical Engineering</option>
           <option value="ae">Aerospace Engineering</option>
-          <option value="other">Other / General Studies</option>
+          <option value="aiml">AI &amp; Machine Learning</option>
+          <option value="it">Information Technology</option>
+          <option value="oth">Other / General Studies</option>
         </select>
         <span class="error-msg" id="branchError"></span>
       </div>
 
-      <!-- Password -->
-      <div class="field">
-        <label for="password">Password</label>
-        <div class="password-wrapper">
-          <input type="password" id="password" placeholder="Min. 8 characters" required />
-          <button type="button" class="toggle-password-btn" id="togglePassword" aria-label="Toggle password visibility">
-            <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
-              <circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.5" />
-            </svg>
-          </button>
+      <!-- Password Fields Wrapper (Appears ONLY after Email is verified) -->
+      <div class="password-fields-wrapper" id="passwordFieldsWrapper" style="display:none;">
+        <!-- Password -->
+        <div class="field">
+          <label for="password">Create Password</label>
+          <div class="password-wrapper">
+            <input type="password" id="password" placeholder="Min. 8 characters" required />
+            <button type="button" class="toggle-password-btn" id="togglePassword" aria-label="Toggle password visibility">
+              <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
+                <circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.5" />
+              </svg>
+            </button>
+          </div>
+          <span class="error-msg" id="passwordError"></span>
         </div>
-        <span class="error-msg" id="passwordError"></span>
-      </div>
 
-      <!-- Confirm Password -->
-      <div class="field">
-        <label for="confirmPassword">Confirm Password</label>
-        <div class="password-wrapper">
-          <input type="password" id="confirmPassword" placeholder="Re-enter password" required />
-          <button type="button" class="toggle-password-btn" id="toggleConfirmPassword" aria-label="Toggle password visibility">
-            <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
-              <circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.5" />
-            </svg>
-          </button>
+        <!-- Confirm Password -->
+        <div class="field">
+          <label for="confirmPassword">Confirm Password</label>
+          <div class="password-wrapper">
+            <input type="password" id="confirmPassword" placeholder="Re-enter password" required />
+            <button type="button" class="toggle-password-btn" id="toggleConfirmPassword" aria-label="Toggle password visibility">
+              <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
+                <circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.5" />
+              </svg>
+            </button>
+          </div>
+          <span class="error-msg" id="confirmPasswordError"></span>
         </div>
-        <span class="error-msg" id="confirmPasswordError"></span>
       </div>
 
       <div class="form-footer">
-        <button type="submit" class="btn-submit" id="submitBtn">Create account</button>
+        <button type="submit" class="btn-submit" id="submitBtn">Verify Email &amp; Continue</button>
         <p class="signin-prompt">Already have an account?<a href="login.php">Signin</a></p>
       </div>
     </form>

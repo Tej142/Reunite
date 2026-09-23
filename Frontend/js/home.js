@@ -50,32 +50,45 @@ function renderCards() {
   if (!grid) return;
   const filtered = currentFilter === 'all' ? ITEMS : ITEMS.filter(i => i.status === currentFilter);
 
-  grid.innerHTML = filtered.map(item => `
-    <article class="item-card">
-      <div class="item-card-img-wrap">
-        <img src="${item.img}" alt="${item.title}" class="item-card-img" loading="lazy" />
-        <div class="item-card-overlay"></div>
-        <span class="item-badge ${item.status === 'matched' ? 'badge-matched' : 'badge-active'}">
-          ${item.status === 'matched' ? '&#10003; Reunited' : 'Searching'}
-        </span>
-      </div>
-      <div class="item-card-body">
-        <h3 class="item-card-title">${item.title}</h3>
-        <p class="item-card-desc">${item.desc}</p>
-        <div class="item-card-foot">
-          <span class="item-loc">
-            <svg width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden="true">
-              <path d="M5 1C3.343 1 2 2.343 2 4c0 2.5 3 5 3 5s3-2.5 3-5c0-1.657-1.343-3-3-3z" fill="#A8A29E"/>
-              <circle cx="5" cy="4" r="1" fill="white"/>
-            </svg>
-            ${item.city}
+  grid.innerHTML = filtered.map(item => {
+    const isSaved = window.ReuniteBookmarks ? window.ReuniteBookmarks.isSaved(`home-${item.id}`) : false;
+    return `
+      <article class="item-card search-item-card" data-id="home-${item.id}">
+        <div class="item-card-img-wrap">
+          <img src="${item.img}" alt="${item.title}" class="item-card-img card-img" loading="lazy" onload="this.classList.add('loaded')" />
+          <div class="item-card-overlay"></div>
+          <button type="button" class="btn-bookmark card-bookmark-btn ${isSaved ? 'active' : ''}" data-id="home-${item.id}" onclick="handleHomeBookmark(event, 'home-${item.id}', '${item.title.replace(/'/g, "\\'")}')" aria-label="Save item" title="${isSaved ? 'Remove from saved' : 'Save this item'}">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/></svg>
+          </button>
+          <span class="item-badge ${item.status === 'matched' ? 'badge-matched' : 'badge-active'}">
+            ${item.status === 'matched' ? '&#10003; Reunited' : 'Searching'}
           </span>
-          <span class="item-when">${item.when}</span>
         </div>
-      </div>
-    </article>
-  `).join('');
+        <div class="item-card-body">
+          <h3 class="item-card-title">${item.title}</h3>
+          <p class="item-card-desc">${item.desc}</p>
+          <div class="item-card-foot">
+            <span class="item-loc">
+              <svg width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden="true">
+                <path d="M5 1C3.343 1 2 2.343 2 4c0 2.5 3 5 3 5s3-2.5 3-5c0-1.657-1.343-3-3-3z" fill="#A8A29E"/>
+                <circle cx="5" cy="4" r="1" fill="white"/>
+              </svg>
+              ${item.city}
+            </span>
+            <span class="item-when">${item.when}</span>
+          </div>
+        </div>
+      </article>
+    `;
+  }).join('');
 }
+
+window.handleHomeBookmark = function(e, itemId, itemTitle) {
+  e.stopPropagation();
+  if (window.ReuniteBookmarks) {
+    window.ReuniteBookmarks.toggle(itemId, itemTitle);
+  }
+};
 
 function initFilters() {
   const pills = document.querySelectorAll('.filter-pill');
@@ -84,7 +97,17 @@ function initFilters() {
       currentFilter = pill.dataset.filter;
       pills.forEach(p => p.classList.remove('active'));
       pill.classList.add('active');
-      renderCards();
+      
+      const grid = document.getElementById('itemsGrid');
+      if (grid) {
+        grid.style.opacity = '0.5';
+        setTimeout(() => {
+          renderCards();
+          grid.style.opacity = '1';
+        }, 120);
+      } else {
+        renderCards();
+      }
     });
   });
 }
@@ -93,3 +116,4 @@ document.addEventListener('DOMContentLoaded', () => {
   renderCards();
   initFilters();
 });
+

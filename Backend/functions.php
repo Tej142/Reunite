@@ -1,0 +1,667 @@
+<?php
+/**
+ * Reunite Backend Helper Functions
+ * Clean database, authentication, and security utilities
+ */
+
+require_once __DIR__ . '/config/config.php';
+
+/**
+ * Encrypt sensitive data using AES-256-CBC
+ */
+function encryptData($data) {
+    if (empty($data)) return $data;
+    $key = hash('sha256', ENCRYPTION_KEY);
+    $iv = ENCRYPTION_IV;
+    $encrypted = openssl_encrypt($data, 'AES-256-CBC', $key, 0, $iv);
+    return $encrypted ? base64_encode($encrypted) : $data;
+}
+
+/**
+ * Decrypt sensitive data using AES-256-CBC
+ */
+function decryptData($data) {
+    if (empty($data)) return $data;
+    $key = hash('sha256', ENCRYPTION_KEY);
+    $iv = ENCRYPTION_IV;
+    $decoded = base64_decode($data);
+    $decrypted = openssl_decrypt($decoded, 'AES-256-CBC', $key, 0, $iv);
+    return $decrypted !== false ? $decrypted : $data;
+}
+
+/**
+ * Clean and sanitize user inputs
+ */
+function sanitizeInput($data) {
+    if (is_array($data)) {
+        return array_map('sanitizeInput', $data);
+    }
+    return htmlspecialchars(trim((string)$data), ENT_QUOTES, 'UTF-8');
+}
+
+/**
+ * Parse JSON or Form POST request body
+ */
+function getRequestData() {
+    $contentType = $_SERVER['CONTENT_TYPE'] ?? '';
+    if (stripos($contentType, 'application/json') !== false) {
+        $json = file_get_contents('php://input');
+        return json_decode($json, true) ?: [];
+    }
+    return $_POST;
+}
+
+/**
+ * Standardized JSON API Response
+ */
+function sendJsonResponse($success, $message = '', $data = [], $statusCode = 200) {
+    http_response_code($statusCode);
+    header('Content-Type: application/json');
+    echo json_encode(array_merge([
+        'success' => $success,
+        'message' => $message
+    ], $data));
+    exit;
+}
+
+/**
+ * Check if request is expecting a JSON response
+ */
+function isApiRequest() {
+    $accept = $_SERVER['HTTP_ACCEPT'] ?? '';
+    $contentType = $_SERVER['CONTENT_TYPE'] ?? '';
+    return (stripos($accept, 'application/json') !== false || 
+            stripos($contentType, 'application/json') !== false ||
+            isset($_GET['api']) ||
+            isset($_POST['api']));
+}
+
+/**
+ * Check if student/user is authenticated
+ */
+function isUserLoggedIn() {
+    return isset($_SESSION['user_id']) && !empty($_SESSION['user_id']);
+}
+
+/**
+ * Get current authenticated user details from database or session
+ */
+function getCurrentUser() {
+    if (!isUserLoggedIn()) {
+        return null;
+    }
+
+    global $conn;
+    $userId = $_SESSION['user_id'];
+
+    if ($conn) {
+        $stmt = $conn->prepare("SELECT user_id, full_name, pin, email, phone, trust_score, role, status, dob, college, branch, created_at FROM users WHERE user_id = ? LIMIT 1");
+        if ($stmt) {
+            $stmt->bind_param("i", $userId);
+            $stmt->execute();
+            $result = $stmt->get_result();
+            if ($row = $result->fetch_assoc()) {
+                $rawEmail = decryptData($row['email']);
+                $rawPhone = decryptData($row['phone']);
+                $row['name'] = $row['full_name'];
+                $row['email_raw'] = $rawEmail;
+                $row['phone_raw'] = $rawPhone;
+                $row['email'] = $rawEmail;
+                $row['phone'] = $rawPhone;
+                $stmt->close();
+                return $row;
+            }
+            $stmt->close();
+        }
+    }
+
+    $name = $_SESSION['full_name'] ?? ($_SESSION['user']['name'] ?? 'Student');
+    $bCode = $_SESSION['branch'] ?? ($_SESSION['user']['branch'] ?? 'cme');
+    return [
+        'user_id' => $_SESSION['user_id'] ?? null,
+        'full_name' => $name,
+        'name' => $name,
+        'pin' => $_SESSION['pin'] ?? ($_SESSION['user']['pin'] ?? ''),
+        'dob' => $_SESSION['dob'] ?? ($_SESSION['user']['dob'] ?? ''),
+        'email' => $_SESSION['email'] ?? ($_SESSION['user']['email'] ?? ''),
+        'phone' => $_SESSION['phone'] ?? ($_SESSION['user']['phone'] ?? ''),
+        'role' => $_SESSION['role'] ?? 'user',
+        'college' => $_SESSION['college'] ?? ($_SESSION['user']['college'] ?? ''),
+        'branch' => $bCode,
+        'branch_name' => get_branch_name($bCode),
+        'trust_score' => $_SESSION['trust_score'] ?? 100
+    ];
+}
+
+/**
+ * Maps short branch codes (e.g., 'cme', 'cse', 'ece') to full human-readable names
+ */
+function get_branch_name($code) {
+    if (empty($code)) return 'Computer Engineering';
+    $code = strtolower(trim((string)$code));
+    $branches = [
+        'cme'  => 'Computer Engineering',
+        'cs'   => 'Computer Science & Engineering',
+        'cse'  => 'Computer Science & Engineering',
+        'ece'  => 'Electronics & Communication Engineering',
+        'ec'   => 'Electronics & Communication Engineering',
+        'eee'  => 'Electrical & Electronics Engineering',
+        'ee'   => 'Electrical & Electronics Engineering',
+        'me'   => 'Mechanical Engineering',
+        'mec'  => 'Mechanical Engineering',
+        'ce'   => 'Civil Engineering',
+        'civ'  => 'Civil Engineering',
+        'che'  => 'Chemical Engineering',
+        'ae'   => 'Aerospace Engineering',
+        'aiml' => 'AI & Machine Learning',
+        'it'   => 'Information Technology',
+        'oth'  => 'Other / General Studies',
+        'other'=> 'Other / General Studies'
+    ];
+    return $branches[$code] ?? ucfirst($code);
+}
+
+/**
+ * Require authentication or return 401 / redirect
+ */
+function requireAuth() {
+    if (!isUserLoggedIn()) {
+        if (isApiRequest()) {
+            sendJsonResponse(false, 'Unauthorized. Please login to continue.', [], 401);
+        } else {
+            header("Location: " . FRONTEND_URL . "/login.php?error=" . urlencode("Please login to access this page."));
+            exit;
+        }
+    }
+}
+
+/**
+ * Audit Logger: Insert action record into access_logs table
+ */
+function logAccess($userId, $action, $details = '') {
+    global $conn;
+    if (!$conn) return;
+
+    try {
+        $ip = $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1';
+        $device = substr($_SERVER['HTTP_USER_AGENT'] ?? 'Unknown', 0, 255);
+        $stmt = $conn->prepare("INSERT INTO access_logs (user_id, action, ip_address, device_info) VALUES (?, ?, ?, ?)");
+        if ($stmt) {
+            $stmt->bind_param("isss", $userId, $action, $ip, $device);
+            $stmt->execute();
+            $stmt->close();
+        }
+    } catch (Exception $e) {
+        error_log("Failed to log access: " . $e->getMessage());
+    }
+}
+
+/**
+ * Send Transactional Email in Real-Time (Supports Brevo API, Resend, and SMTP)
+ */
+function sendBrevoEmail($toEmail, $toName, $subject, $htmlContent) {
+    // 1. Check for Brevo (Sendinblue) API Key (Prioritized - HTTPS port 443 works on all hosting)
+    $brevoKey = defined('BREVO_API_KEY') && !empty(BREVO_API_KEY) ? BREVO_API_KEY : (getenv('BREVO_API_KEY') ?: '');
+    if (!empty($brevoKey)) {
+        $senderEmail = defined('BREVO_SENDER_EMAIL') && !empty(BREVO_SENDER_EMAIL) ? BREVO_SENDER_EMAIL : (getenv('BREVO_SENDER_EMAIL') ?: 'charante153624@gmail.com');
+        $senderName = defined('BREVO_SENDER_NAME') && !empty(BREVO_SENDER_NAME) ? BREVO_SENDER_NAME : (getenv('BREVO_SENDER_NAME') ?: 'REUNITE TEAM');
+
+        $url = 'https://api.brevo.com/v3/smtp/email';
+        $payload = [
+            'sender' => [
+                'name' => $senderName,
+                'email' => $senderEmail
+            ],
+            'to' => [
+                [
+                    'email' => $toEmail,
+                    'name' => !empty($toName) ? $toName : 'Student'
+                ]
+            ],
+            'subject' => $subject,
+            'htmlContent' => $htmlContent
+        ];
+        $jsonPayload = json_encode($payload);
+
+        // Attempt 1: cURL with robust settings
+        if (function_exists('curl_init')) {
+            $ch = curl_init($url);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+            curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
+            curl_setopt($ch, CURLOPT_POST, true);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, $jsonPayload);
+            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+            curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
+            curl_setopt($ch, CURLOPT_HTTPHEADER, [
+                'api-key: ' . $brevoKey,
+                'Content-Type: application/json',
+                'Accept: application/json'
+            ]);
+
+            $response = curl_exec($ch);
+            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            $curlError = curl_error($ch);
+            curl_close($ch);
+
+            if (!$curlError && $httpCode >= 200 && $httpCode < 300) {
+                return ['success' => true, 'provider' => 'brevo', 'data' => json_decode($response, true)];
+            }
+            if (!empty($response)) {
+                $resData = json_decode($response, true);
+                $brevoErrMsg = $resData['message'] ?? "Brevo returned HTTP $httpCode";
+                error_log("Brevo API Error ($httpCode): " . $brevoErrMsg);
+                // Return error directly if Brevo is configured
+                return [
+                    'success' => false,
+                    'provider' => 'brevo',
+                    'error' => "Brevo Error ($httpCode): " . $brevoErrMsg
+                ];
+            }
+        }
+
+        // Attempt 2: PHP stream_context (fallback if cURL is blocked)
+        $opts = [
+            'http' => [
+                'method' => 'POST',
+                'header' => "api-key: " . $brevoKey . "\r\n" .
+                            "Content-Type: application/json\r\n" .
+                            "Accept: application/json\r\n",
+                'content' => $jsonPayload,
+                'timeout' => 8,
+                'ignore_errors' => true
+            ],
+            'ssl' => [
+                'verify_peer' => false,
+                'verify_peer_name' => false
+            ]
+        ];
+        $context = stream_context_create($opts);
+        $streamRes = @file_get_contents($url, false, $context);
+        if ($streamRes !== false) {
+            $resData = json_decode($streamRes, true);
+            if (isset($resData['messageId'])) {
+                return ['success' => true, 'provider' => 'brevo_stream', 'data' => $resData];
+            }
+            if (isset($resData['message'])) {
+                return ['success' => false, 'provider' => 'brevo_stream', 'error' => "Brevo: " . $resData['message']];
+            }
+        }
+    }
+
+    // 2. Check for Direct Gmail / Standard SMTP (Fallback)
+    $smtpHost = defined('SMTP_HOST') && !empty(SMTP_HOST) ? SMTP_HOST : getenv('SMTP_HOST');
+    $smtpUser = defined('SMTP_USER') && !empty(SMTP_USER) ? SMTP_USER : getenv('SMTP_USER');
+    $smtpPass = defined('SMTP_PASS') && !empty(SMTP_PASS) ? SMTP_PASS : getenv('SMTP_PASS');
+    if (!empty($smtpHost) && !empty($smtpUser) && !empty($smtpPass)) {
+        $smtpPort = defined('SMTP_PORT') ? (int)SMTP_PORT : 587;
+        $fromEmail = defined('SMTP_FROM_EMAIL') ? SMTP_FROM_EMAIL : $smtpUser;
+        $fromName = defined('SMTP_FROM_NAME') ? SMTP_FROM_NAME : 'REUNITE TEAM';
+
+        $smtpResult = sendNativeSmtp($smtpHost, $smtpPort, $smtpUser, $smtpPass, $fromEmail, $fromName, $toEmail, $toName, $subject, $htmlContent);
+        if ($smtpResult['success']) {
+            return ['success' => true, 'provider' => 'smtp', 'data' => $smtpResult];
+        }
+    }
+
+    // 3. Check for Resend API Key (https://resend.com)
+    $resendKey = defined('RESEND_API_KEY') && !empty(RESEND_API_KEY) ? RESEND_API_KEY : getenv('RESEND_API_KEY');
+    if (!empty($resendKey)) {
+        $senderEmail = defined('RESEND_SENDER_EMAIL') && !empty(RESEND_SENDER_EMAIL) ? RESEND_SENDER_EMAIL : 'onboarding@resend.dev';
+        $senderName = defined('RESEND_SENDER_NAME') && !empty(RESEND_SENDER_NAME) ? RESEND_SENDER_NAME : 'Reunite';
+
+        $ch = curl_init('https://api.resend.com/emails');
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 15);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode([
+            'from' => "$senderName <$senderEmail>",
+            'to' => [$toEmail],
+            'subject' => $subject,
+            'html' => $htmlContent
+        ]));
+        curl_setopt($ch, CURLOPT_HTTPHEADER, [
+            'Authorization: Bearer ' . $resendKey,
+            'Content-Type: application/json'
+        ]);
+
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $curlError = curl_error($ch);
+        curl_close($ch);
+
+        if (!$curlError) {
+            $resData = json_decode($response, true);
+            if ($httpCode >= 200 && $httpCode < 300) {
+                return ['success' => true, 'provider' => 'resend', 'data' => $resData];
+            }
+            // Return Resend specific error if failed
+            return [
+                'success' => false,
+                'error' => $resData['message'] ?? 'Failed to deliver email via Resend API.',
+                'http_code' => $httpCode
+            ];
+        }
+    }
+
+    // 4. Fallback / Local simulation mode if no provider succeeds
+    error_log("[Email Simulation] Subject: $subject | To: $toEmail");
+    return [
+        'success' => true,
+        'simulated' => true,
+        'message' => 'Email simulated locally (Check .env for live delivery settings)'
+    ];
+}
+
+/**
+ * Pure PHP lightweight SMTP client
+ */
+function sendNativeSmtp($host, $port, $username, $password, $fromEmail, $fromName, $toEmail, $toName, $subject, $htmlBody) {
+    $timeout = 15;
+    $isSsl = ($port == 465);
+    $protocol = $isSsl ? 'ssl://' : '';
+
+    $socket = @fsockopen($protocol . $host, $port, $errno, $errstr, $timeout);
+    if (!$socket) {
+        return ['success' => false, 'error' => "Could not connect to SMTP server $host:$port ($errstr)"];
+    }
+
+    $read = function() use ($socket) {
+        $response = '';
+        while ($str = fgets($socket, 515)) {
+            $response .= $str;
+            if (substr($str, 3, 1) == ' ') break;
+        }
+        return $response;
+    };
+
+    $send = function($cmd) use ($socket, $read) {
+        fputs($socket, $cmd . "\r\n");
+        return $read();
+    };
+
+    $greeting = $read();
+    if (substr($greeting, 0, 3) != '220') {
+        fclose($socket);
+        return ['success' => false, 'error' => "SMTP Server error on connect: $greeting"];
+    }
+
+    $ehlo = $send("EHLO " . gethostname());
+
+    if (!$isSsl && $port == 587) {
+        $starttls = $send("STARTTLS");
+        if (substr($starttls, 0, 3) != '220') {
+            fclose($socket);
+            return ['success' => false, 'error' => "STARTTLS failed: $starttls"];
+        }
+        if (!@stream_socket_enable_crypto($socket, true, STREAM_CRYPTO_METHOD_TLS_CLIENT)) {
+            fclose($socket);
+            return ['success' => false, 'error' => "Failed to establish TLS encryption"];
+        }
+        $send("EHLO " . gethostname());
+    }
+
+    $auth = $send("AUTH LOGIN");
+    if (substr($auth, 0, 3) != '334') {
+        fclose($socket);
+        return ['success' => false, 'error' => "AUTH LOGIN failed: $auth"];
+    }
+
+    $userRes = $send(base64_encode($username));
+    if (substr($userRes, 0, 3) != '334') {
+        fclose($socket);
+        return ['success' => false, 'error' => "Username rejected: $userRes"];
+    }
+
+    $passRes = $send(base64_encode($password));
+    if (substr($passRes, 0, 3) != '235') {
+        fclose($socket);
+        return ['success' => false, 'error' => "Password rejected: $passRes"];
+    }
+
+    $mailFrom = $send("MAIL FROM:<$fromEmail>");
+    if (substr($mailFrom, 0, 3) != '250') {
+        fclose($socket);
+        return ['success' => false, 'error' => "MAIL FROM failed: $mailFrom"];
+    }
+
+    $rcptTo = $send("RCPT TO:<$toEmail>");
+    if (substr($rcptTo, 0, 3) != '250') {
+        fclose($socket);
+        return ['success' => false, 'error' => "RCPT TO failed: $rcptTo"];
+    }
+
+    $data = $send("DATA");
+    if (substr($data, 0, 3) != '354') {
+        fclose($socket);
+        return ['success' => false, 'error' => "DATA start failed: $data"];
+    }
+
+    $headers = [
+        "MIME-Version: 1.0",
+        "Content-Type: text/html; charset=UTF-8",
+        "From: =?UTF-8?B?" . base64_encode($fromName) . "?= <$fromEmail>",
+        "To: =?UTF-8?B?" . base64_encode($toName ?: $toEmail) . "?= <$toEmail>",
+        "Subject: =?UTF-8?B?" . base64_encode($subject) . "?=",
+        "Date: " . date('r'),
+        "X-Mailer: Reunite Campus Platform"
+    ];
+
+    $emailContent = implode("\r\n", $headers) . "\r\n\r\n" . $htmlBody . "\r\n.";
+    $finish = $send($emailContent);
+    $send("QUIT");
+    fclose($socket);
+
+    if (substr($finish, 0, 3) == '250') {
+        return ['success' => true, 'message' => 'Email sent successfully via SMTP'];
+    }
+
+    return ['success' => false, 'error' => "Failed to finish message delivery: $finish"];
+}
+
+/**
+ * Generate 6-digit OTP code and store in session (Valid for 10 minutes)
+ */
+function generateEmailOtp($email) {
+    if (session_status() === PHP_SESSION_NONE) {
+        session_start();
+    }
+
+    $otp = sprintf("%06d", mt_rand(100000, 999999));
+    $_SESSION['signup_otp'] = [
+        'email' => strtolower(trim($email)),
+        'code' => $otp,
+        'expires_at' => time() + (10 * 60) // 10 mins
+    ];
+
+    return $otp;
+}
+
+/**
+ * Verify submitted OTP against session
+ */
+function verifyEmailOtp($email, $code) {
+    if (session_status() === PHP_SESSION_NONE) {
+        session_start();
+    }
+
+    if (!isset($_SESSION['signup_otp'])) {
+        return ['success' => false, 'message' => 'No verification code was sent. Please request a new one.'];
+    }
+
+    $stored = $_SESSION['signup_otp'];
+    $cleanEmail = strtolower(trim($email));
+    $cleanCode = trim((string)$code);
+
+    if ($stored['email'] !== $cleanEmail) {
+        return ['success' => false, 'message' => 'Email mismatch. Please request a new verification code.'];
+    }
+
+    if (time() > $stored['expires_at']) {
+        unset($_SESSION['signup_otp']);
+        return ['success' => false, 'message' => 'Verification code has expired. Please request a new one.'];
+    }
+
+    if ($stored['code'] !== $cleanCode) {
+        return ['success' => false, 'message' => 'Incorrect 6-digit verification code. Please try again.'];
+    }
+
+    // OTP Valid! Mark email as verified in session
+    $_SESSION['verified_signup_email'] = $cleanEmail;
+    unset($_SESSION['signup_otp']);
+
+    return ['success' => true, 'message' => 'Email verified successfully!'];
+}
+
+/**
+ * Check if the email was successfully verified in the current session
+ */
+function isEmailOtpVerified($email) {
+    if (session_status() === PHP_SESSION_NONE) {
+        session_start();
+    }
+    return isset($_SESSION['verified_signup_email']) && $_SESSION['verified_signup_email'] === strtolower(trim($email));
+}
+
+/**
+ * Ensures password_resets table exists in the database
+ */
+function ensurePasswordResetsTable() {
+    global $conn;
+    if (!$conn) return;
+    $sql = "CREATE TABLE IF NOT EXISTS `password_resets` (
+        `id` INT(11) NOT NULL AUTO_INCREMENT PRIMARY KEY,
+        `user_id` INT(11) NOT NULL,
+        `email` VARCHAR(255) NOT NULL,
+        `token` VARCHAR(128) NOT NULL,
+        `expires_at` DATETIME NOT NULL,
+        `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        INDEX `idx_reset_token` (`token`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
+    @$conn->query($sql);
+}
+
+/**
+ * Generate secure 64-char crypto token for Password Reset (Expires in 10 minutes)
+ */
+function createPasswordResetToken($userId, $email) {
+    global $conn;
+    ensurePasswordResetsTable();
+
+    $token = bin2hex(random_bytes(32)); // 64 hex characters
+    $expiresAt = date('Y-m-d H:i:s', time() + (10 * 60)); // Exactly 10 minutes
+
+    if ($conn) {
+        // Clear any previous active tokens for this user
+        $delStmt = $conn->prepare("DELETE FROM password_resets WHERE user_id = ?");
+        if ($delStmt) {
+            $delStmt->bind_param("i", $userId);
+            $delStmt->execute();
+            $delStmt->close();
+        }
+
+        $stmt = $conn->prepare("INSERT INTO password_resets (user_id, email, token, expires_at) VALUES (?, ?, ?, ?)");
+        if ($stmt) {
+            $stmt->bind_param("isss", $userId, $email, $token, $expiresAt);
+            $stmt->execute();
+            $stmt->close();
+        }
+    }
+
+    // Also cache in session as a fallback
+    if (session_status() === PHP_SESSION_NONE) {
+        session_start();
+    }
+    $_SESSION['active_password_reset'] = [
+        'user_id' => $userId,
+        'email' => $email,
+        'token' => $token,
+        'expires_at' => time() + (10 * 60)
+    ];
+
+    return $token;
+}
+
+/**
+ * Verify if a reset token is valid and not expired
+ */
+function verifyPasswordResetToken($token) {
+    global $conn;
+    if (empty($token)) return null;
+    $cleanToken = trim($token);
+
+    if ($conn) {
+        ensurePasswordResetsTable();
+        $now = date('Y-m-d H:i:s');
+        $stmt = $conn->prepare("SELECT pr.id, pr.user_id, pr.email, pr.expires_at, u.full_name, u.pin FROM password_resets pr JOIN users u ON pr.user_id = u.user_id WHERE pr.token = ? AND pr.expires_at > ? LIMIT 1");
+        if ($stmt) {
+            $stmt->bind_param("ss", $cleanToken, $now);
+            $stmt->execute();
+            $res = $stmt->get_result();
+            if ($row = $res->fetch_assoc()) {
+                $stmt->close();
+                return $row;
+            }
+            $stmt->close();
+        }
+    }
+
+    // Session fallback check
+    if (session_status() === PHP_SESSION_NONE) {
+        session_start();
+    }
+    if (isset($_SESSION['active_password_reset']) && $_SESSION['active_password_reset']['token'] === $cleanToken) {
+        if (time() <= $_SESSION['active_password_reset']['expires_at']) {
+            return [
+                'user_id' => $_SESSION['active_password_reset']['user_id'],
+                'email' => $_SESSION['active_password_reset']['email'],
+                'full_name' => 'Student'
+            ];
+        }
+    }
+
+    return null;
+}
+
+/**
+ * Reset password in database and invalidate token
+ */
+function consumePasswordResetToken($token, $newPassword) {
+    global $conn;
+    $resetData = verifyPasswordResetToken($token);
+    if (!$resetData) {
+        return ['success' => false, 'message' => 'Reset link is invalid or has expired (10-minute limit exceeded).'];
+    }
+
+    $userId = $resetData['user_id'];
+    $passHash = password_hash($newPassword, PASSWORD_DEFAULT);
+
+    if ($conn) {
+        $stmt = $conn->prepare("UPDATE users SET password_hash = ? WHERE user_id = ?");
+        if ($stmt) {
+            $stmt->bind_param("si", $passHash, $userId);
+            $success = $stmt->execute();
+            $stmt->close();
+
+            if ($success) {
+                // Delete consumed token
+                $cleanToken = trim($token);
+                $del = $conn->prepare("DELETE FROM password_resets WHERE token = ?");
+                if ($del) {
+                    $del->bind_param("s", $cleanToken);
+                    $del->execute();
+                    $del->close();
+                }
+                if (session_status() === PHP_SESSION_NONE) {
+                    session_start();
+                }
+                unset($_SESSION['active_password_reset']);
+                logAccess($userId, 'Password Reset via Email Link');
+                return ['success' => true, 'message' => 'Password reset successfully!'];
+            }
+        }
+    }
+
+    return ['success' => false, 'message' => 'Failed to update password in database.'];
+}
+
