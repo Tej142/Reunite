@@ -262,8 +262,10 @@ document.addEventListener('DOMContentLoaded', () => {
     isAiResponding = true;
     updateVoiceBadgeState();
 
+    const flaskBaseUrl = window.FLASK_BACKEND_URL || (window.location.protocol + '//' + (window.location.hostname || '127.0.0.1') + ':5000');
+
     try {
-      const response = await fetch('http://localhost:5000/report/talk_to_ai/chat', {
+      const response = await fetch(`${flaskBaseUrl}/report/talk_to_ai/chat`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -734,8 +736,10 @@ document.addEventListener('DOMContentLoaded', () => {
         combinedDescription += ` (${attrList.join(', ')})`;
       }
 
+      const flaskBaseUrl = window.FLASK_BACKEND_URL || (window.location.protocol + '//' + (window.location.hostname || '127.0.0.1') + ':5000');
+
       try {
-        const response = await fetch('http://localhost:5000/new-report', {
+        const response = await fetch(`${flaskBaseUrl}/new-report`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
