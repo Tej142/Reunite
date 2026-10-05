@@ -180,11 +180,11 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     if (btnNext) {
-      btnNext.textContent = currentStep === totalSteps ? 'Submit Report' : 'Next Step →';
+      btnNext.textContent = currentStep === totalSteps ? 'Process & Extract Features' : 'Next Step →';
     }
   }
 
-  function submitGuidedReport() {
+  async function submitGuidedReport() {
     const whereInput = document.getElementById('guidedWhere');
     const whenInput = document.getElementById('guidedWhen');
     const emailInput = document.getElementById('guidedEmail');
@@ -195,9 +195,63 @@ document.addEventListener('DOMContentLoaded', () => {
     if (emailInput) guidedState.email = emailInput.value;
     if (verificationInput) guidedState.verification = verificationInput.value;
 
-    const summaryText = `${guidedState.color} ${guidedState.category || 'item'}. Condition: ${guidedState.condition || 'good'}. ${guidedState.brand ? 'Brand: ' + guidedState.brand : ''}`;
+    const summaryText = `${guidedState.color ? guidedState.color + ' ' : ''}${guidedState.category || 'item'}. Condition: ${guidedState.condition || 'good'}. ${guidedState.brand ? 'Brand: ' + guidedState.brand : ''}`;
     
-    showSuccessState(summaryText);
+    if (btnNext && window.setButtonLoading) {
+      window.setButtonLoading(btnNext, true, 'Synthesizing Digital DNA...');
+    }
+
+    const meta = {
+      title: `${guidedState.color ? guidedState.color + ' ' : ''}${guidedState.category || 'Item'}`,
+      where: guidedState.where || '',
+      when: guidedState.when || '',
+      verification: guidedState.verification || ''
+    };
+
+    try {
+      let dna = null;
+      if (window.FlaskAIService) {
+        const aiResult = await window.FlaskAIService.submitReportToFlask({
+          description: summaryText,
+          meta: meta
+        });
+        if (aiResult && aiResult.digital_dna) {
+          dna = aiResult.digital_dna;
+        } else {
+          dna = window.FlaskAIService.extractClientDna(summaryText, meta);
+        }
+      }
+
+      if (typeof window.transitionToReview === 'function') {
+        window.transitionToReview(dna, {
+          title: meta.title,
+          description: summaryText,
+          where: meta.where,
+          when: meta.when,
+          verification: meta.verification
+        });
+      } else {
+        showSuccessState(summaryText, { ...meta, dna });
+      }
+    } catch (e) {
+      console.error('Error extracting DNA from guided state:', e);
+      const dna = window.FlaskAIService ? window.FlaskAIService.extractClientDna(summaryText, meta) : null;
+      if (typeof window.transitionToReview === 'function') {
+        window.transitionToReview(dna, {
+          title: meta.title,
+          description: summaryText,
+          where: meta.where,
+          when: meta.when,
+          verification: meta.verification
+        });
+      } else {
+        showSuccessState(summaryText, { ...meta, dna });
+      }
+    } finally {
+      if (btnNext && window.setButtonLoading) {
+        window.setButtonLoading(btnNext, false);
+      }
+    }
   }
 
   // 4. Mode 3 Talk to AI Chat & Dynamic Attribute Extractor Logic
@@ -724,9 +778,9 @@ document.addEventListener('DOMContentLoaded', () => {
   if (btnDraftSubmit) {
     btnDraftSubmit.addEventListener('click', async () => {
       btnDraftSubmit.disabled = true;
-      btnDraftSubmit.textContent = 'Submitting & Extracting DNA...';
+      btnDraftSubmit.textContent = 'Synthesizing Digital DNA...';
 
-      let combinedDescription = currentDraft.raw_summary || `${currentDraft.title || 'Item'} lost at ${currentDraft.location || 'unknown'}.`;
+      let combinedDescription = currentDraft.raw_summary || `${currentDraft.title || 'Item'} ${isFoundPage ? 'found' : 'lost'} at ${currentDraft.location || 'unknown'}.`;
       
       const attrList = [];
       for (const [k, v] of Object.entries(currentDraft.dynamic_attributes || {})) {
@@ -736,45 +790,61 @@ document.addEventListener('DOMContentLoaded', () => {
         combinedDescription += ` (${attrList.join(', ')})`;
       }
 
-      const flaskBaseUrl = window.FLASK_BACKEND_URL || (window.location.protocol + '//' + (window.location.hostname || '127.0.0.1') + ':5000');
+      const meta = {
+        title: currentDraft.title || 'Reported Item',
+        where: currentDraft.location || '',
+        when: currentDraft.time || '',
+        verification: currentDraft.verification_secret || ''
+      };
 
       try {
-        const response = await fetch(`${flaskBaseUrl}/new-report`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
+        let dna = null;
+        if (window.FlaskAIService) {
+          const aiResult = await window.FlaskAIService.submitReportToFlask({
             description: combinedDescription,
-            location: currentDraft.location,
+            meta: meta
+          });
+
+          if (aiResult && aiResult.digital_dna) {
+            dna = aiResult.digital_dna;
+          } else {
+            dna = window.FlaskAIService.extractClientDna(combinedDescription, meta);
+          }
+        }
+
+        // If dynamic attributes were found in Talk to AI, merge them into the DNA
+        if (dna && currentDraft.dynamic_attributes) {
+          dna.attributes = { ...(dna.attributes || {}), ...currentDraft.dynamic_attributes };
+        }
+
+        if (typeof window.transitionToReview === 'function') {
+          window.transitionToReview(dna, {
+            title: currentDraft.title,
+            description: combinedDescription,
             where: currentDraft.location,
             when: currentDraft.time,
-            title: currentDraft.title,
-            category: currentDraft.category
-          })
-        });
-
-        const resData = await response.json();
-        if (resData.success) {
-          showSuccessState(combinedDescription, {
-            title: currentDraft.title,
-            where: currentDraft.location,
-            verification: currentDraft.verification_secret,
-            reportId: resData.report_id,
-            dna: resData.digital_dna
-          });
-        } else {
-          showSuccessState(combinedDescription, {
-            title: currentDraft.title,
-            where: currentDraft.location,
             verification: currentDraft.verification_secret
           });
+        } else {
+          showSuccessState(combinedDescription, { ...meta, dna });
         }
       } catch (e) {
-        console.error('Error submitting report to backend:', e);
-        showSuccessState(combinedDescription, {
-          title: currentDraft.title,
-          where: currentDraft.location,
-          verification: currentDraft.verification_secret
-        });
+        console.error('Error synthesizing DNA from Talk to AI:', e);
+        const dna = window.FlaskAIService ? window.FlaskAIService.extractClientDna(combinedDescription, meta) : null;
+        if (typeof window.transitionToReview === 'function') {
+          window.transitionToReview(dna, {
+            title: currentDraft.title,
+            description: combinedDescription,
+            where: currentDraft.location,
+            when: currentDraft.time,
+            verification: currentDraft.verification_secret
+          });
+        } else {
+          showSuccessState(combinedDescription, { ...meta, dna });
+        }
+      } finally {
+        btnDraftSubmit.disabled = false;
+        btnDraftSubmit.textContent = 'Process & Extract Features';
       }
     });
   }

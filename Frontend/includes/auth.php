@@ -11,6 +11,9 @@ function init_session() {
     if (session_status() === PHP_SESSION_NONE) {
         session_start();
     }
+    if (function_exists('enforceMaintenanceMode')) {
+        enforceMaintenanceMode();
+    }
 }
 
 function set_permanent_auth_cookie($userData) {

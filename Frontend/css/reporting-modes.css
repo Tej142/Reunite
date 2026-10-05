@@ -1389,6 +1389,106 @@
   text-decoration: underline;
 }
 
+/* ── Visible vs Private Features Separation Styling ── */
+.ai-feature-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 1.5rem;
+  margin-bottom: 0.85rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1.5px dashed var(--border);
+}
+
+.ai-feature-section-title {
+  font-family: 'Fraunces', serif;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--ink);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.ai-visible-badge {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  background: rgba(59, 130, 246, 0.1);
+  color: #2563EB;
+  border: 1px solid rgba(59, 130, 246, 0.25);
+}
+
+.ai-private-badge {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  background: rgba(239, 68, 68, 0.1);
+  color: #DC2626;
+  border: 1px solid rgba(239, 68, 68, 0.25);
+}
+
+[data-theme="dark"] .ai-visible-badge {
+  background: rgba(59, 130, 246, 0.2);
+  color: #60A5FA;
+}
+
+[data-theme="dark"] .ai-private-badge {
+  background: rgba(239, 68, 68, 0.2);
+  color: #F87171;
+}
+
+.ai-security-shield-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  background: rgba(196, 98, 45, 0.06);
+  border: 1px solid rgba(196, 98, 45, 0.2);
+  border-radius: 0.875rem;
+  padding: 0.85rem 1rem;
+  margin-top: 0.75rem;
+  margin-bottom: 1.25rem;
+}
+
+[data-theme="dark"] .ai-security-shield-card {
+  background: rgba(196, 98, 45, 0.1);
+  border-color: rgba(196, 98, 45, 0.25);
+}
+
+.ai-shield-icon {
+  font-size: 1.25rem;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+.ai-shield-text {
+  font-size: 0.8125rem;
+  color: var(--ink-soft, var(--ink));
+  line-height: 1.45;
+}
+
+.ai-shield-text strong {
+  color: var(--accent);
+}
+
+.ai-neural-match-status {
+  margin-top: 1rem;
+  padding: 1rem 1.25rem;
+  background: var(--bg-alt);
+  border: 1px solid var(--border);
+  border-radius: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 0.875rem;
+}
+
 /* ══════════════════════════════════════════════════════
    REPORTING MODES & WIZARD MICROINTERACTIONS
    ══════════════════════════════════════════════════════ */

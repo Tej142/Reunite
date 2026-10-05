@@ -177,7 +177,7 @@
 
         <div class="form-footer">
           <p class="footer-note">By submitting, this item is indexed in active searches. We will alert you immediately if any lost report matches it.</p>
-          <button type="submit" class="btn-submit">⚡ Analyze with AI &amp; Review Details &rarr;</button>
+          <button type="submit" class="btn-submit btn-ai-analyze">Process &amp; Extract Features</button>
         </div>
       </form>
     </div>
@@ -362,7 +362,7 @@
           </div>
 
           <div class="draft-footer">
-            <button type="button" class="btn-draft-submit" id="btnDraftSubmit" disabled>Submit Report</button>
+            <button type="button" class="btn-draft-submit btn-ai-analyze" id="btnDraftSubmit" disabled>Process &amp; Extract Features</button>
           </div>
         </div>
 
@@ -375,11 +375,11 @@
     <div class="ai-review-container" id="aiReviewContainer" style="display:none;">
       <div class="ai-review-step-badge">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-        Step 2 of 2: Review &amp; Edit Details
+        Step 2: Inspect Neural Digital DNA &amp; Confirm Features
       </div>
-      <h2 class="serif ai-review-title">Verify &amp; Fine-Tune Extracted Information</h2>
+      <h2 class="serif ai-review-title">Verify &amp; Confirm Extracted Feature Vectors</h2>
       <p class="ai-review-subtitle">
-        Our AI analyzed the found item description and photo. <strong>You can edit any field below or add/remove tags</strong> to ensure all details are 100% accurate before final submission.
+        Our neural engine separated the found item report into <strong>Visible Public Features</strong> and <strong>Protected Private Verification Keys</strong>. You can fine-tune any field before launching the neural matching engine.
       </p>
       <div id="aiReviewFormWrap"></div>
     </div>

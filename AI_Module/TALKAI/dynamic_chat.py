@@ -9,7 +9,22 @@ _ai_mod_dir = str(Path(__file__).parent.parent)
 if _ai_mod_dir not in sys.path:
     sys.path.insert(0, _ai_mod_dir)
 
-from config import client, GEMINI_MODEL, mistral_client, MISTRAL_MODEL
+from utils.time_parser import parse_temporal_expression
+
+def _enrich_draft_with_time(draft: dict, user_message: str) -> dict:
+    if not isinstance(draft, dict):
+        draft = {}
+    time_candidate = draft.get("time") or ""
+    combined_text = f"{user_message} {time_candidate}".strip()
+    time_info = parse_temporal_expression(combined_text)
+    if time_info.get("resolved_date"):
+        draft["resolved_date"] = time_info["resolved_date"]
+        draft["resolved_time"] = time_info.get("resolved_time", "")
+        draft["time_display"] = time_info.get("formatted_display", "")
+        if not draft.get("time") or time_info.get("is_relative"):
+            draft["time"] = time_info.get("formatted_display", "")
+    return draft
+
 
 
 SYSTEM_INSTRUCTION_LOST = """
@@ -172,10 +187,11 @@ Now, respond with the updated JSON containing your conversational reply and the 
             parsed = json.loads(cleaned)
 
             if isinstance(parsed, dict) and "reply" in parsed:
+                draft_res = _enrich_draft_with_time(parsed.get("draft", current_draft), user_message)
                 return {
                     "success": True,
                     "reply": parsed.get("reply", ""),
-                    "draft": parsed.get("draft", current_draft),
+                    "draft": draft_res,
                     "is_ready_to_submit": bool(parsed.get("is_ready_to_submit", False))
                 }
         except Exception as gemini_err:
@@ -198,10 +214,11 @@ Now, respond with the updated JSON containing your conversational reply and the 
                 parsed = json.loads(cleaned)
 
                 if isinstance(parsed, dict) and "reply" in parsed:
+                    draft_res = _enrich_draft_with_time(parsed.get("draft", current_draft), user_message)
                     return {
                         "success": True,
                         "reply": parsed.get("reply", ""),
-                        "draft": parsed.get("draft", current_draft),
+                        "draft": draft_res,
                         "is_ready_to_submit": bool(parsed.get("is_ready_to_submit", False))
                     }
         except Exception as mistral_err:
@@ -209,13 +226,15 @@ Now, respond with the updated JSON containing your conversational reply and the 
             traceback.print_exc()
 
         # Graceful fallback if both APIs fail
+        draft_fallback = _enrich_draft_with_time({
+            **current_draft,
+            "title": current_draft.get("title") or ("Watch" if "watch" in user_message.lower() else "Lost Item"),
+            "raw_summary": user_message
+        }, user_message)
+
         return {
             "success": True,
             "reply": f"I noted that! Could you also share where you lost or found it, and any distinct features?",
-            "draft": {
-                **current_draft,
-                "title": current_draft.get("title") or ("Watch" if "watch" in user_message.lower() else "Lost Item"),
-                "raw_summary": user_message
-            },
-            "is_ready_to_submit": bool(current_draft.get("title") or current_draft.get("location"))
+            "draft": draft_fallback,
+            "is_ready_to_submit": bool(draft_fallback.get("title") or draft_fallback.get("location"))
         }

@@ -8,8 +8,7 @@ function getFlaskServerUrl() {
   if (typeof window !== 'undefined' && window.FLASK_BACKEND_URL) {
     return window.FLASK_BACKEND_URL;
   }
-  const isLocal = (typeof window !== 'undefined' && window.location && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'));
-  return isLocal ? 'http://127.0.0.1:5000' : 'https://reunite-ai-backend.onrender.com';
+  return 'http://127.0.0.1:5000';
 }
 
 const FLASK_SERVER_URL = getFlaskServerUrl();
@@ -310,7 +309,7 @@ function renderAiDnaCard(dna, container, options = {}) {
   if (!container || !dna) return;
 
   const isReviewMode = options.isReviewMode !== false;
-  const objType = dna.object_type || 'General Item';
+  const objType = dna.object_type || dna.category || 'General Item';
   const attrs = dna.attributes || {};
   const brand = attrs.Brand || attrs.brand || '';
   const model = attrs.Model || attrs.model || '';
@@ -318,6 +317,8 @@ function renderAiDnaCard(dna, container, options = {}) {
   const material = attrs.Material || attrs.material || '';
   const condition = attrs.Condition || attrs.condition || 'Good';
   const marks = attrs["Distinguishing Marks"] || attrs.marks || attrs.verification || '';
+  const serial = attrs["Serial Number"] || attrs.serial_number || attrs.imei || attrs.id_number || '';
+  const secretDetails = attrs["Private Verification Keys"] || attrs.secret_details || attrs.internal_contents || '';
   const location = dna.location || options.location || attrs.Location || attrs.where || '';
   const dateTime = attrs["Date / Time"] || attrs["Date/Time"] || options.when || options.time || '';
 
@@ -333,19 +334,27 @@ function renderAiDnaCard(dna, container, options = {}) {
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
               </svg>
-              <span>AI Extracted Attributes &amp; Digital DNA</span>
+              <span>AI Neural Feature Extraction &amp; Digital DNA</span>
             </div>
-            <span class="ai-dna-badge">⚡ Extracted by AI &bull; Editable</span>
+            <span class="ai-dna-badge">⚡ Multi-Modal Analyzed (CLIP + DINOv2)</span>
           </div>
 
           <p class="ai-dna-intro">
-            Our AI vision &amp; text engine extracted these structured attributes. <strong>You can edit any field or add/remove tags below</strong> if anything is incorrect before submitting:
+            Our AI analyzed your description and image. Below, features are organized into <strong>Visible Public Attributes</strong> (indexed for search) and <strong>Protected Private Verification Keys</strong> (encrypted for owner verification). You can edit any field before launching the neural matching engine.
           </p>
+
+          <!-- ── Section 1: Visible Public Feature Vectors ── -->
+          <div class="ai-feature-section-header">
+            <div class="ai-feature-section-title">
+              <span>👁️ Visible Public Feature Vectors</span>
+            </div>
+            <span class="ai-visible-badge">Public &amp; Indexed</span>
+          </div>
 
           <form class="ai-dynamic-fields-grid" id="aiDynamicEditForm" onsubmit="event.preventDefault();">
             <div class="ai-form-field">
               <label for="aiFieldCategory">
-                <span>Item Category / Type</span>
+                <span>Item Category / Classification</span>
                 <span class="ai-field-edit-hint">✎ Edit</span>
               </label>
               <input type="text" class="ai-field-input" id="aiFieldCategory" value="${escapeHtml(objType)}" placeholder="e.g. Electronics / Smartphone" />
@@ -369,7 +378,7 @@ function renderAiDnaCard(dna, container, options = {}) {
 
             <div class="ai-form-field">
               <label for="aiFieldColor">
-                <span>Primary Color</span>
+                <span>Primary Color &amp; Accents</span>
                 <span class="ai-field-edit-hint">✎ Edit</span>
               </label>
               <input type="text" class="ai-field-input" id="aiFieldColor" value="${escapeHtml(color)}" placeholder="e.g. Midnight Blue, Matte Black" />
@@ -377,7 +386,7 @@ function renderAiDnaCard(dna, container, options = {}) {
 
             <div class="ai-form-field">
               <label for="aiFieldMaterial">
-                <span>Material</span>
+                <span>Material &amp; Surface Build</span>
                 <span class="ai-field-edit-hint">✎ Edit</span>
               </label>
               <input type="text" class="ai-field-input" id="aiFieldMaterial" value="${escapeHtml(material)}" placeholder="e.g. Leather, Stainless Steel, Plastic" />
@@ -406,18 +415,10 @@ function renderAiDnaCard(dna, container, options = {}) {
               </label>
               <input type="text" class="ai-field-input" id="aiFieldDateTime" value="${escapeHtml(dateTime)}" placeholder="e.g. Today 2:00 PM, Yesterday" />
             </div>
-
-            <div class="ai-form-field full-width">
-              <label for="aiFieldMarks">
-                <span>Distinguishing Marks / Secret Details</span>
-                <span class="ai-field-edit-hint">✎ Edit</span>
-              </label>
-              <textarea class="ai-field-textarea" id="aiFieldMarks" rows="2" placeholder="e.g. Scratch on dial; Logo with green stripe; Roman numerals...">${escapeHtml(marks)}</textarea>
-            </div>
           </form>
 
-          <div class="ai-dna-section-title">
-            Visual Features &amp; Search Tags (${currentTags.length})
+          <div class="ai-dna-section-title" style="margin-top:0.75rem;">
+            Public Visual Features &amp; Search Tags (${currentTags.length})
           </div>
 
           <div class="ai-dna-chips" id="aiDnaChipsContainer">
@@ -425,12 +426,53 @@ function renderAiDnaCard(dna, container, options = {}) {
           </div>
 
           <div class="ai-add-tag-box">
-            <input type="text" class="ai-tag-input" id="aiNewTagInput" placeholder="+ Add custom keyword or visual detail (e.g. Green striped logo, Roman XII)..." />
+            <input type="text" class="ai-tag-input" id="aiNewTagInput" placeholder="+ Add visual search tag (e.g. Green striped logo, Roman numerals XII, Yellow keychain)..." />
             <button type="button" class="btn-add-tag" id="aiBtnAddTag">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
               Add Tag
             </button>
           </div>
+
+          <!-- ── Section 2: Protected Private Verification Keys ── -->
+          <div class="ai-feature-section-header">
+            <div class="ai-feature-section-title">
+              <span>🔒 Protected Private Verification Keys</span>
+            </div>
+            <span class="ai-private-badge">Encrypted &bull; Ownership Lock</span>
+          </div>
+
+          <div class="ai-security-shield-card">
+            <span class="ai-shield-icon">🛡️</span>
+            <div class="ai-shield-text">
+              <strong>Zero-Knowledge Ownership Authentication:</strong> Private verification details are never published on public search boards. When a candidate match is found, the system cross-examines these attributes to safely verify true ownership.
+            </div>
+          </div>
+
+          <form class="ai-dynamic-fields-grid" id="aiDynamicPrivateForm" onsubmit="event.preventDefault();">
+            <div class="ai-form-field">
+              <label for="aiFieldSerial">
+                <span>Serial / IMEI / Hardware ID Traces</span>
+                <span class="ai-field-edit-hint">✎ Private</span>
+              </label>
+              <input type="text" class="ai-field-input" id="aiFieldSerial" value="${escapeHtml(serial)}" placeholder="e.g. Serial: C02..., IMEI: 354892..." />
+            </div>
+
+            <div class="ai-form-field">
+              <label for="aiFieldPrivateMarks">
+                <span>Secret Engravings / Lock Screen / Secret Marks</span>
+                <span class="ai-field-edit-hint">✎ Private</span>
+              </label>
+              <input type="text" class="ai-field-input" id="aiFieldPrivateMarks" value="${escapeHtml(marks)}" placeholder="e.g. Custom initial engraving 'CT', Anime wallpaper" />
+            </div>
+
+            <div class="ai-form-field full-width">
+              <label for="aiFieldSecretContents">
+                <span>Internal Contents / Hidden Cards / Secret Compartment Details</span>
+                <span class="ai-field-edit-hint">✎ Private</span>
+              </label>
+              <textarea class="ai-field-textarea" id="aiFieldSecretContents" rows="2" placeholder="e.g. Contains student ID card #24155, metro pass, folded note inside zipper compartment...">${escapeHtml(secretDetails)}</textarea>
+            </div>
+          </form>
 
           <div class="ai-dynamic-actions">
             ${options.onBack ? `
@@ -440,8 +482,8 @@ function renderAiDnaCard(dna, container, options = {}) {
               </button>
             ` : '<div></div>'}
             <button type="button" class="btn-confirm-dna" id="btnConfirmDna">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
-              Confirm &amp; Submit Final Report
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+              🚀 Confirm Digital DNA &amp; Launch Neural Matching Engine &rarr;
             </button>
           </div>
         </div>
@@ -455,9 +497,9 @@ function renderAiDnaCard(dna, container, options = {}) {
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#10B981" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>
               </svg>
-              <span>Confirmed Digital DNA &amp; Indexed Tags</span>
+              <span>Confirmed Digital DNA &amp; Indexed Feature Vectors</span>
             </div>
-            <span class="ai-dna-badge" style="background: rgba(16, 185, 129, 0.15); color: #10B981;">✓ Active &amp; Indexed</span>
+            <span class="ai-dna-badge" style="background: rgba(16, 185, 129, 0.15); color: #10B981;">✓ Indexed in ChromaDB</span>
           </div>
 
           <div class="ai-dynamic-fields-grid" style="pointer-events: none; opacity: 0.95;">
@@ -493,12 +535,6 @@ function renderAiDnaCard(dna, container, options = {}) {
               <label>Date &amp; Time</label>
               <div class="ai-field-input" style="padding-top: 2px;">${escapeHtml(dateTime || 'Recent')}</div>
             </div>
-            ${marks ? `
-              <div class="ai-form-field full-width">
-                <label>Distinguishing Marks</label>
-                <div class="ai-field-input" style="padding-top: 2px;">${escapeHtml(marks)}</div>
-              </div>
-            ` : ''}
           </div>
 
           ${currentTags.length > 0 ? `
@@ -529,7 +565,7 @@ function renderAiDnaCard(dna, container, options = {}) {
 
   function renderChipsHtml(tags) {
     if (!tags || tags.length === 0) {
-      return '<span style="font-size: 0.8125rem; color: var(--muted); font-style: italic;">No tags added yet. Type below to add search tags.</span>';
+      return '<span style="font-size: 0.8125rem; color: var(--muted); font-style: italic;">No search tags added. Type below to add tags.</span>';
     }
     return tags.map((t, index) => `
       <span class="ai-dna-chip editable" data-index="${index}">
@@ -616,7 +652,7 @@ function renderAiDnaCard(dna, container, options = {}) {
       confirmBtn.addEventListener('click', (e) => {
         e.preventDefault();
 
-        // Harvest all current inputs
+        // Harvest visible attributes
         const catInput = container.querySelector('#aiFieldCategory');
         const brandInput = container.querySelector('#aiFieldBrand');
         const modelInput = container.querySelector('#aiFieldModel');
@@ -625,21 +661,33 @@ function renderAiDnaCard(dna, container, options = {}) {
         const condInput = container.querySelector('#aiFieldCondition');
         const locInput = container.querySelector('#aiFieldLocation');
         const dateInput = container.querySelector('#aiFieldDateTime');
-        const marksInput = container.querySelector('#aiFieldMarks');
+
+        // Harvest private attributes
+        const serialInput = container.querySelector('#aiFieldSerial');
+        const privMarksInput = container.querySelector('#aiFieldPrivateMarks');
+        const secretContentsInput = container.querySelector('#aiFieldSecretContents');
 
         const updatedDna = {
           object_type: catInput ? catInput.value.trim() : objType,
+          category: catInput ? catInput.value.trim() : objType,
           attributes: {
             Brand: brandInput ? brandInput.value.trim() : brand,
             Model: modelInput ? modelInput.value.trim() : model,
             Color: colorInput ? colorInput.value.trim() : color,
             Material: matInput ? matInput.value.trim() : material,
             Condition: condInput ? condInput.value.trim() : condition,
-            "Distinguishing Marks": marksInput ? marksInput.value.trim() : marks,
-            "Date / Time": dateInput ? dateInput.value.trim() : dateTime
+            "Date / Time": dateInput ? dateInput.value.trim() : dateTime,
+            "Serial Number": serialInput ? serialInput.value.trim() : serial,
+            "Distinguishing Marks": privMarksInput ? privMarksInput.value.trim() : marks,
+            "Private Verification Keys": secretContentsInput ? secretContentsInput.value.trim() : secretDetails
           },
           location: locInput ? locInput.value.trim() : location,
-          visible_features: [...currentTags]
+          visible_features: [...currentTags],
+          private_verification: {
+            serial: serialInput ? serialInput.value.trim() : serial,
+            marks: privMarksInput ? privMarksInput.value.trim() : marks,
+            secret_contents: secretContentsInput ? secretContentsInput.value.trim() : secretDetails
+          }
         };
 
         if (typeof options.onConfirm === 'function') {
@@ -666,6 +714,82 @@ function escapeHtml(str) {
     .replace(/>/g, '&gt;');
 }
 
+/**
+ * Submits confirmed report data directly to Backend PHP + Flask Vector Engine
+ */
+async function submitReportToBackend(payload = {}) {
+  const formData = new FormData();
+  formData.append('action', 'create');
+  formData.append('type', payload.reportType || 'lost');
+  formData.append('title', payload.title || payload.dna?.object_type || 'Reported Item');
+  formData.append('category', payload.category || payload.dna?.object_type || 'General');
+  formData.append('description', payload.description || '');
+  formData.append('location', payload.location || payload.dna?.location || 'Campus');
+  formData.append('date', payload.date || payload.dna?.attributes?.["Date / Time"] || new Date().toISOString().split('T')[0]);
+
+  if (payload.imageFile) {
+    formData.append('image', payload.imageFile);
+  }
+
+  if (payload.dna) {
+    formData.append('digital_dna', JSON.stringify(payload.dna));
+  }
+
+  const response = await fetch('../Backend/reports.php', {
+    method: 'POST',
+    body: formData
+  });
+
+  const result = await response.json();
+  return result;
+}
+
+/**
+ * Performs AI Vector Similarity Search using ChromaDB Late Fusion
+ */
+async function searchMatchesWithFlask(params = {}) {
+  try {
+    const url = `${getFlaskServerUrl()}/report/search-matches`;
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(params)
+    });
+
+    if (!response.ok) {
+      throw new Error(`Vector search failed with status ${response.status}`);
+    }
+
+    return await response.json();
+  } catch (err) {
+    console.warn('[FlaskAIService] searchMatchesWithFlask error:', err);
+    return { success: false, error: err.message, matches: [] };
+  }
+}
+
+/**
+ * Extracts and stores vectors in ChromaDB for a new report
+ */
+async function embedAndStoreWithFlask(reportData = {}) {
+  try {
+    const url = `${getFlaskServerUrl()}/report/embed-and-store`;
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(reportData)
+    });
+
+    if (!response.ok) {
+      throw new Error(`Embedding storage failed with status ${response.status}`);
+    }
+
+    return await response.json();
+  } catch (err) {
+    console.warn('[FlaskAIService] embedAndStoreWithFlask error:', err);
+    return { success: false, error: err.message };
+  }
+}
+
 // Export for module/script usage
 window.FlaskAIService = {
   submitReportToFlask,
@@ -674,8 +798,12 @@ window.FlaskAIService = {
   normalizeReport,
   renderAiDnaCard,
   extractClientDna,
+  searchMatchesWithFlask,
+  embedAndStoreWithFlask,
+  submitReportToBackend,
   SERVER_URL: FLASK_SERVER_URL,
 };
+
 
 
 

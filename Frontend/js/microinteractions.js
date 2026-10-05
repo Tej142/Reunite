@@ -227,6 +227,96 @@
     document.addEventListener('pointercancel', () => {
       document.querySelectorAll('.is-pressed').forEach(el => el.classList.remove('is-pressed'));
     });
+
+    // ── Scroll Reveal (.reveal, .reveal-stagger) ─────────────────
+    if ('IntersectionObserver' in window) {
+      const revealObserver = new IntersectionObserver(
+        (entries) => {
+          entries.forEach((entry) => {
+            if (entry.isIntersecting) {
+              entry.target.classList.add('in-view');
+              revealObserver.unobserve(entry.target);
+            }
+          });
+        },
+        { threshold: 0.12, rootMargin: '0px 0px -40px 0px' }
+      );
+
+      document.querySelectorAll('.reveal, .reveal-stagger').forEach((el) => {
+        revealObserver.observe(el);
+      });
+    } else {
+      // Fallback for older browsers — show everything
+      document.querySelectorAll('.reveal, .reveal-stagger').forEach(el => {
+        el.classList.add('in-view');
+      });
+    }
+
+    // ── Lazy Image Load Observer ──────────────────────────────────
+    if ('IntersectionObserver' in window) {
+      const imgObserver = new IntersectionObserver(
+        (entries) => {
+          entries.forEach((entry) => {
+            if (entry.isIntersecting) {
+              const img = entry.target;
+              img.addEventListener('load', () => img.classList.add('loaded'), { once: true });
+              img.addEventListener('error', () => img.classList.add('loaded'), { once: true });
+              if (img.complete) img.classList.add('loaded');
+              imgObserver.unobserve(img);
+            }
+          });
+        },
+        { threshold: 0 }
+      );
+
+      document.querySelectorAll('img[loading="lazy"]').forEach((img) => {
+        imgObserver.observe(img);
+      });
+    }
+
+    // ── Ripple Effect on .ripple-wrap elements ────────────────────
+    document.addEventListener('click', (e) => {
+      const btn = e.target.closest('.ripple-wrap');
+      if (!btn) return;
+      const rect   = btn.getBoundingClientRect();
+      const size   = Math.max(rect.width, rect.height);
+      const x      = e.clientX - rect.left - size / 2;
+      const y      = e.clientY - rect.top  - size / 2;
+      const ripple = document.createElement('span');
+      ripple.className = 'ripple-effect';
+      ripple.style.cssText = `width:${size}px;height:${size}px;left:${x}px;top:${y}px;`;
+      btn.appendChild(ripple);
+      ripple.addEventListener('animationend', () => ripple.remove(), { once: true });
+    });
+
+    // ── Count-up Animation for .count-up elements ─────────────────
+    const countEls = document.querySelectorAll('.count-up[data-target]');
+    if (countEls.length && 'IntersectionObserver' in window) {
+      const countObserver = new IntersectionObserver(
+        (entries) => {
+          entries.forEach((entry) => {
+            if (!entry.isIntersecting) return;
+            const el     = entry.target;
+            const target = parseFloat(el.dataset.target) || 0;
+            const suffix = el.dataset.suffix || '';
+            const dur    = parseInt(el.dataset.duration, 10) || 1200;
+            const start  = performance.now();
+            const animate = (now) => {
+              const progress = Math.min((now - start) / dur, 1);
+              const ease     = 1 - Math.pow(1 - progress, 3); // cubic ease-out
+              const val      = target * ease;
+              el.textContent = (Number.isInteger(target) ? Math.round(val) : val.toFixed(1)) + suffix;
+              if (progress < 1) requestAnimationFrame(animate);
+            };
+            requestAnimationFrame(animate);
+            countObserver.unobserve(el);
+          });
+        },
+        { threshold: 0.5 }
+      );
+      countEls.forEach(el => countObserver.observe(el));
+    }
+
   });
 
 })(window, document);

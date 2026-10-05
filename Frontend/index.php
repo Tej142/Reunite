@@ -5,6 +5,38 @@ if (is_logged_in()) {
     header("Location: home.php");
     exit;
 }
+
+$reunitedCount = 0;
+$totalReports = 0;
+$activeCount = 0;
+$realStories = [];
+
+if (isset($conn) && $conn) {
+    // Count reunited, total and active reports
+    $sRes = $conn->query("SELECT 
+        ((SELECT COUNT(*) FROM lost_reports WHERE status IN ('matched', 'claimed', 'closed')) +
+         (SELECT COUNT(*) FROM found_reports WHERE status IN ('matched', 'claimed', 'closed'))) as reunited_cnt,
+        ((SELECT COUNT(*) FROM lost_reports) + (SELECT COUNT(*) FROM found_reports)) as total_cnt,
+        ((SELECT COUNT(*) FROM lost_reports WHERE status = 'active') + (SELECT COUNT(*) FROM found_reports WHERE status = 'active')) as active_cnt
+    ");
+    if ($sRes && $sRow = $sRes->fetch_assoc()) {
+        $reunitedCount = (int)($sRow['reunited_cnt'] ?? 0);
+        $totalReports = (int)($sRow['total_cnt'] ?? 0);
+        $activeCount = (int)($sRow['active_cnt'] ?? 0);
+    }
+    
+    // Fetch real reunited cases for success stories if available
+    $stRes = $conn->query("SELECT f.id, f.title, f.location, f.description, f.image_path, f.created_at, u.full_name, u.branch 
+        FROM found_reports f 
+        LEFT JOIN users u ON f.user_id = u.user_id 
+        WHERE f.status IN ('matched', 'claimed', 'closed') 
+        ORDER BY f.created_at DESC LIMIT 3");
+    if ($stRes) {
+        while ($stRow = $stRes->fetch_assoc()) {
+            $realStories[] = $stRow;
+        }
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -107,7 +139,9 @@ if (is_logged_in()) {
     <a class="btn btn-ghost btn-lg" href="login.php">Log in</a>
   </div>
 
-  <p class="intro-trust"><strong>14,200+</strong> items reunited &middot; a new match roughly every 6 hours</p>
+  <p class="intro-trust">
+    <strong><?php echo number_format(max($reunitedCount, $totalReports)); ?>+</strong> items tracked &amp; reunited &middot; AI smart matching on campus
+  </p>
 
   <a class="scroll-cue" href="#highlights">
     <span class="cue-text-more">Learn more</span>
@@ -154,67 +188,48 @@ if (is_logged_in()) {
   <div class="section-head reveal">
     <div class="section-eyebrow">Real matches</div>
     <h2>Recent Success Stories</h2>
-    <p>See how SVGP Poly students are getting their belongings back.</p>
+    <p>See how campus students are getting their belongings back.</p>
   </div>
   
-  <div class="stories-grid">
-    <div class="story-card reveal reveal-1">
-      <div class="story-image-wrap">
-        <img src="https://images.unsplash.com/photo-1610945265064-0e34e5519bbf?w=500&fit=crop&q=80" alt="Lost Samsung Mobile" class="story-image" />
-        <span class="story-badge">Reunited in 3h</span>
-      </div>
-      <div class="story-content">
-        <h3>Lost samsung mobile</h3>
-        <p class="story-location">SVGP Library</p>
-        <p class="story-quote">"I thought my mobile was gone forever! SVGP's Reunite matched my lost post with Vignesh's found post instantly. Safe handoff next morning."</p>
-        <div class="story-author">
-          <div class="author-avatar" style="background-image: url('https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&h=100&fit=crop&q=80')"></div>
-          <div>
-            <div class="author-name">Pujitha</div>
-            <div class="author-meta">CME Student</div>
+  <?php if (!empty($realStories)): ?>
+    <div class="stories-grid">
+      <?php foreach ($realStories as $idx => $st): 
+        $stImg = !empty($st['image_path']) ? htmlspecialchars($st['image_path']) : 'assets/placeholder.jpg';
+        $authorName = !empty($st['full_name']) ? htmlspecialchars($st['full_name']) : 'Student Member';
+        $authorBranch = !empty($st['branch']) ? htmlspecialchars(strtoupper($st['branch'])) . ' Student' : 'Campus Student';
+      ?>
+        <div class="story-card reveal reveal-<?php echo ($idx + 1); ?>">
+          <div class="story-image-wrap">
+            <img src="<?php echo $stImg; ?>" alt="<?php echo htmlspecialchars($st['title']); ?>" class="story-image" />
+            <span class="story-badge">Reunited</span>
+          </div>
+          <div class="story-content">
+            <h3><?php echo htmlspecialchars($st['title']); ?></h3>
+            <p class="story-location"><?php echo htmlspecialchars($st['location'] ?? 'Campus Hub'); ?></p>
+            <p class="story-quote">"<?php echo htmlspecialchars(mb_strimwidth($st['description'] ?? 'Reunited successfully through Reunite AI matching.', 0, 120, '...')); ?>"</p>
+            <div class="story-author">
+              <div class="author-avatar" style="background: var(--accent); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700;">
+                <?php echo strtoupper(substr($authorName, 0, 1)); ?>
+              </div>
+              <div>
+                <div class="author-name"><?php echo $authorName; ?></div>
+                <div class="author-meta"><?php echo $authorBranch; ?></div>
+              </div>
+            </div>
           </div>
         </div>
-      </div>
+      <?php endforeach; ?>
     </div>
-    
-    <div class="story-card reveal reveal-2">
-      <div class="story-image-wrap">
-        <img src="https://images.unsplash.com/photo-1629654297299-c8506221ca97?w=500&fit=crop&q=80" alt="Python Programming Textbook" class="story-image" />
-        <span class="story-badge">Reunited in 1d</span>
-      </div>
-      <div class="story-content">
-        <h3>Python Textbook</h3>
-        <p class="story-location">Block B Labs</p>
-        <p class="story-quote">"Left my book in the lab. A junior found it and posted it here. Within hours, I was notified and got it back before my exam!"</p>
-        <div class="story-author">
-          <div class="author-avatar" style="background-image: url('https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=100&h=100&fit=crop&q=80')"></div>
-          <div>
-            <div class="author-name">R. Charan</div>
-            <div class="author-meta">CME Student</div>
-          </div>
-        </div>
-      </div>
+  <?php else: ?>
+    <div class="empty-story-banner reveal" style="text-align: center; padding: 3rem 1.5rem; background: var(--surface); border: 1px dashed var(--border); border-radius: 1.25rem; max-width: 680px; margin: 0 auto;">
+      <span style="font-size: 2.5rem; display: block; margin-bottom: 0.75rem;">🤝</span>
+      <h3 style="font-size: 1.15rem; margin-bottom: 0.5rem; color: var(--ink);">Join the Campus Lost &amp; Found Network</h3>
+      <p style="color: var(--muted); font-size: 0.9rem; line-height: 1.5; margin-bottom: 1.25rem;">
+        Every item posted is cross-referenced using CLIP and DINOv2 AI. As missing belongings are matched and returned, live community success stories will appear here.
+      </p>
+      <a href="signup.php" class="btn btn-primary">Report an Item Today</a>
     </div>
-    
-    <div class="story-card reveal reveal-3">
-      <div class="story-image-wrap">
-        <img src="https://images.unsplash.com/photo-1508685096489-7aacd43bd3b1?w=500&fit=crop&q=80" alt="Lost Firebolt Smartwatch" class="story-image" />
-        <span class="story-badge">Reunited in 6h</span>
-      </div>
-      <div class="story-content">
-        <h3>Firebolt watch</h3>
-        <p class="story-location">Mainblock IT Lab</p>
-        <p class="story-quote">"Dropped my watch somewhere near the It lab in Mainblock. Spotted them on Reunite within 15 minutes of posting. Lifesaver app!"</p>
-        <div class="story-author">
-          <div class="author-avatar" style="background-image: url('https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=100&h=100&fit=crop&q=80')"></div>
-          <div>
-            <div class="author-name">Riya M.</div>
-            <div class="author-meta">MEC Student</div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
+  <?php endif; ?>
 </section>
 
 <!-- ================= CTA BANNER ================= -->

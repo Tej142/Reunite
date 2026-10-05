@@ -4,167 +4,19 @@
  * dynamic item card rendering, and claim verification modals.
  */
 
-// Comprehensive Campus Lost & Found Item Database
-const ITEMS_DATABASE = [
-  {
-    id: 'RF-8042',
-    title: 'Blue Leather Bifold Wallet',
-    category: 'Wallets & Bags',
-    type: 'found',
-    status: 'found',
-    img: 'https://images.unsplash.com/photo-1627123424574-724758594e93?w=640&h=420&fit=crop&auto=format',
-    desc: 'Navy blue leather wallet with white stitching along borders. Contains student ID card with initials A.K., library card, and transit pass.',
-    location: 'Central Library (2nd Floor Desk)',
-    date: '2026-09-11',
-    timeAgo: '2 hours ago',
-    dna: {
-      category: 'Wallet',
-      brand: 'Tommy Hilfiger',
-      color: 'Navy Blue',
-      material: 'Genuine Leather',
-      features: ['White contrast stitching', 'Inner coin zipper', 'ID slot visible', 'Transit pass inside']
-    }
-  },
-  {
-    id: 'RF-8041',
-    title: 'iPhone 13 with Translucent Case',
-    category: 'Electronics',
-    type: 'found',
-    status: 'found',
-    img: 'https://images.unsplash.com/photo-1591337676887-a217a6970a8a?w=640&h=420&fit=crop&auto=format',
-    desc: 'Midnight black iPhone 13 in a transparent bumper case with an astronaut sticker on the back. Screen lock pattern has an anime wallpaper.',
-    location: 'Cafeteria Table #14',
-    date: '2026-09-11',
-    timeAgo: '4 hours ago',
-    dna: {
-      category: 'Smartphone',
-      brand: 'Apple',
-      model: 'iPhone 13',
-      color: 'Midnight Black',
-      features: ['Astronaut sticker on back', 'Diagonal dual rear cameras', 'Clear silicone shockproof case']
-    }
-  },
-  {
-    id: 'RF-8039',
-    title: 'Casio fx-991EX Scientific Calculator',
-    category: 'Books & Stationeries',
-    type: 'found',
-    status: 'found',
-    img: 'https://images.unsplash.com/photo-1594980596870-8aa52a78d8cd?w=640&h=420&fit=crop&auto=format',
-    desc: 'ClassWiz black & white scientific calculator with small scratch on top right solar panel and "ECE" written in marker inside the cover.',
-    location: 'Computer Science Lab 3',
-    date: '2026-09-10',
-    timeAgo: '1 day ago',
-    dna: {
-      category: 'Calculator',
-      brand: 'Casio',
-      model: 'fx-991EX ClassWiz',
-      color: 'Black & White',
-      features: ['ECE written in silver marker inside slip-cover', 'Solar panel scratch', 'High-res screen']
-    }
-  },
-  {
-    id: 'RF-8038',
-    title: 'Honda Bike Key with Red Metal Tag',
-    category: 'Keys & Fobs',
-    type: 'found',
-    status: 'found',
-    img: 'https://images.unsplash.com/photo-1582139329536-e7284fece509?w=640&h=420&fit=crop&auto=format',
-    desc: 'Single Honda motorcycle key attached to a red anodized aluminum "REMOVE BEFORE FLIGHT" fabric keychain tag.',
-    location: 'Student Parking Bay 2',
-    date: '2026-09-10',
-    timeAgo: '1 day ago',
-    dna: {
-      category: 'Key',
-      brand: 'Honda',
-      color: 'Silver key / Red Tag',
-      features: ['Red Remove Before Flight ribbon tag', 'Black plastic key head with wing logo']
-    }
-  },
-  {
-    id: 'RF-8035',
-    title: 'Ray-Ban Wayfarer Matte Sunglasses',
-    category: 'Accessories',
-    type: 'found',
-    status: 'found',
-    img: 'https://images.unsplash.com/photo-1511499767150-a48a237f0083?w=640&h=420&fit=crop&auto=format',
-    desc: 'Black matte acetate sunglasses, polarized green lenses, left arm has faint silver Ray-Ban lettering.',
-    location: 'Sports Ground Pavilion',
-    date: '2026-09-09',
-    timeAgo: '2 days ago',
-    dna: {
-      category: 'Eyewear',
-      brand: 'Ray-Ban',
-      color: 'Matte Black',
-      features: ['Polarized G-15 dark green lenses', 'Silver rivet accents on corners', 'No protective case']
-    }
-  },
-  {
-    id: 'RF-8032',
-    title: 'Apple AirPods Pro 2nd Gen Case',
-    category: 'Electronics',
-    type: 'found',
-    status: 'found',
-    img: 'https://images.unsplash.com/photo-1600294037681-c80b4cb5b434?w=640&h=420&fit=crop&auto=format',
-    desc: 'White MagSafe charging case with both earbuds inside. Small red lanyard loop attached to the side.',
-    location: 'Main Block Auditorium (Row F)',
-    date: '2026-09-08',
-    timeAgo: '3 days ago',
-    dna: {
-      category: 'Audio',
-      brand: 'Apple',
-      model: 'AirPods Pro (2nd Gen)',
-      color: 'Glossy White',
-      features: ['Lanyard loop installed', 'Speaker holes at bottom', 'Silicone ear tips medium size']
-    }
-  },
-  {
-    id: 'RL-1092',
-    title: 'Dell Inspiron Laptop Charger (65W)',
-    category: 'Electronics',
-    type: 'lost',
-    status: 'lost',
-    img: 'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=640&h=420&fit=crop&auto=format',
-    desc: 'Original 65W Dell barrel-pin charger with blue LED indicator ring on tip. Wrapped with black Velcro cable tie.',
-    location: 'Electrical Workshop Desk 4',
-    date: '2026-09-09',
-    timeAgo: '2 days ago',
-    dna: {
-      category: 'Power Adapter',
-      brand: 'Dell',
-      color: 'Black',
-      features: ['Blue illuminated tip', 'Velcro strap attached', '3-prong power cable']
-    }
-  },
-  {
-    id: 'RR-0519',
-    title: 'Black Wildcraft College Backpack',
-    category: 'Wallets & Bags',
-    type: 'reunited',
-    status: 'reunited',
-    img: 'https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=640&h=420&fit=crop&auto=format',
-    desc: '3-compartment black and grey water-resistant backpack with a water bottle mesh pocket and engineering notebook inside.',
-    location: 'Civil Department Lobby',
-    date: '2026-09-06',
-    timeAgo: '5 days ago',
-    dna: {
-      category: 'Backpack',
-      brand: 'Wildcraft',
-      color: 'Black & Slate Grey',
-      features: ['Orange embroidered logo', 'Laptop padding inside', 'Engineering textbooks']
-    }
-  }
-];
+// Real-Time Campus Lost & Found Item Database (Populated from Backend/Database)
+let ITEMS_DATABASE = [];
 
 // Active State
 let currentSearchQuery = '';
-let currentTypeFilter = 'found';
+let currentTypeFilter = 'found'; // Default to Found Items so only found items display on search
 let currentCategory = 'all';
 let currentLocation = 'all';
 let currentSort = 'newest';
 let isAiMatchActive = false;
 let aiMatchScores = {};
 let isListView = false;
+let isFetchingBackend = false;
 
 // DOM Elements
 let searchInput, clearBtn, searchSpinner, resultsGrid, resultsCount, catChips, typeSelect, categorySelect, locationSelect, sortSelect;
@@ -174,7 +26,75 @@ document.addEventListener('DOMContentLoaded', () => {
   initDomElements();
   bindEvents();
   renderResults();
+  fetchBackendReports();
 });
+
+async function fetchBackendReports() {
+  if (isFetchingBackend) return;
+  isFetchingBackend = true;
+
+  try {
+    const resp = await fetch('../Backend/reports.php?action=list&type=all&limit=200');
+    if (!resp.ok) return;
+    const json = await resp.json();
+    const rows = (json.data && json.data.reports) ? json.data.reports : (json.reports || []);
+
+    if (!Array.isArray(rows)) return;
+
+    ITEMS_DATABASE = [];
+    rows.forEach(r => {
+      const repType = String(r.report_type || 'found').toLowerCase();
+      const dbId = r.id;
+      const formattedId = dbId ? `R${repType === 'found' ? 'F' : 'L'}-${String(dbId).padStart(5, '0')}` : (r.report_id || `R-${Math.random()}`);
+
+      let imgUrl = 'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=640&h=420&fit=crop&auto=format';
+      if (r.image_path && typeof r.image_path === 'string' && r.image_path.trim() !== '') {
+        const p = r.image_path.trim();
+        imgUrl = (p.startsWith('http') || p.startsWith('data:')) ? p : (p.startsWith('/') ? p : '../' + p);
+      } else if (repType === 'found') {
+        imgUrl = 'https://images.unsplash.com/photo-1584438784894-089d6a62b8fa?w=640&h=420&fit=crop&auto=format';
+      }
+
+      ITEMS_DATABASE.push({
+        id: formattedId,
+        rawId: dbId,
+        title: r.title || r.category || (repType === 'found' ? 'Found Item' : 'Lost Item'),
+        category: r.category || 'General',
+        type: repType,
+        status: r.status || 'active',
+        img: imgUrl,
+        desc: r.description || 'Reported on campus via Reunite.',
+        location: r.location || 'Campus',
+        date: r.created_at ? r.created_at.split(' ')[0] : '2026-09-28',
+        timeAgo: formatTimeAgo(r.created_at),
+        dna: {
+          category: r.category || 'Item',
+          features: [r.category || 'Indexed Item', r.location || 'Campus']
+        }
+      });
+    });
+
+    renderResults();
+  } catch (err) {
+    console.warn('[Search] Backend reports sync notice:', err);
+  } finally {
+    isFetchingBackend = false;
+  }
+}
+
+function formatTimeAgo(dateStr) {
+  if (!dateStr) return 'Recently';
+  try {
+    const diff = (new Date() - new Date(dateStr.replace(/-/g, '/'))) / 1000;
+    if (isNaN(diff) || diff < 0) return 'Recently';
+    if (diff < 60) return 'Just now';
+    if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+    if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+    return `${Math.floor(diff / 86400)}d ago`;
+  } catch (e) {
+    return 'Recently';
+  }
+}
 
 function initDomElements() {
   searchInput   = document.getElementById('searchInput');
@@ -192,6 +112,25 @@ function initDomElements() {
   aiMatchBtn    = document.getElementById('aiMatchToggleBtn');
   aiTextarea    = document.getElementById('aiSmartQuery');
   aiTagsDetected= document.getElementById('aiTagsDetected');
+
+  // Read URL query parameters or select value on page load
+  const urlParams = new URLSearchParams(window.location.search);
+  const paramType = urlParams.get('type');
+  if (paramType && ['all', 'found', 'lost', 'reunited'].includes(paramType.toLowerCase())) {
+    currentTypeFilter = paramType.toLowerCase();
+    if (typeSelect) typeSelect.value = currentTypeFilter;
+  } else if (typeSelect && typeSelect.value) {
+    currentTypeFilter = typeSelect.value;
+  } else {
+    currentTypeFilter = 'found';
+  }
+
+  const paramCategory = urlParams.get('category');
+  if (paramCategory) {
+    currentCategory = paramCategory;
+    if (categorySelect) categorySelect.value = currentCategory;
+    catChips.forEach(c => c.classList.toggle('active', c.dataset.category === currentCategory));
+  }
 }
 
 function bindEvents() {
@@ -341,7 +280,7 @@ function bindEvents() {
 
 function resetAllFilters() {
   currentSearchQuery = '';
-  currentTypeFilter = 'all';
+  currentTypeFilter = 'found'; // Reset to default Found Items
   currentCategory = 'all';
   currentLocation = 'all';
   currentSort = 'newest';
@@ -350,7 +289,7 @@ function resetAllFilters() {
 
   if (searchInput) searchInput.value = '';
   if (clearBtn) clearBtn.classList.remove('visible');
-  if (typeSelect) typeSelect.value = 'all';
+  if (typeSelect) typeSelect.value = 'found';
   if (categorySelect) categorySelect.value = 'all';
   if (locationSelect) locationSelect.value = 'all';
   if (sortSelect) sortSelect.value = 'newest';
@@ -492,8 +431,22 @@ function renderResults() {
       </div>
     ` : '';
 
-    const badgeClass = item.status === 'found' ? 'badge-found' : item.status === 'lost' ? 'badge-lost' : 'badge-reunited';
-    const badgeLabel = item.status === 'found' ? 'Found Item' : item.status === 'lost' ? 'Lost Item' : 'Reunited';
+    const isFound = item.type === 'found';
+    const isLost = item.type === 'lost';
+    const isReunited = item.status === 'claimed' || item.status === 'reunited' || item.status === 'closed';
+
+    let badgeClass = 'badge-found';
+    let badgeLabel = 'Found Item';
+    if (isReunited) {
+      badgeClass = 'badge-reunited';
+      badgeLabel = 'Reunited';
+    } else if (isFound) {
+      badgeClass = 'badge-found';
+      badgeLabel = 'Found Item';
+    } else if (isLost) {
+      badgeClass = 'badge-lost';
+      badgeLabel = 'Lost Item';
+    }
 
     const miniTags = (item.dna && item.dna.features) 
       ? item.dna.features.slice(0, 2).map(f => `<span class="dna-mini-tag">✨ ${f}</span>`).join('') 
