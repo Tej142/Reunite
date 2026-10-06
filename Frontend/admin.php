@@ -29,8 +29,16 @@ $isAdmin = !empty($_SESSION['reunite_admin_auth']) && $_SESSION['reunite_admin_a
   <!-- 1. SECURITY CLEARANCE TERMINAL AUTH SCREEN -->
   <!-- ───────────────────────────────────────────────────────────── -->
   <div class="admin-auth-screen" id="adminAuthScreen" style="<?php echo $isAdmin ? 'display:none;' : 'display:flex;'; ?>">
+    <div style="position: absolute; top: 1.5rem; right: 1.5rem; z-index: 10;">
+      <button type="button" class="btn-admin-theme" id="btnAdminThemeToggleAuth" title="Toggle Light/Dark Theme" aria-label="Toggle theme">
+        <svg class="sun-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+        <svg class="moon-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+      </button>
+    </div>
     <div class="admin-auth-card">
-      <div class="admin-auth-icon">🛡️</div>
+      <div class="admin-auth-icon">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+      </div>
       <h1 class="admin-auth-title">System Admin Clearance</h1>
       <p class="admin-auth-sub">
         Restricted Site Maintenance Console. Authorized system administrators only.
@@ -57,7 +65,7 @@ $isAdmin = !empty($_SESSION['reunite_admin_auth']) && $_SESSION['reunite_admin_a
   ?>
   <?php if ($isAdmin && $maint['enabled']): ?>
   <div class="admin-maint-on-banner" role="alert">
-    <span>🟠 Maintenance Mode is <strong>ON</strong> — non-admin users see the maintenance page.</span>
+    <span><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" stroke="none" style="vertical-align:-1px; margin-right:4px; color:var(--admin-warning);"><circle cx="12" cy="12" r="10"/></svg> Maintenance Mode is <strong>ON</strong> — non-admin users see the maintenance page.</span>
     <span style="font-size:0.8125rem; color: var(--admin-warning);">Turn it OFF in the Health &amp; HUD tab when ready.</span>
   </div>
   <?php endif; ?>
@@ -67,7 +75,9 @@ $isAdmin = !empty($_SESSION['reunite_admin_auth']) && $_SESSION['reunite_admin_a
     <!-- Top Header -->
     <header class="admin-header">
       <div class="admin-brand">
-        <div class="admin-brand-icon">⚙️</div>
+        <div class="admin-brand-icon">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        </div>
         <div>
           <span class="admin-brand-title">Reunite Core Ops</span>
           <span class="admin-brand-badge">Site Maintenance</span>
@@ -75,6 +85,10 @@ $isAdmin = !empty($_SESSION['reunite_admin_auth']) && $_SESSION['reunite_admin_a
       </div>
 
       <div class="admin-header-actions">
+        <button type="button" class="btn-admin-theme" id="btnAdminThemeToggle" title="Toggle Light/Dark Theme" aria-label="Toggle theme">
+          <svg class="sun-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+          <svg class="moon-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        </button>
         <div class="admin-user-pill">
           <span class="admin-pulse-dot"></span>
           <span id="adminUserPillName">System Administrator</span>
@@ -89,19 +103,19 @@ $isAdmin = !empty($_SESSION['reunite_admin_auth']) && $_SESSION['reunite_admin_a
     <!-- Tab Navigation -->
     <nav class="admin-nav-bar">
       <button type="button" class="admin-tab-btn active" data-tab="health">
-        ⚡ System Health &amp; HUD
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px; margin-right:4px;"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> System Health &amp; HUD
       </button>
       <button type="button" class="admin-tab-btn" data-tab="reports">
-        📊 Reports &amp; Digital DNA
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px; margin-right:4px;"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M7 17v-4"/><path d="M12 17V7"/><path d="M17 17v-8"/></svg> Reports &amp; Digital DNA
       </button>
       <button type="button" class="admin-tab-btn" data-tab="vector">
-        🧠 ChromaDB Vector Engine
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px; margin-right:4px;"><path d="M12 2a4 4 0 0 1 4 4v1a4 4 0 0 1-8 0V6a4 4 0 0 1 4-4z"/><path d="M6 11v2a6 6 0 0 0 12 0v-2M12 19v3M8 22h8"/></svg> ChromaDB Vector Engine
       </button>
       <button type="button" class="admin-tab-btn" data-tab="vault">
-        🗄️ Media Vault Storage
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px; margin-right:4px;"><rect width="20" height="8" x="2" y="3" rx="2"/><rect width="20" height="8" x="2" y="13" rx="2"/><line x1="10" x1="10" y1="7" y2="7"/><line x1="10" x1="10" y1="17" y2="17"/></svg> Media Vault Storage
       </button>
       <button type="button" class="admin-tab-btn" data-tab="logs">
-        🛡️ Access Audit Logs
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px; margin-right:4px;"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg> Access Audit Logs
       </button>
     </nav>
 
@@ -111,7 +125,9 @@ $isAdmin = !empty($_SESSION['reunite_admin_auth']) && $_SESSION['reunite_admin_a
       <!-- Server Outage Alert Banner (Appears dynamically when Flask AI or DB is offline) -->
       <div class="admin-outage-banner" id="serverOutageBanner" style="display: none;">
         <div class="admin-outage-content">
-          <div class="admin-outage-icon">⚠️</div>
+          <div class="admin-outage-icon">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          </div>
           <div>
             <div class="admin-outage-title" id="outageBannerTitle">Server Component Offline</div>
             <div class="admin-outage-desc" id="outageBannerDesc">
@@ -122,7 +138,7 @@ $isAdmin = !empty($_SESSION['reunite_admin_auth']) && $_SESSION['reunite_admin_a
         </div>
         <div>
           <button type="button" class="btn-admin secondary sm" id="btnRetryOutagePing" style="white-space: nowrap;">
-            🔄 Retry Connection
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="vertical-align:-1px; margin-right:3px;"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-.1-8.24"/></svg> Retry Connection
           </button>
         </div>
       </div>
@@ -170,7 +186,7 @@ $isAdmin = !empty($_SESSION['reunite_admin_auth']) && $_SESSION['reunite_admin_a
               <span>Site Status</span>
               <span id="badgeMaintenanceMode" class="admin-badge success">Site is Live</span>
             </div>
-            <div class="admin-metric-value" style="font-size: 1.1rem; color: var(--admin-success);" id="maintModeLabel">🟢 Live</div>
+            <div class="admin-metric-value" style="font-size: 1.1rem; color: var(--admin-success);" id="maintModeLabel">Live</div>
             <div class="admin-metric-sub" id="maintEtaLabel">All users have full access</div>
           </div>
 
@@ -179,9 +195,13 @@ $isAdmin = !empty($_SESSION['reunite_admin_auth']) && $_SESSION['reunite_admin_a
         <!-- Maintenance Toggle Card -->
         <div class="admin-card admin-maint-card" id="adminMaintCard">
           <div class="admin-card-header">
-            <div class="admin-card-title">🛠️ Maintenance Mode Control</div>
+            <div class="admin-card-title">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px; margin-right:4px;"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg> Maintenance Mode Control
+            </div>
             <div class="admin-card-actions">
-              <button type="button" class="btn-admin" id="btnRefreshDiagnostics">⚡ Run Health Check</button>
+              <button type="button" class="btn-admin" id="btnRefreshDiagnostics">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-1px; margin-right:3px;"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> Run Health Check
+              </button>
             </div>
           </div>
 
@@ -216,7 +236,7 @@ $isAdmin = !empty($_SESSION['reunite_admin_auth']) && $_SESSION['reunite_admin_a
 
           <div style="display: flex; gap: 0.75rem; flex-wrap: wrap; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--admin-border);">
             <button type="button" class="btn-admin secondary" id="btnOptimizeDb">
-              ⚡ Optimize &amp; Rebuild MySQL Indexes
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-1px; margin-right:3px;"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> Optimize &amp; Rebuild MySQL Indexes
             </button>
           </div>
         </div>
@@ -224,7 +244,9 @@ $isAdmin = !empty($_SESSION['reunite_admin_auth']) && $_SESSION['reunite_admin_a
         <!-- Server Environment Specs -->
         <div class="admin-card">
           <div class="admin-card-header">
-            <div class="admin-card-title">🖥️ Server Environment &amp; Memory Specs</div>
+            <div class="admin-card-title">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px; margin-right:4px;"><rect width="20" height="14" x="2" y="3" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg> Server Environment &amp; Memory Specs
+            </div>
           </div>
           <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; font-size: 0.875rem;">
             <div>
@@ -256,10 +278,12 @@ $isAdmin = !empty($_SESSION['reunite_admin_auth']) && $_SESSION['reunite_admin_a
         <div class="admin-card">
           <div class="admin-card-header">
             <div class="admin-card-title">
-              📋 Lost &amp; Found Central Registry
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px; margin-right:4px;"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg> Lost &amp; Found Central Registry
             </div>
             <div class="admin-card-actions">
-              <button type="button" class="btn-admin secondary sm" id="btnRefreshReports">🔄 Refresh Reports</button>
+              <button type="button" class="btn-admin secondary sm" id="btnRefreshReports">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="vertical-align:-1px; margin-right:3px;"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-.1-8.24"/></svg> Refresh Reports
+              </button>
             </div>
           </div>
 
@@ -270,7 +294,7 @@ $isAdmin = !empty($_SESSION['reunite_admin_auth']) && $_SESSION['reunite_admin_a
               <option value="lost">Lost Reports Only</option>
               <option value="found">Found Reports Only</option>
             </select>
-            <input type="text" class="admin-input admin-search-input" id="reportSearchInput" placeholder="🔍 Search reports by ID, title, description, location..." />
+            <input type="text" class="admin-input admin-search-input" id="reportSearchInput" placeholder="Search reports by ID, title, description, location..." />
           </div>
 
           <!-- Reports Table -->
@@ -307,7 +331,7 @@ $isAdmin = !empty($_SESSION['reunite_admin_auth']) && $_SESSION['reunite_admin_a
         <div class="admin-card">
           <div class="admin-card-header">
             <div class="admin-card-title">
-              🧠 ChromaDB Late-Fusion Multi-Modal Vector Control
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px; margin-right:4px;"><path d="M12 2a4 4 0 0 1 4 4v1a4 4 0 0 1-8 0V6a4 4 0 0 1 4-4z"/><path d="M6 11v2a6 6 0 0 0 12 0v-2M12 19v3M8 22h8"/></svg> ChromaDB Late-Fusion Multi-Modal Vector Control
             </div>
           </div>
 
@@ -331,10 +355,10 @@ $isAdmin = !empty($_SESSION['reunite_admin_auth']) && $_SESSION['reunite_admin_a
 
           <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
             <button type="button" class="btn-admin" id="btnSyncChroma">
-              🚀 Re-index &amp; Sync All Reports to ChromaDB
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px; margin-right:4px;"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/></svg> Re-index &amp; Sync All Reports to ChromaDB
             </button>
             <button type="button" class="btn-admin danger" id="btnPurgeChroma">
-              🧹 Purge All ChromaDB Vectors
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px; margin-right:4px;"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg> Purge All ChromaDB Vectors
             </button>
           </div>
         </div>
@@ -349,11 +373,13 @@ $isAdmin = !empty($_SESSION['reunite_admin_auth']) && $_SESSION['reunite_admin_a
         <div class="admin-card">
           <div class="admin-card-header">
             <div class="admin-card-title">
-              🗄️ Media Vault Storage &amp; Image Clean Up
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px; margin-right:4px;"><rect width="20" height="8" x="2" y="3" rx="2"/><rect width="20" height="8" x="2" y="13" rx="2"/><line x1="10" x1="10" y1="7" y2="7"/><line x1="10" x1="10" y1="17" y2="17"/></svg> Media Vault Storage &amp; Image Clean Up
             </div>
             <div class="admin-card-actions">
               <span id="vaultScanSummary" style="font-size: 0.8125rem; color: var(--admin-text-muted);"></span>
-              <button type="button" class="btn-admin secondary sm" id="btnRescanVault">🔄 Rescan</button>
+              <button type="button" class="btn-admin secondary sm" id="btnRescanVault">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="vertical-align:-1px; margin-right:3px;"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-.1-8.24"/></svg> Rescan
+              </button>
             </div>
           </div>
 
@@ -363,7 +389,7 @@ $isAdmin = !empty($_SESSION['reunite_admin_auth']) && $_SESSION['reunite_admin_a
 
           <div style="margin-bottom: 1.5rem;">
             <button type="button" class="btn-admin secondary" id="btnPurgeOrphans">
-              🧹 Purge Orphaned Media Files (Free Storage)
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px; margin-right:4px;"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg> Purge Orphaned Media Files (Free Storage)
             </button>
           </div>
 
@@ -399,11 +425,15 @@ $isAdmin = !empty($_SESSION['reunite_admin_auth']) && $_SESSION['reunite_admin_a
         <div class="admin-card">
           <div class="admin-card-header">
             <div class="admin-card-title">
-              🛡️ Real-Time Access &amp; Security Audit Trail
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px; margin-right:4px;"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg> Real-Time Access &amp; Security Audit Trail
             </div>
             <div class="admin-card-actions" style="display: flex; gap: 0.5rem;">
-              <button type="button" class="btn-admin secondary sm" id="btnExportLogs">📥 Export JSON</button>
-              <button type="button" class="btn-admin secondary sm" id="btnClearLogs">🗑️ Clear Logs</button>
+              <button type="button" class="btn-admin secondary sm" id="btnExportLogs">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-1px; margin-right:3px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Export JSON
+              </button>
+              <button type="button" class="btn-admin secondary sm" id="btnClearLogs">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-1px; margin-right:3px;"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg> Clear Logs
+              </button>
             </div>
           </div>
 
@@ -440,14 +470,18 @@ $isAdmin = !empty($_SESSION['reunite_admin_auth']) && $_SESSION['reunite_admin_a
   <div class="admin-modal-backdrop" id="maintModalBackdrop" style="display:none;">
     <div class="admin-modal" style="max-width: 520px;" role="dialog" aria-modal="true" aria-labelledby="maintModalTitle">
       <div class="admin-modal-header">
-        <div class="admin-card-title" id="maintModalTitle">🛠️ Enable Maintenance Mode</div>
-        <button type="button" class="btn-admin secondary sm" id="btnCloseMaintModal" aria-label="Close">✕ Close</button>
+        <div class="admin-card-title" id="maintModalTitle">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px; margin-right:4px;"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg> Enable Maintenance Mode
+        </div>
+        <button type="button" class="btn-admin secondary sm" id="btnCloseMaintModal" aria-label="Close">&times; Close</button>
       </div>
       <div class="admin-modal-body" style="background: var(--admin-surface); color: var(--admin-text); font-family: var(--admin-font); padding: 1.5rem;">
         <!-- Warning banner -->
         <div class="admin-outage-banner" style="margin-bottom:1.25rem; font-size:0.875rem;">
           <div class="admin-outage-content">
-            <div class="admin-outage-icon">⚠️</div>
+            <div class="admin-outage-icon">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            </div>
             <div>
               <div class="admin-outage-title">This will block all non-admin access.</div>
               <div class="admin-outage-desc">All visitors will immediately see the maintenance page. Admins stay logged in.</div>
@@ -482,7 +516,7 @@ $isAdmin = !empty($_SESSION['reunite_admin_auth']) && $_SESSION['reunite_admin_a
       <div class="admin-modal-footer" style="gap:0.75rem;">
         <button type="button" class="btn-admin secondary" id="btnCancelMaint">Cancel</button>
         <button type="button" class="btn-admin danger" id="btnConfirmMaint">
-          🔒 Confirm — Enable Maintenance
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px; margin-right:4px;"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> Confirm — Enable Maintenance
         </button>
       </div>
     </div>
@@ -494,7 +528,9 @@ $isAdmin = !empty($_SESSION['reunite_admin_auth']) && $_SESSION['reunite_admin_a
   <div class="admin-modal-backdrop" id="dnaModalBackdrop">
     <div class="admin-modal">
       <div class="admin-modal-header">
-        <div class="admin-card-title" id="dnaModalTitle">🧬 Digital DNA Inspector</div>
+        <div class="admin-card-title" id="dnaModalTitle">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px; margin-right:4px;"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg> Digital DNA Inspector
+        </div>
         <button type="button" class="btn-admin secondary sm" id="btnCloseDnaModal">&times; Close</button>
       </div>
       <div class="admin-modal-body" id="dnaModalContent">

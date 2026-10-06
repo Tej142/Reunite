@@ -141,10 +141,11 @@ textarea:-webkit-autofill {
 }
 
 /* ── Nav ───────────────────────────────────────────── */
-nav {
+nav.reunite-main-nav,
+nav:not(.admin-nav-bar):not(.maint-topnav) {
   position: sticky;
   top: 0;
-  z-index: 50;
+  z-index: 1000;
   background: var(--bg);
   border-bottom: 1px solid var(--border);
 }
@@ -345,11 +346,11 @@ nav {
   top: calc(100% + 0.6rem);
   right: -0.5rem;
   width: 20rem;
-  background: var(--white);
+  background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 1rem;
   box-shadow: var(--shadow-lg);
-  z-index: 100;
+  z-index: 1100;
   animation: notifDrop 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
   overflow: hidden;
 }
@@ -368,7 +369,7 @@ nav {
   align-items: center;
   justify-content: space-between;
   padding: 0.85rem 1rem;
-  background: var(--bg-alt);
+  background: var(--surface-alt);
   border-bottom: 1px solid var(--border);
   font-size: 0.8125rem;
   font-weight: 600;
@@ -387,7 +388,7 @@ nav {
 .notif-dropdown-list {
   max-height: 16rem;
   overflow-y: auto;
-  background: var(--white);
+  background: var(--surface);
 }
 
 .notif-dropdown-item {
@@ -397,7 +398,7 @@ nav {
   padding: 0.85rem 1rem;
   border-bottom: 1px solid var(--border-soft);
   text-decoration: none;
-  background: var(--white);
+  background: var(--surface);
   transition: background 0.15s ease;
 }
 
@@ -406,16 +407,16 @@ nav {
 }
 
 .notif-dropdown-item:hover {
-  background: var(--bg-alt);
+  background: var(--surface-alt);
 }
 
 .notif-dropdown-item.unread {
-  background: var(--white);
+  background: var(--surface);
   border-left: 3px solid var(--accent);
 }
 
 .notif-dropdown-item.unread:hover {
-  background: var(--bg-alt);
+  background: var(--surface-alt);
 }
 
 .notif-item-icon {

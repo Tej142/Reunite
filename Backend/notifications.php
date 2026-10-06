@@ -136,19 +136,17 @@ if ($conn) {
         $listRes = $stmtList->get_result();
         while ($row = $listRes->fetch_assoc()) {
             $nType = $row['type'] ?: 'match';
-            $icon = '✨';
-            if ($nType === 'match') {
-                $icon = '🎯';
-            } elseif ($nType === 'claim') {
-                $icon = '🤝';
-            } elseif ($nType === 'system') {
-                $icon = '🔔';
-            }
+            $icon = $nType;
+
+            // Strip any legacy emojis from title and message
+            $emojiRegex = '/[\x{1F300}-\x{1FAFF}\x{1F000}-\x{1F2FF}\x{2300}-\x{23FF}\x{2600}-\x{27BF}\x{2B00}-\x{2BFF}\x{FE00}-\x{FE0F}\x{200D}]/u';
+            $cleanTitle = trim(preg_replace('/\s+/', ' ', preg_replace($emojiRegex, '', $row['title'] ?? '')));
+            $cleanMessage = trim(preg_replace('/\s+/', ' ', preg_replace($emojiRegex, '', $row['message'] ?? '')));
 
             $notifications[] = [
                 'id' => (int)$row['notification_id'],
-                'title' => $row['title'] ?: ($nType === 'match' ? 'New AI Match Detected!' : 'Notification'),
-                'message' => $row['message'],
+                'title' => $cleanTitle ?: ($nType === 'match' ? 'New AI Match Detected!' : 'Notification'),
+                'message' => $cleanMessage,
                 'link' => !empty($row['link']) ? $row['link'] : 'search.php',
                 'type' => $nType,
                 'icon' => $icon,

@@ -15,11 +15,11 @@ $is_profile = ($current_page === 'profile.php');
   // Local Flask AI Server Endpoint
   (function() {
     window.FLASK_BACKEND_URL = 'http://127.0.0.1:5000';
-    console.log('⚡ [Reunite] Connected Local Flask Backend URL:', window.FLASK_BACKEND_URL);
+    console.log('[Reunite] Connected Local Flask Backend URL:', window.FLASK_BACKEND_URL);
   })();
 </script>
 <script src="js/microinteractions.js"></script>
-<nav>
+<nav class="reunite-main-nav">
   <div class="nav-inner">
     <a href="<?php echo $logged_in ? 'home.php' : 'index.php'; ?>" class="brand">
       <svg width="28" height="28" viewBox="0 0 28 28" fill="none" aria-hidden="true">
@@ -106,15 +106,19 @@ if ($logged_in && isset($conn) && $conn) {
                 <?php if (!empty($userNotifs)): ?>
                   <?php foreach ($userNotifs as $notif): 
                     $isUnread = empty($notif['is_read']);
-                    $icon = '🔔';
-                    if (stripos($notif['title'], 'match') !== false) $icon = '🎯';
-                    elseif (stripos($notif['title'], 'claim') !== false) $icon = '🤝';
-                    elseif (stripos($notif['title'], 'found') !== false) $icon = '🔍';
+                    $iconSvg = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>';
+                    if (stripos($notif['title'], 'match') !== false) {
+                        $iconSvg = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>';
+                    } elseif (stripos($notif['title'], 'claim') !== false) {
+                        $iconSvg = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>';
+                    } elseif (stripos($notif['title'], 'found') !== false) {
+                        $iconSvg = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>';
+                    }
                     $timeStr = !empty($notif['created_at']) ? date('M d, H:i', strtotime($notif['created_at'])) : 'Recently';
                     $linkUrl = !empty($notif['link']) ? htmlspecialchars($notif['link']) : 'search.php';
                   ?>
                     <a href="<?php echo $linkUrl; ?>" class="notif-dropdown-item <?php echo $isUnread ? 'unread' : ''; ?>" data-notif-id="<?php echo $notif['notification_id']; ?>">
-                      <span class="notif-item-icon"><?php echo $icon; ?></span>
+                      <span class="notif-item-icon"><?php echo $iconSvg; ?></span>
                       <div class="notif-item-info">
                         <p class="notif-item-title"><?php echo htmlspecialchars($notif['title'] ?? 'Notification'); ?></p>
                         <p class="notif-item-desc"><?php echo htmlspecialchars($notif['message'] ?? ''); ?></p>
@@ -124,7 +128,9 @@ if ($logged_in && isset($conn) && $conn) {
                   <?php endforeach; ?>
                 <?php else: ?>
                   <div class="notif-dropdown-empty" style="padding: 1.5rem 1rem; text-align: center; color: var(--muted); font-size: 0.8125rem;">
-                    <span style="font-size: 1.5rem; display: block; margin-bottom: 0.35rem;">🔔</span>
+                    <div style="display: flex; justify-content: center; margin-bottom: 0.35rem; color: var(--muted-2);">
+                      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
+                    </div>
                     No notifications yet
                   </div>
                 <?php endif; ?>

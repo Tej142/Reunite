@@ -45,6 +45,14 @@
     }
   }
 
+  function stripEmoji(str) {
+    if (!str) return '';
+    return String(str)
+      .replace(/[\u{1F300}-\u{1FAFF}\u{1F000}-\u{1F2FF}\u{2300}-\u{23FF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\u{FE00}-\u{FE0F}\u{200D}]/gu, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
   function escapeHtml(str) {
     if (!str) return '';
     return String(str)
@@ -177,8 +185,8 @@
 
           if (window.ReuniteToast) {
             window.ReuniteToast.show({
-              title: newestAlertItem.title || '🎯 Match Alert!',
-              message: newestAlertItem.message,
+              title: stripEmoji(newestAlertItem.title) || 'Match Alert!',
+              message: stripEmoji(newestAlertItem.message),
               type: 'info',
               duration: 7000
             });
@@ -191,21 +199,36 @@
         if (notifications.length === 0) {
           notifList.innerHTML = `
             <div class="notif-dropdown-empty" style="padding: 1.5rem 1rem; text-align: center; color: var(--muted); font-size: 0.8125rem;">
-              <span style="font-size: 1.5rem; display: block; margin-bottom: 0.35rem;">🔔</span>
+              <div style="display: flex; justify-content: center; margin-bottom: 0.35rem; color: var(--muted-2);">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
+              </div>
               No notifications yet
             </div>
           `;
         } else {
-          notifList.innerHTML = notifications.map(item => `
-            <a href="${item.link || 'search.php'}" class="notif-dropdown-item ${item.is_read ? '' : 'unread'}" data-notif-id="${item.id}">
-              <span class="notif-item-icon">${item.icon || '✨'}</span>
-              <div class="notif-item-info">
-                <p class="notif-item-title">${escapeHtml(item.title)}</p>
-                <p class="notif-item-desc">${escapeHtml(item.message)}</p>
-                <span class="notif-item-time">${item.time_ago}</span>
-              </div>
-            </a>
-          `).join('');
+          notifList.innerHTML = notifications.map(item => {
+            const cleanTitle = stripEmoji(item.title);
+            const cleanMsg = stripEmoji(item.message);
+            const titleLower = cleanTitle.toLowerCase();
+            let iconSvg = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>';
+            if (titleLower.includes('match')) {
+              iconSvg = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>';
+            } else if (titleLower.includes('claim')) {
+              iconSvg = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>';
+            } else if (titleLower.includes('found')) {
+              iconSvg = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>';
+            }
+            return `
+              <a href="${item.link || 'search.php'}" class="notif-dropdown-item ${item.is_read ? '' : 'unread'}" data-notif-id="${item.id}">
+                <span class="notif-item-icon">${iconSvg}</span>
+                <div class="notif-item-info">
+                  <p class="notif-item-title">${escapeHtml(cleanTitle)}</p>
+                  <p class="notif-item-desc">${escapeHtml(cleanMsg)}</p>
+                  <span class="notif-item-time">${item.time_ago}</span>
+                </div>
+              </a>
+            `;
+          }).join('');
 
           // Attach item click handlers to mark read immediately
           const items = notifList.querySelectorAll('.notif-dropdown-item');

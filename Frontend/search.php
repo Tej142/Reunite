@@ -2,6 +2,17 @@
 require_once __DIR__ . '/includes/auth.php';
 $logged_in = is_logged_in();
 $user = get_current_user_data();
+
+// Forward direct item links (e.g. search.php?item=RF-00002 or search.php?match_id=1) to dedicated item.php page
+if (!empty($_GET['item']) || !empty($_GET['id']) || !empty($_GET['item_id']) || !empty($_GET['match_id'])) {
+    $itemId = $_GET['item'] ?? $_GET['id'] ?? $_GET['item_id'] ?? '';
+    $matchId = $_GET['match_id'] ?? '';
+    $params = [];
+    if (!empty($itemId)) $params['id'] = $itemId;
+    if (!empty($matchId)) $params['match_id'] = $matchId;
+    header("Location: item.php?" . http_build_query($params));
+    exit;
+}
 ?>
 <!doctype html>
 <html lang="en">
@@ -64,7 +75,10 @@ $user = get_current_user_data();
     <!-- Smart AI Match Drawer -->
     <div id="aiMatchDrawer" class="ai-match-drawer">
       <div class="ai-drawer-header">
-        <div class="ai-drawer-title">🧬 AI Smart Match</div>
+        <div class="ai-drawer-title">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -2px; margin-right: 4px;"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+          AI Smart Match
+        </div>
       </div>
       <p class="ai-drawer-desc">Describe your item to calculate similarity confidence against active reports.</p>
       <div class="ai-drawer-input-row">
@@ -78,14 +92,30 @@ $user = get_current_user_data();
   <!-- ── Category Chips ── -->
   <div class="category-chips-bar">
     <button type="button" class="cat-chip active" data-category="all">All</button>
-    <button type="button" class="cat-chip" data-category="Electronics">📱 Electronics</button>
-    <button type="button" class="cat-chip" data-category="Wallets &amp; Bags">👜 Wallets &amp; Bags</button>
-    <button type="button" class="cat-chip" data-category="Keys &amp; Fobs">🔑 Keys &amp; Fobs</button>
-    <button type="button" class="cat-chip" data-category="Books &amp; Stationeries">📚 Stationeries</button>
-    <button type="button" class="cat-chip" data-category="Accessories">👓 Accessories</button>
-    <button type="button" class="cat-chip" data-category="Clothing">👕 Clothing</button>
-    <button type="button" class="cat-chip" data-category="ID Cards">🪪 ID Cards</button>
-    <button type="button" class="cat-chip" data-category="Others">··· Others</button>
+    <button type="button" class="cat-chip" data-category="Electronics">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -1px; margin-right: 3px;"><rect width="14" height="20" x="5" y="2" rx="2" ry="2"/><line x1="12" x2="12.01" y1="18" y2="18"/></svg>Electronics
+    </button>
+    <button type="button" class="cat-chip" data-category="Wallets &amp; Bags">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -1px; margin-right: 3px;"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>Wallets &amp; Bags
+    </button>
+    <button type="button" class="cat-chip" data-category="Keys &amp; Fobs">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -1px; margin-right: 3px;"><circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6"/><path d="m15.5 7.5 3 3L22 7l-3-3"/></svg>Keys &amp; Fobs
+    </button>
+    <button type="button" class="cat-chip" data-category="Books &amp; Stationeries">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -1px; margin-right: 3px;"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5Z"/><path d="M6 6h10"/><path d="M6 10h10"/></svg>Stationeries
+    </button>
+    <button type="button" class="cat-chip" data-category="Accessories">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -1px; margin-right: 3px;"><circle cx="6" cy="15" r="4"/><circle cx="18" cy="15" r="4"/><path d="M14 15a2 2 0 0 0-4 0"/><path d="M2.5 13 5 7c.7-1.3 1.4-2 3-2"/><path d="M21.5 13 19 7c-.7-1.3-1.4-2-3-2"/></svg>Accessories
+    </button>
+    <button type="button" class="cat-chip" data-category="Clothing">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -1px; margin-right: 3px;"><path d="M20.38 3.46 16 2a4 4 0 0 1-8 0L3.62 3.46a2 2 0 0 0-1.34 2.23l.58 3.47a1 1 0 0 0 .99.84H6v10c0 1.1.9 2 2 2h8a2 2 0 0 0 2-2V10h2.15a1 1 0 0 0 .99-.84l.58-3.47a2 2 0 0 0-1.34-2.23z"/></svg>Clothing
+    </button>
+    <button type="button" class="cat-chip" data-category="ID Cards">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -1px; margin-right: 3px;"><rect width="18" height="13" x="3" y="5" rx="2"/><path d="M7 15h4"/><path d="M15 15h2"/><circle cx="9" cy="10" r="2"/></svg>ID Cards
+    </button>
+    <button type="button" class="cat-chip" data-category="Others">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -1px; margin-right: 3px;"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>Others
+    </button>
   </div>
 
   <!-- ── Content Area: Sidebar + Grid ── -->
@@ -168,7 +198,9 @@ $user = get_current_user_data();
 
       <!-- Tip Card -->
       <div class="sidebar-tip">
-        <div class="tip-icon">💡</div>
+        <div class="tip-icon">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"/><path d="M9 18h6"/><path d="M10 22h4"/></svg>
+        </div>
         <div>
           <div class="tip-title">Tip</div>
           <p class="tip-body">Use specific keywords like brand, color, or location to get better results with AI Match.</p>
@@ -199,8 +231,9 @@ $user = get_current_user_data();
 
 </main>
 
-<!-- ── Item Details Modal ── -->
-<div id="itemModalOverlay" class="modal-overlay" role="dialog" aria-modal="true"></div>
+<!-- ── Item Details Slide-Over Drawer & Overlay ── -->
+<div id="itemDrawerOverlay" class="drawer-overlay" role="presentation"></div>
+<aside id="itemDrawer" class="item-slideover-drawer" role="dialog" aria-labelledby="modalItemTitle" aria-hidden="true" aria-modal="false"></aside>
 
 <!-- ── Scripts ── -->
 <script src="js/flask-ai-service.js?v=<?php echo time(); ?>"></script>

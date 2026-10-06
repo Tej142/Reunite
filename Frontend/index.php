@@ -123,7 +123,7 @@ if (isset($conn) && $conn) {
     </div>
   </div>
 
-  <div class="intro-eyebrow"><span>👋</span> New here? Welcome to the community.</div>
+  <div class="intro-eyebrow">New here? Welcome to the community.</div>
 
   <h1>
     <span class="line"><span>Things get lost.</span></span>
@@ -222,7 +222,9 @@ if (isset($conn) && $conn) {
     </div>
   <?php else: ?>
     <div class="empty-story-banner reveal" style="text-align: center; padding: 3rem 1.5rem; background: var(--surface); border: 1px dashed var(--border); border-radius: 1.25rem; max-width: 680px; margin: 0 auto;">
-      <span style="font-size: 2.5rem; display: block; margin-bottom: 0.75rem;">🤝</span>
+      <div style="display: flex; justify-content: center; margin-bottom: 0.75rem; color: var(--accent);">
+        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+      </div>
       <h3 style="font-size: 1.15rem; margin-bottom: 0.5rem; color: var(--ink);">Join the Campus Lost &amp; Found Network</h3>
       <p style="color: var(--muted); font-size: 0.9rem; line-height: 1.5; margin-bottom: 1.25rem;">
         Every item posted is cross-referenced using CLIP and DINOv2 AI. As missing belongings are matched and returned, live community success stories will appear here.

@@ -30,7 +30,7 @@ function extractClientDna(text = '', extraMeta = {}) {
 
   // Electronics
   if (lower.includes('iphone') || lower.includes('phone') || lower.includes('apple') || lower.includes('samsung') || lower.includes('pixel') || lower.includes('oneplus')) {
-    category = '📱 Electronics / Smartphone';
+    category = 'Electronics / Smartphone';
     if (lower.includes('apple') || lower.includes('iphone')) brand = 'Apple';
     if (lower.includes('samsung')) brand = 'Samsung';
     if (lower.includes('pixel')) brand = 'Google';
@@ -45,28 +45,28 @@ function extractClientDna(text = '', extraMeta = {}) {
 
     features.push('OLED Display', 'Camera Lens Array', 'Lock Screen Protected');
   } else if (lower.includes('laptop') || lower.includes('macbook') || lower.includes('dell') || lower.includes('lenovo') || lower.includes('hp')) {
-    category = '💻 Electronics / Laptop';
+    category = 'Electronics / Laptop';
     if (lower.includes('macbook')) { brand = 'Apple'; model = 'MacBook'; }
     if (lower.includes('dell')) brand = 'Dell';
     if (lower.includes('lenovo')) brand = 'Lenovo';
     features.push('Keyboard Layout', 'Trackpad', 'Laptop Chassis');
   } else if (lower.includes('wallet') || lower.includes('purse') || lower.includes('pouch')) {
-    category = '💼 Wallets & Bags';
+    category = 'Wallets & Bags';
     material = 'Leather';
     features.push('Card Slots', 'Cash Pocket', 'Folding Bifold');
   } else if (lower.includes('backpack') || lower.includes('bag')) {
-    category = '🎒 Bags & Luggage';
+    category = 'Bags & Luggage';
     if (lower.includes('wildcraft')) brand = 'Wildcraft';
     if (lower.includes('nike')) brand = 'Nike';
     features.push('Zipper Compartments', 'Adjustable Straps');
   } else if (lower.includes('key') || lower.includes('keys')) {
-    category = '🔑 Keys & Access';
+    category = 'Keys & Access';
     features.push('Metal Keyring', 'Access Fob / Key');
   } else if (lower.includes('watch') || lower.includes('smartwatch')) {
-    category = '⌚ Watches & Wearables';
+    category = 'Watches & Wearables';
     features.push('Wrist Strap', 'Watch Dial');
   } else if (lower.includes('earbuds') || lower.includes('airpods') || lower.includes('headphones')) {
-    category = '🎧 Audio & Earbuds';
+    category = 'Audio & Earbuds';
     if (lower.includes('airpods')) { brand = 'Apple'; model = 'AirPods'; }
     features.push('Charging Case', 'Wireless Earbuds');
   }
@@ -336,7 +336,7 @@ function renderAiDnaCard(dna, container, options = {}) {
               </svg>
               <span>AI Neural Feature Extraction &amp; Digital DNA</span>
             </div>
-            <span class="ai-dna-badge">⚡ Multi-Modal Analyzed (CLIP + DINOv2)</span>
+            <span class="ai-dna-badge"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-1px; margin-right:3px;"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> Multi-Modal Analyzed (CLIP + DINOv2)</span>
           </div>
 
           <p class="ai-dna-intro">
@@ -346,7 +346,7 @@ function renderAiDnaCard(dna, container, options = {}) {
           <!-- ── Section 1: Visible Public Feature Vectors ── -->
           <div class="ai-feature-section-header">
             <div class="ai-feature-section-title">
-              <span>👁️ Visible Public Feature Vectors</span>
+              <span><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px; margin-right:4px;"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg> Visible Public Feature Vectors</span>
             </div>
             <span class="ai-visible-badge">Public &amp; Indexed</span>
           </div>
@@ -355,7 +355,7 @@ function renderAiDnaCard(dna, container, options = {}) {
             <div class="ai-form-field">
               <label for="aiFieldCategory">
                 <span>Item Category / Classification</span>
-                <span class="ai-field-edit-hint">✎ Edit</span>
+                <span class="ai-field-edit-hint">Edit</span>
               </label>
               <input type="text" class="ai-field-input" id="aiFieldCategory" value="${escapeHtml(objType)}" placeholder="e.g. Electronics / Smartphone" />
             </div>
@@ -363,7 +363,7 @@ function renderAiDnaCard(dna, container, options = {}) {
             <div class="ai-form-field">
               <label for="aiFieldBrand">
                 <span>Brand</span>
-                <span class="ai-field-edit-hint">✎ Edit</span>
+                <span class="ai-field-edit-hint">Edit</span>
               </label>
               <input type="text" class="ai-field-input" id="aiFieldBrand" value="${escapeHtml(brand)}" placeholder="e.g. Apple, Peter England, Wildcraft" />
             </div>
@@ -371,7 +371,7 @@ function renderAiDnaCard(dna, container, options = {}) {
             <div class="ai-form-field">
               <label for="aiFieldModel">
                 <span>Model / Variant</span>
-                <span class="ai-field-edit-hint">✎ Edit</span>
+                <span class="ai-field-edit-hint">Edit</span>
               </label>
               <input type="text" class="ai-field-input" id="aiFieldModel" value="${escapeHtml(model)}" placeholder="e.g. iPhone 13 Pro, Classic Chrono" />
             </div>
@@ -379,7 +379,7 @@ function renderAiDnaCard(dna, container, options = {}) {
             <div class="ai-form-field">
               <label for="aiFieldColor">
                 <span>Primary Color &amp; Accents</span>
-                <span class="ai-field-edit-hint">✎ Edit</span>
+                <span class="ai-field-edit-hint">Edit</span>
               </label>
               <input type="text" class="ai-field-input" id="aiFieldColor" value="${escapeHtml(color)}" placeholder="e.g. Midnight Blue, Matte Black" />
             </div>
@@ -387,7 +387,7 @@ function renderAiDnaCard(dna, container, options = {}) {
             <div class="ai-form-field">
               <label for="aiFieldMaterial">
                 <span>Material &amp; Surface Build</span>
-                <span class="ai-field-edit-hint">✎ Edit</span>
+                <span class="ai-field-edit-hint">Edit</span>
               </label>
               <input type="text" class="ai-field-input" id="aiFieldMaterial" value="${escapeHtml(material)}" placeholder="e.g. Leather, Stainless Steel, Plastic" />
             </div>
@@ -395,7 +395,7 @@ function renderAiDnaCard(dna, container, options = {}) {
             <div class="ai-form-field">
               <label for="aiFieldCondition">
                 <span>Physical Condition</span>
-                <span class="ai-field-edit-hint">✎ Edit</span>
+                <span class="ai-field-edit-hint">Edit</span>
               </label>
               <input type="text" class="ai-field-input" id="aiFieldCondition" value="${escapeHtml(condition)}" placeholder="e.g. Good, Minor Scratches" />
             </div>
@@ -403,7 +403,7 @@ function renderAiDnaCard(dna, container, options = {}) {
             <div class="ai-form-field">
               <label for="aiFieldLocation">
                 <span>Reported Location (Where)</span>
-                <span class="ai-field-edit-hint">✎ Edit</span>
+                <span class="ai-field-edit-hint">Edit</span>
               </label>
               <input type="text" class="ai-field-input" id="aiFieldLocation" value="${escapeHtml(location)}" placeholder="e.g. Central Library 2nd Floor, IT Lab" />
             </div>
@@ -411,7 +411,7 @@ function renderAiDnaCard(dna, container, options = {}) {
             <div class="ai-form-field">
               <label for="aiFieldDateTime">
                 <span>Reported Date &amp; Time (When)</span>
-                <span class="ai-field-edit-hint">✎ Edit</span>
+                <span class="ai-field-edit-hint">Edit</span>
               </label>
               <input type="text" class="ai-field-input" id="aiFieldDateTime" value="${escapeHtml(dateTime)}" placeholder="e.g. Today 2:00 PM, Yesterday" />
             </div>
@@ -436,13 +436,13 @@ function renderAiDnaCard(dna, container, options = {}) {
           <!-- ── Section 2: Protected Private Verification Keys ── -->
           <div class="ai-feature-section-header">
             <div class="ai-feature-section-title">
-              <span>🔒 Protected Private Verification Keys</span>
+              <span><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px; margin-right:4px;"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> Protected Private Verification Keys</span>
             </div>
             <span class="ai-private-badge">Encrypted &bull; Ownership Lock</span>
           </div>
 
           <div class="ai-security-shield-card">
-            <span class="ai-shield-icon">🛡️</span>
+            <span class="ai-shield-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></span>
             <div class="ai-shield-text">
               <strong>Zero-Knowledge Ownership Authentication:</strong> Private verification details are never published on public search boards. When a candidate match is found, the system cross-examines these attributes to safely verify true ownership.
             </div>
@@ -452,7 +452,7 @@ function renderAiDnaCard(dna, container, options = {}) {
             <div class="ai-form-field">
               <label for="aiFieldSerial">
                 <span>Serial / IMEI / Hardware ID Traces</span>
-                <span class="ai-field-edit-hint">✎ Private</span>
+                <span class="ai-field-edit-hint">Private</span>
               </label>
               <input type="text" class="ai-field-input" id="aiFieldSerial" value="${escapeHtml(serial)}" placeholder="e.g. Serial: C02..., IMEI: 354892..." />
             </div>
@@ -460,7 +460,7 @@ function renderAiDnaCard(dna, container, options = {}) {
             <div class="ai-form-field">
               <label for="aiFieldPrivateMarks">
                 <span>Secret Engravings / Lock Screen / Secret Marks</span>
-                <span class="ai-field-edit-hint">✎ Private</span>
+                <span class="ai-field-edit-hint">Private</span>
               </label>
               <input type="text" class="ai-field-input" id="aiFieldPrivateMarks" value="${escapeHtml(marks)}" placeholder="e.g. Custom initial engraving 'CT', Anime wallpaper" />
             </div>
@@ -468,7 +468,7 @@ function renderAiDnaCard(dna, container, options = {}) {
             <div class="ai-form-field full-width">
               <label for="aiFieldSecretContents">
                 <span>Internal Contents / Hidden Cards / Secret Compartment Details</span>
-                <span class="ai-field-edit-hint">✎ Private</span>
+                <span class="ai-field-edit-hint">Private</span>
               </label>
               <textarea class="ai-field-textarea" id="aiFieldSecretContents" rows="2" placeholder="e.g. Contains student ID card #24155, metro pass, folded note inside zipper compartment...">${escapeHtml(secretDetails)}</textarea>
             </div>
@@ -483,7 +483,7 @@ function renderAiDnaCard(dna, container, options = {}) {
             ` : '<div></div>'}
             <button type="button" class="btn-confirm-dna" id="btnConfirmDna">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
-              🚀 Confirm Digital DNA &amp; Launch Neural Matching Engine &rarr;
+              Confirm Digital DNA &amp; Launch Neural Matching Engine &rarr;
             </button>
           </div>
         </div>
@@ -540,7 +540,7 @@ function renderAiDnaCard(dna, container, options = {}) {
           ${currentTags.length > 0 ? `
             <div class="ai-dna-section-title">Indexed Visual Features (${currentTags.length})</div>
             <div class="ai-dna-chips">
-              ${currentTags.map(f => `<span class="ai-dna-chip">🔍 ${escapeHtml(f)}</span>`).join('')}
+              ${currentTags.map(f => `<span class="ai-dna-chip">${escapeHtml(f)}</span>`).join('')}
             </div>
           ` : ''}
 
@@ -569,7 +569,7 @@ function renderAiDnaCard(dna, container, options = {}) {
     }
     return tags.map((t, index) => `
       <span class="ai-dna-chip editable" data-index="${index}">
-        <span>🔍 ${escapeHtml(t)}</span>
+        <span>${escapeHtml(t)}</span>
         <button type="button" class="btn-remove-tag" data-tag-index="${index}" aria-label="Remove tag">&times;</button>
       </span>
     `).join('');

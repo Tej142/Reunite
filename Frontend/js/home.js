@@ -3,34 +3,33 @@ let currentFilter = 'all';
 
 async function fetchLiveHomeItems() {
   try {
-    const res = await fetch('../Backend/reports.php?action=list&type=all&limit=20');
+    const res = await fetch('../Backend/reports.php?action=list&type=lost&limit=20');
     if (!res.ok) return;
     const json = await res.json();
     const rows = (json.data && json.data.reports) ? json.data.reports : (json.reports || []);
 
     if (Array.isArray(rows)) {
-      ITEMS = rows.map(r => {
-        const repType = String(r.report_type || 'lost').toLowerCase();
-        let imgUrl = 'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=480&h=320&fit=crop&auto=format';
-        if (r.image_path && typeof r.image_path === 'string' && r.image_path.trim() !== '') {
-          const p = r.image_path.trim();
-          imgUrl = (p.startsWith('http') || p.startsWith('data:')) ? p : (p.startsWith('/') ? p : '../' + p);
-        } else if (repType === 'found') {
-          imgUrl = 'https://images.unsplash.com/photo-1584438784894-089d6a62b8fa?w=480&h=320&fit=crop&auto=format';
-        }
+      ITEMS = rows
+        .filter(r => String(r.report_type || 'lost').toLowerCase() === 'lost')
+        .map(r => {
+          let imgUrl = 'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=480&h=320&fit=crop&auto=format';
+          if (r.image_path && typeof r.image_path === 'string' && r.image_path.trim() !== '') {
+            const p = r.image_path.trim();
+            imgUrl = (p.startsWith('http') || p.startsWith('data:')) ? p : (p.startsWith('/') ? p : '../' + p);
+          }
 
-        return {
-          id: r.id,
-          reportId: `R${repType === 'found' ? 'F' : 'L'}-${String(r.id).padStart(5, '0')}`,
-          img: imgUrl,
-          title: r.title || r.category || (repType === 'found' ? 'Found Item' : 'Lost Item'),
-          desc: r.description || 'Reported on campus via Reunite.',
-          city: r.location || 'Campus Hub',
-          when: r.created_at ? formatTimeAgo(r.created_at) : 'Recently',
-          status: inArray(r.status, ['matched', 'claimed', 'closed']) ? 'matched' : 'active',
-          type: repType
-        };
-      });
+          return {
+            id: r.id,
+            reportId: `RL-${String(r.id).padStart(5, '0')}`,
+            img: imgUrl,
+            title: r.title || r.category || 'Lost Item',
+            desc: r.description || 'Reported on campus via Reunite.',
+            city: r.location || 'Campus Hub',
+            when: r.created_at ? formatTimeAgo(r.created_at) : 'Recently',
+            status: inArray(r.status, ['matched', 'claimed', 'closed']) ? 'matched' : 'active',
+            type: 'lost'
+          };
+        });
 
       renderCards();
     }
@@ -60,19 +59,32 @@ function formatTimeAgo(dateStr) {
 function renderCards() {
   const grid = document.getElementById('itemsGrid');
   if (!grid) return;
-  const filtered = currentFilter === 'all' ? ITEMS : ITEMS.filter(i => i.status === currentFilter);
+
+  // Filter strictly to lost items
+  let filtered = ITEMS.filter(i => i.type === 'lost');
+  if (currentFilter === 'active') {
+    filtered = filtered.filter(i => i.status === 'active');
+  } else if (currentFilter === 'matched') {
+    filtered = filtered.filter(i => i.status === 'matched');
+  }
 
   if (filtered.length === 0) {
+    const emptyMsg = currentFilter === 'matched' 
+      ? 'No reunited items recorded yet.' 
+      : 'No active missing item searches right now.';
+
     grid.innerHTML = `
-      <div style="grid-column: 1 / -1; text-align: center; padding: 3rem 1.5rem; background: var(--white, #fff); border: 1px solid var(--border, #E4DCD3); border-radius: 1rem;">
-        <div style="font-size: 2.25rem; margin-bottom: 0.5rem;">🔍</div>
-        <h3 style="font-size: 1.15rem; font-weight: 600; color: var(--ink, #1C1917); margin-bottom: 0.35rem;">No active listings in this category</h3>
+      <div style="grid-column: 1 / -1; text-align: center; padding: 3rem 1.5rem; background: var(--surface, #fff); border: 1px solid var(--border, #E4DCD3); border-radius: 1rem;">
+        <div style="display: flex; justify-content: center; margin-bottom: 0.75rem; color: var(--muted, #8C827A);">
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+        </div>
+        <h3 style="font-size: 1.15rem; font-weight: 600; color: var(--ink, #1C1917); margin-bottom: 0.35rem;">${emptyMsg}</h3>
         <p style="font-size: 0.875rem; color: var(--muted, #8C827A); margin-bottom: 1.25rem; max-width: 40ch; margin-left: auto; margin-right: auto;">
-          New reports submitted by students will appear live right here.
+          When students report missing belongings on campus, they will appear live right here.
         </p>
         <div style="display: flex; gap: 0.65rem; justify-content: center; flex-wrap: wrap;">
-          <a href="report-lost-item.php" class="btn btn-primary" style="font-size: 0.85rem; padding: 0.55rem 1.15rem;">+ Report Missing</a>
-          <a href="report-found-item.php" class="btn btn-ghost" style="font-size: 0.85rem; padding: 0.55rem 1.15rem;">+ Report Found</a>
+          <a href="report-lost-item.php" class="btn btn-primary" style="font-size: 0.85rem; padding: 0.55rem 1.15rem;">+ Report Missing Item</a>
+          <a href="search.php" class="btn btn-ghost" style="font-size: 0.85rem; padding: 0.55rem 1.15rem;">Search Found Belongings</a>
         </div>
       </div>
     `;
@@ -82,7 +94,7 @@ function renderCards() {
   grid.innerHTML = filtered.map(item => {
     const isSaved = window.ReuniteBookmarks ? window.ReuniteBookmarks.isSaved(`item-${item.id}`) : false;
     return `
-      <article class="item-card search-item-card" data-id="${item.reportId}" onclick="window.location.href='search.php?id=${item.id}&type=${item.type}'" style="cursor: pointer;">
+      <article class="item-card search-item-card" data-id="${item.reportId}" onclick="window.location.href='item.php?id=${item.reportId}'" style="cursor: pointer;">
         <div class="item-card-img-wrap">
           <img src="${item.img}" alt="${item.title}" class="item-card-img card-img" loading="lazy" onerror="this.src='https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=480&h=320&fit=crop'" onload="this.classList.add('loaded')" />
           <div class="item-card-overlay"></div>
@@ -90,7 +102,7 @@ function renderCards() {
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/></svg>
           </button>
           <span class="item-badge ${item.status === 'matched' ? 'badge-matched' : 'badge-active'}">
-            ${item.status === 'matched' ? '&#10003; Reunited' : (item.type === 'found' ? 'Found Item' : 'Lost Item')}
+            ${item.status === 'matched' ? '&#10003; Reunited' : 'Lost Item'}
           </span>
         </div>
         <div class="item-card-body">

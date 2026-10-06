@@ -25,6 +25,28 @@
   --admin-mono: 'JetBrains Mono', 'Fira Code', monospace;
 }
 
+body.admin-light,
+[data-admin-theme="light"] {
+  --admin-bg: #F8FAFC;
+  --admin-surface: #FFFFFF;
+  --admin-surface-2: #F1F5F9;
+  --admin-surface-3: #E2E8F0;
+  --admin-border: #CBD5E1;
+  --admin-border-focus: #C4622D;
+  --admin-text: #0F172A;
+  --admin-text-muted: #64748B;
+  --admin-accent: #C4622D;
+  --admin-accent-glow: rgba(196, 98, 45, 0.18);
+  --admin-success: #059669;
+  --admin-success-bg: rgba(5, 150, 105, 0.12);
+  --admin-danger: #DC2626;
+  --admin-danger-bg: rgba(220, 38, 38, 0.12);
+  --admin-warning: #D97706;
+  --admin-warning-bg: rgba(217, 119, 6, 0.12);
+  --admin-info: #2563EB;
+  --admin-info-bg: rgba(37, 99, 235, 0.12);
+}
+
 body.admin-body {
   background: var(--admin-bg);
   color: var(--admin-text);
@@ -34,7 +56,31 @@ body.admin-body {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
+  transition: background 0.2s ease, color 0.2s ease;
 }
+
+.btn-admin-theme {
+  background: var(--admin-surface-2);
+  border: 1px solid var(--admin-border);
+  color: var(--admin-text);
+  padding: 0.45rem 0.65rem;
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.btn-admin-theme:hover {
+  background: var(--admin-surface-3);
+  border-color: var(--admin-border-focus);
+}
+
+.btn-admin-theme .sun-icon { display: none; }
+.btn-admin-theme .moon-icon { display: block; }
+body.admin-light .btn-admin-theme .sun-icon { display: block; }
+body.admin-light .btn-admin-theme .moon-icon { display: none; }
 
 /* ── Top Header ────────────────────────────────────────────── */
 .admin-header {
@@ -764,4 +810,113 @@ body.admin-body {
 .admin-modal-backdrop[style*="flex"] {
   display: flex !important;
 }
+
+/* ══════════════════════════════════════════════════════════════════
+   LIGHT THEME ENHANCEMENTS & OVERRIDES
+   ══════════════════════════════════════════════════════════════════ */
+body.admin-light .admin-auth-screen {
+  background: radial-gradient(circle at 50% 20%, #FFFFFF 0%, #F1F5F9 55%, #E2E8F0 100%);
+}
+
+body.admin-light .admin-auth-card {
+  background: #FFFFFF;
+  border-color: #CBD5E1;
+  box-shadow: 0 20px 45px rgba(0, 0, 0, 0.07);
+}
+
+body.admin-light .admin-auth-icon {
+  background: rgba(196, 98, 45, 0.08);
+}
+
+body.admin-light .admin-metric-card,
+body.admin-light .admin-card {
+  background: #FFFFFF;
+  border-color: #E2E8F0;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04);
+}
+
+body.admin-light .admin-metric-card:hover {
+  border-color: var(--admin-accent);
+  box-shadow: 0 6px 20px rgba(196, 98, 45, 0.08);
+}
+
+body.admin-light .admin-table th {
+  background: #F8FAFC;
+  color: #475569;
+  border-bottom: 1px solid #CBD5E1;
+}
+
+body.admin-light .admin-table td {
+  border-bottom: 1px solid #F1F5F9;
+  color: #0F172A;
+}
+
+body.admin-light .admin-table tr:hover td {
+  background: #F8FAFC;
+}
+
+body.admin-light .admin-tab-btn:hover {
+  background: rgba(0, 0, 0, 0.04);
+  color: #0F172A;
+}
+
+body.admin-light .admin-tab-btn.active {
+  background: rgba(196, 98, 45, 0.08);
+  color: var(--admin-accent);
+  border-bottom-color: var(--admin-accent);
+}
+
+body.admin-light .admin-input,
+body.admin-light .admin-select {
+  background: #FFFFFF;
+  border-color: #CBD5E1;
+  color: #0F172A;
+}
+
+body.admin-light .admin-input:focus,
+body.admin-light .admin-select:focus {
+  background: #FFFFFF;
+  border-color: var(--admin-accent);
+  box-shadow: 0 0 0 3px rgba(196, 98, 45, 0.12);
+}
+
+body.admin-light .admin-modal {
+  background: #FFFFFF;
+  border-color: #CBD5E1;
+  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.14);
+}
+
+body.admin-light .admin-outage-banner {
+  background: linear-gradient(90deg, #FEF2F2 0%, #FFF1F2 100%);
+  border-color: #FECACA;
+  border-left: 4px solid var(--admin-danger);
+  box-shadow: 0 4px 16px rgba(239, 68, 68, 0.08);
+}
+
+body.admin-light .admin-outage-title {
+  color: #991B1B;
+}
+
+body.admin-light .admin-outage-desc {
+  color: #7F1D1D;
+}
+
+body.admin-light .admin-code-snippet {
+  background: #FEE2E2;
+  color: #B91C1C;
+  border: 1px solid #FCA5A5;
+}
+
+body.admin-light .admin-maint-on-banner {
+  background: linear-gradient(90deg, #FFFBEB 0%, #FEF3C7 100%);
+  border-bottom-color: #FDE68A;
+  border-left: 4px solid var(--admin-warning);
+  color: #92400E;
+}
+
+body.admin-light .admin-maint-active-info {
+  background: #FEF2F2;
+  border-color: #FECACA;
+}
+
 

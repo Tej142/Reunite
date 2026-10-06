@@ -905,15 +905,16 @@ function runRealtimeMatchmaking($insertedId, $reportType, $category, $title, $de
         if ($lostInfo && $foundInfo) {
             $lostUserId = (int)$lostInfo['user_id'];
             $foundUserId = (int)$foundInfo['user_id'];
-            $lostTitle = $lostInfo['title'];
-            $foundTitle = $foundInfo['title'];
+            $emojiRegex = '/[\x{1F300}-\x{1FAFF}\x{1F000}-\x{1F2FF}\x{2300}-\x{23FF}\x{2600}-\x{27BF}\x{2B00}-\x{2BFF}\x{FE00}-\x{FE0F}\x{200D}]/u';
+            $lostTitle = trim(preg_replace('/\s+/', ' ', preg_replace($emojiRegex, '', $lostInfo['title'] ?? '')));
+            $foundTitle = trim(preg_replace('/\s+/', ' ', preg_replace($emojiRegex, '', $foundInfo['title'] ?? '')));
             $scoreDisplay = round($score) . '%';
 
             // Notification for Lost Report Owner
             if ($lostUserId > 0) {
-                $nTitle = "🎯 Potential Match: " . substr($foundTitle, 0, 40);
+                $nTitle = "Potential Match: " . substr($foundTitle, 0, 40);
                 $nMsg = "A found item '" . $foundTitle . "' matches your lost report '" . $lostTitle . "' with {$scoreDisplay} similarity.";
-                $nLink = "search.php?match_id=" . ($matchId ?: 1);
+                $nLink = "item.php?match_id=" . ($matchId ?: 1);
                 $nStmt = $conn->prepare("INSERT INTO notifications (user_id, title, report_type, report_id, type, message, link, is_read, created_at) VALUES (?, ?, 'LOST', ?, 'match', ?, ?, 0, NOW())");
                 if ($nStmt) {
                     $nStmt->bind_param("isiss", $lostUserId, $nTitle, $lostId, $nMsg, $nLink);
@@ -924,9 +925,9 @@ function runRealtimeMatchmaking($insertedId, $reportType, $category, $title, $de
 
             // Notification for Found Report Owner (if different user)
             if ($foundUserId > 0 && $foundUserId !== $lostUserId) {
-                $nTitle = "🎯 Potential Match: " . substr($lostTitle, 0, 40);
+                $nTitle = "Potential Match: " . substr($lostTitle, 0, 40);
                 $nMsg = "Your reported found item '" . $foundTitle . "' has a {$scoreDisplay} match with a lost item ('" . $lostTitle . "').";
-                $nLink = "search.php?match_id=" . ($matchId ?: 1);
+                $nLink = "item.php?match_id=" . ($matchId ?: 1);
                 $nStmt = $conn->prepare("INSERT INTO notifications (user_id, title, report_type, report_id, type, message, link, is_read, created_at) VALUES (?, ?, 'FOUND', ?, 'match', ?, ?, 0, NOW())");
                 if ($nStmt) {
                     $nStmt->bind_param("isiss", $foundUserId, $nTitle, $foundId, $nMsg, $nLink);

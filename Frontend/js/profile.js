@@ -104,6 +104,25 @@ document.addEventListener('DOMContentLoaded', () => {
           if (profileDisplayName) {
             profileDisplayName.textContent = name;
           }
+          // Update live hero metadata with selected dropdown names
+          const collegeEl = document.getElementById('profCollege');
+          const branchEl = document.getElementById('profBranch');
+          const collegeText = collegeEl && collegeEl.options[collegeEl.selectedIndex] ? collegeEl.options[collegeEl.selectedIndex].text : college;
+          const branchText = branchEl && branchEl.options[branchEl.selectedIndex] ? branchEl.options[branchEl.selectedIndex].text : branch;
+          const metaEl = document.querySelector('.profile-meta-text');
+          if (metaEl) {
+            metaEl.innerHTML = `
+              <span style="display: inline-flex; align-items: center; gap: 0.35rem;">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M5 21V7l7-4 7 4v14"/><path d="M9 10h1"/><path d="M14 10h1"/><path d="M9 14h1"/><path d="M14 14h1"/><path d="M9 18h1"/><path d="M14 18h1"/></svg>
+                ${collegeText}
+              </span>
+              &bull; 
+              <span style="display: inline-flex; align-items: center; gap: 0.35rem;">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="12" x="3" y="4" rx="2"/><line x1="2" x2="22" y1="20" y2="20"/></svg>
+                ${branchText}
+              </span>
+            `;
+          }
           // Update Avatar Letter in hero & navbar
           const newInitial = name.charAt(0).toUpperCase();
           document.querySelectorAll('.avatar-letter, .avatar-initial').forEach(el => {

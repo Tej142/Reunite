@@ -9,7 +9,75 @@ $user_email = $user['email_raw'] ?? $user['email'] ?? ($_SESSION['email'] ?? '')
 $user_phone = $user['phone_raw'] ?? $user['phone'] ?? ($_SESSION['phone'] ?? '');
 $user_college = $user['college'] ?? ($_SESSION['college'] ?? '');
 $user_branch = $user['branch'] ?? ($_SESSION['branch'] ?? '');
-$user_branch_display = function_exists('get_branch_name') ? get_branch_name($user_branch) : $user_branch;
+
+$collegeList = [
+    'svgp'     => 'Sri Venkateswara Government polytechnic, Tirupati',
+    'plpt'     => 'Government polytechinc pillaripattu, Puttur.',
+    'vkpt'     => 'Venkata Perumal',
+    'berkeley' => 'University of California, Berkeley',
+    'columbia' => 'Columbia University',
+    'gatech'   => 'Georgia Institute of Technology (Georgia Tech)',
+    'cmu'      => 'Carnegie Mellon University (CMU)',
+    'other'    => 'Other Academic Institution'
+];
+
+$branchList = [
+    'cme'  => 'Computer Engineering',
+    'cse'  => 'Computer Science & Engineering',
+    'ece'  => 'Electronics & Communication Engineering',
+    'eee'  => 'Electrical & Electronics Engineering',
+    'me'   => 'Mechanical Engineering',
+    'ce'   => 'Civil Engineering',
+    'che'  => 'Chemical Engineering',
+    'ae'   => 'Aerospace Engineering',
+    'aiml' => 'AI & Machine Learning',
+    'it'   => 'Information Technology',
+    'oth'  => 'Other / General Studies'
+];
+
+function resolve_profile_college_code($val, $list) {
+    if (empty($val)) return '';
+    $valLower = strtolower(trim((string)$val));
+    if (isset($list[$valLower])) {
+        return $valLower;
+    }
+    foreach ($list as $k => $name) {
+        if (strtolower($name) === $valLower || stripos($valLower, strtolower($k)) !== false || stripos(strtolower($name), $valLower) !== false) {
+            return $k;
+        }
+    }
+    return 'other';
+}
+
+function resolve_profile_branch_code($val, $list) {
+    if (empty($val)) return '';
+    $valLower = strtolower(trim((string)$val));
+    if (isset($list[$valLower])) {
+        return $valLower;
+    }
+    $aliasMap = [
+        'cs' => 'cse',
+        'ec' => 'ece',
+        'ee' => 'eee',
+        'mec' => 'me',
+        'civ' => 'ce',
+        'other' => 'oth'
+    ];
+    if (isset($aliasMap[$valLower])) {
+        return $aliasMap[$valLower];
+    }
+    foreach ($list as $k => $name) {
+        if (strtolower($name) === $valLower || stripos(strtolower($name), $valLower) !== false) {
+            return $k;
+        }
+    }
+    return 'oth';
+}
+
+$user_college_code = resolve_profile_college_code($user_college, $collegeList);
+$user_college_display = $collegeList[$user_college_code] ?? ($user_college ?: 'University Campus');
+$user_branch_code = resolve_profile_branch_code($user_branch, $branchList);
+$user_branch_display = $branchList[$user_branch_code] ?? (function_exists('get_branch_name') ? get_branch_name($user_branch) : $user_branch);
 $user_initial = !empty(trim($user_name)) ? strtoupper(substr(trim($user_name), 0, 1)) : 'S';
 
 // Fetch current user's real database reports & statistics
@@ -150,8 +218,15 @@ if ($userId && isset($conn) && $conn) {
           <span class="pin-tag"><?php echo htmlspecialchars($user_pin); ?></span>
         </div>
         <p class="profile-meta-text">
-          <span>🏛️ <?php echo htmlspecialchars($user_college); ?></span> &bull; 
-          <span>💻 <?php echo htmlspecialchars($user_branch_display); ?></span>
+          <span style="display: inline-flex; align-items: center; gap: 0.35rem;">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M5 21V7l7-4 7 4v14"/><path d="M9 10h1"/><path d="M14 10h1"/><path d="M9 14h1"/><path d="M14 14h1"/><path d="M9 18h1"/><path d="M14 18h1"/></svg>
+            <?php echo htmlspecialchars($user_college_display); ?>
+          </span>
+          &bull; 
+          <span style="display: inline-flex; align-items: center; gap: 0.35rem;">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="12" x="3" y="4" rx="2"/><line x1="2" x2="22" y1="20" y2="20"/></svg>
+            <?php echo htmlspecialchars($user_branch_display); ?>
+          </span>
         </p>
         <p class="profile-joined-text">Student Member &bull; Active Session</p>
       </div>
@@ -242,16 +317,30 @@ if ($userId && isset($conn) && $conn) {
               <input type="text" id="profPhone" name="phone" value="<?php echo htmlspecialchars($user_phone); ?>" placeholder="e.g. +91 98765 43210" />
             </div>
 
-            <!-- College Name -->
+            <!-- College / University Dropdown -->
             <div class="form-group">
-              <label for="profCollege">College / Polytechnic</label>
-              <input type="text" id="profCollege" name="college" value="<?php echo htmlspecialchars($user_college); ?>" required />
+              <label for="profCollege">College / University</label>
+              <select id="profCollege" name="college" class="profile-select" required>
+                <option value="" disabled <?php echo empty($user_college_code) ? 'selected' : ''; ?>>Select your college...</option>
+                <?php foreach ($collegeList as $code => $cName): ?>
+                  <option value="<?php echo htmlspecialchars($code); ?>" <?php echo ($user_college_code === $code) ? 'selected' : ''; ?>>
+                    <?php echo htmlspecialchars($cName); ?>
+                  </option>
+                <?php endforeach; ?>
+              </select>
             </div>
 
-            <!-- Branch / Department -->
+            <!-- Academic Branch / Department Dropdown -->
             <div class="form-group">
-              <label for="profBranch">Branch / Department</label>
-              <input type="text" id="profBranch" name="branch" value="<?php echo htmlspecialchars($user_branch_display); ?>" required />
+              <label for="profBranch">Academic Branch / Department</label>
+              <select id="profBranch" name="branch" class="profile-select" required>
+                <option value="" disabled <?php echo empty($user_branch_code) ? 'selected' : ''; ?>>Select your branch...</option>
+                <?php foreach ($branchList as $code => $bName): ?>
+                  <option value="<?php echo htmlspecialchars($code); ?>" <?php echo ($user_branch_code === $code) ? 'selected' : ''; ?>>
+                    <?php echo htmlspecialchars($bName); ?>
+                  </option>
+                <?php endforeach; ?>
+              </select>
             </div>
           </div>
 
@@ -304,19 +393,31 @@ if ($userId && isset($conn) && $conn) {
                   </div>
                   <h3 class="user-report-title"><?php echo htmlspecialchars($rep['title']); ?></h3>
                   <p class="user-report-desc"><?php echo htmlspecialchars($rep['description'] ?? ''); ?></p>
-                  <div class="user-report-meta" style="font-size: 0.75rem; color: var(--muted); margin-top: 0.35rem;">
-                    <span>📍 <?php echo htmlspecialchars($rep['location'] ?? 'Campus Hub'); ?></span> &bull; 
-                    <span>🏷️ <?php echo htmlspecialchars($rep['category'] ?? 'General'); ?></span>
+                  <div class="user-report-meta" style="font-size: 0.75rem; color: var(--muted); margin-top: 0.35rem; display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+                    <span style="display: inline-flex; align-items: center; gap: 0.25rem;">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
+                      <?php echo htmlspecialchars($rep['location'] ?? 'Campus Hub'); ?>
+                    </span>
+                    &bull; 
+                    <span style="display: inline-flex; align-items: center; gap: 0.25rem;">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 2 9 9-9 9-9-9Z"/><path d="M16 8h.01"/></svg>
+                      <?php echo htmlspecialchars($rep['category'] ?? 'General'); ?>
+                    </span>
                   </div>
                 </div>
                 <div class="user-report-actions">
-                  <a href="search.php" class="btn-report-view">View In Catalog &rarr;</a>
+                  <?php 
+                    $repCode = ($rep['report_type'] === 'found' ? 'RF-' : 'RL-') . str_pad($rep['id'], 5, '0', STR_PAD_LEFT);
+                  ?>
+                  <a href="item.php?id=<?php echo $repCode; ?>" class="btn-report-view">View Details &rarr;</a>
                 </div>
               </div>
             <?php endforeach; ?>
           <?php else: ?>
             <div class="empty-user-reports" style="text-align: center; padding: 3rem 1.5rem; background: var(--surface); border: 1px dashed var(--border); border-radius: 1rem;">
-              <span style="font-size: 2.5rem; display: block; margin-bottom: 0.5rem;">📂</span>
+              <div style="display: flex; justify-content: center; margin-bottom: 0.5rem; color: var(--muted-2);">
+                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg>
+              </div>
               <h3 style="font-size: 1.1rem; color: var(--ink); margin-bottom: 0.35rem;">No Reports Filed Yet</h3>
               <p style="font-size: 0.85rem; color: var(--muted); max-width: 420px; margin: 0 auto 1.25rem;">
                 You haven't submitted any missing item reports or found belongings under your account yet.

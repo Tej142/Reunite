@@ -28,6 +28,23 @@ document.addEventListener('DOMContentLoaded', () => {
   // Cached audit logs for export
   let currentLogsData = [];
 
+  // Theme Toggle Support
+  const savedAdminTheme = localStorage.getItem('reunite_admin_theme') || 'dark';
+  if (savedAdminTheme === 'light') {
+    document.body.classList.add('admin-light');
+    document.documentElement.setAttribute('data-admin-theme', 'light');
+  }
+
+  const themeToggleBtns = document.querySelectorAll('.btn-admin-theme');
+  themeToggleBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      const isLight = document.body.classList.toggle('admin-light');
+      const newTheme = isLight ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-admin-theme', newTheme);
+      localStorage.setItem('reunite_admin_theme', newTheme);
+    });
+  });
+
   // Init
   checkAdminAuth();
 
@@ -144,7 +161,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnHealth = document.getElementById('btnRefreshDiagnostics');
     if (btnHealth && !isInitial) {
       btnHealth.disabled = true;
-      btnHealth.textContent = '🔄 Checking Diagnostics...';
+      btnHealth.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="vertical-align:-1px; margin-right:3px;"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-.1-8.24"/></svg> Checking Diagnostics...';
     }
 
     try {
@@ -170,20 +187,20 @@ document.addEventListener('DOMContentLoaded', () => {
         if (adminPulseDot) adminPulseDot.classList.add('offline');
 
         if (!isAiOnline && !isDbOnline) {
-          if (outageBannerTitle) outageBannerTitle.textContent = '⚠️ CRITICAL: AI Engine & Database Server are BOTH OFFLINE';
+          if (outageBannerTitle) outageBannerTitle.textContent = 'CRITICAL: AI Engine & Database Server are BOTH OFFLINE';
           if (outageBannerDesc) outageBannerDesc.textContent = 'Both the Python Flask AI Server and MySQL database are unreachable. All site operations, vector searches, and data lookups are halted.';
           if (outageBannerHint) outageBannerHint.innerHTML = '1. Start MySQL in XAMPP &nbsp;|&nbsp; 2. Start Flask: <span class="admin-code-snippet">python flask_server.py</span>';
-          if (adminUserPillName) adminUserPillName.textContent = '⚠️ Dual Server Outage';
+          if (adminUserPillName) adminUserPillName.textContent = 'Dual Server Outage';
         } else if (!isAiOnline) {
-          if (outageBannerTitle) outageBannerTitle.textContent = '⚠️ Python Flask AI Server (127.0.0.1:5000) is OFFLINE';
+          if (outageBannerTitle) outageBannerTitle.textContent = 'Python Flask AI Server (127.0.0.1:5000) is OFFLINE';
           if (outageBannerDesc) outageBannerDesc.textContent = 'The local AI multi-modal engine is unreachable. Visual ONNX vision parsing, DINOv2 & CLIP vector embeddings, and neural late-fusion matching are currently paused.';
           if (outageBannerHint) outageBannerHint.innerHTML = 'Run this command to start the AI server: <span class="admin-code-snippet">python flask_server.py</span>';
-          if (adminUserPillName) adminUserPillName.textContent = '⚠️ AI Server Offline';
+          if (adminUserPillName) adminUserPillName.textContent = 'AI Server Offline';
         } else {
-          if (outageBannerTitle) outageBannerTitle.textContent = '⚠️ MySQL Database Connection Failed';
+          if (outageBannerTitle) outageBannerTitle.textContent = 'MySQL Database Connection Failed';
           if (outageBannerDesc) outageBannerDesc.textContent = 'Could not establish connection with MySQL lost_connect_db.';
           if (outageBannerHint) outageBannerHint.innerHTML = 'Ensure MySQL service is running in your XAMPP Control Panel.';
-          if (adminUserPillName) adminUserPillName.textContent = '⚠️ Database Offline';
+          if (adminUserPillName) adminUserPillName.textContent = 'Database Offline';
         }
 
         // Disable vector sync buttons
@@ -220,7 +237,7 @@ document.addEventListener('DOMContentLoaded', () => {
           flaskBadge.textContent = `Online (${data.ai_engine.latency_ms}ms)`;
         } else {
           flaskBadge.className = 'admin-badge danger';
-          flaskBadge.textContent = '🔴 OFFLINE / UNREACHABLE';
+          flaskBadge.textContent = 'OFFLINE / UNREACHABLE';
         }
       }
 
@@ -252,7 +269,7 @@ document.addEventListener('DOMContentLoaded', () => {
     } finally {
       if (btnHealth) {
         btnHealth.disabled = false;
-        btnHealth.textContent = '⚡ Run System Health Check';
+        btnHealth.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-1px; margin-right:3px;"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> Run System Health Check';
       }
     }
   }
@@ -260,10 +277,10 @@ document.addEventListener('DOMContentLoaded', () => {
   function handleFullOutage(reason) {
     if (serverOutageBanner) serverOutageBanner.style.display = 'flex';
     if (adminPulseDot) adminPulseDot.classList.add('offline');
-    if (outageBannerTitle) outageBannerTitle.textContent = '⚠️ Administration Backend Unreachable';
+    if (outageBannerTitle) outageBannerTitle.textContent = 'Administration Backend Unreachable';
     if (outageBannerDesc) outageBannerDesc.textContent = reason || 'Local web server or PHP backend is not responding.';
     if (outageBannerHint) outageBannerHint.innerHTML = 'Ensure Apache &amp; MySQL are running in XAMPP.';
-    if (adminUserPillName) adminUserPillName.textContent = '⚠️ Backend Outage';
+    if (adminUserPillName) adminUserPillName.textContent = 'Backend Outage';
   }
 
   // Health Check Buttons (Explicit user click only)
@@ -276,11 +293,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
   if (btnRetryOutagePing) {
     btnRetryOutagePing.addEventListener('click', async () => {
-      btnRetryOutagePing.textContent = '🔄 Checking...';
+      btnRetryOutagePing.textContent = 'Checking...';
       btnRetryOutagePing.disabled = true;
       await loadSystemDiagnostics(false);
       btnRetryOutagePing.disabled = false;
-      btnRetryOutagePing.textContent = '🔄 Retry Connection';
+      btnRetryOutagePing.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="vertical-align:-1px; margin-right:3px;"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-.1-8.24"/></svg> Retry Connection';
     });
   }
 
@@ -309,14 +326,14 @@ document.addEventListener('DOMContentLoaded', () => {
       if (badge) { badge.className = 'admin-badge danger'; badge.textContent = 'Maintenance Mode Active'; }
       // Toggle button
       if (toggleBtn) {
-        toggleBtn.textContent = '🟢 Disable Maintenance Mode';
+        toggleBtn.textContent = 'Disable Maintenance Mode';
         toggleBtn.className = 'btn-admin btn-maint-toggle active danger';
       }
       // Status card
-      if (statusTitle) statusTitle.textContent = '🔴 Maintenance Mode Active';
+      if (statusTitle) statusTitle.textContent = 'Maintenance Mode Active';
       if (statusSub)   statusSub.textContent   = 'Non-admin users are redirected to the maintenance page.';
       if (indicator)   { indicator.style.background = 'var(--admin-danger)'; indicator.style.boxShadow = '0 0 10px var(--admin-danger)'; }
-      if (modeLabel)   { modeLabel.textContent = '🔴 Maintenance Active'; modeLabel.style.color = 'var(--admin-danger)'; }
+      if (modeLabel)   { modeLabel.textContent = 'Maintenance Active'; modeLabel.style.color = 'var(--admin-danger)'; }
       if (etaLabel && settings.eta) {
         const d = new Date(settings.eta);
         etaLabel.textContent = 'ETA: ' + d.toLocaleString();
@@ -345,14 +362,14 @@ document.addEventListener('DOMContentLoaded', () => {
       if (badge) { badge.className = 'admin-badge success'; badge.textContent = 'Site is Live'; }
       // Toggle button
       if (toggleBtn) {
-        toggleBtn.textContent = '🔒 Enable Maintenance Mode';
+        toggleBtn.textContent = 'Enable Maintenance Mode';
         toggleBtn.className = 'btn-admin btn-maint-toggle secondary';
       }
       // Status card
-      if (statusTitle) statusTitle.textContent = '🟢 Site is Live';
+      if (statusTitle) statusTitle.textContent = 'Site is Live';
       if (statusSub)   statusSub.textContent   = 'All users have full access to the platform.';
       if (indicator)   { indicator.style.background = 'var(--admin-success)'; indicator.style.boxShadow = '0 0 10px var(--admin-success)'; }
-      if (modeLabel)   { modeLabel.textContent = '🟢 Live'; modeLabel.style.color = 'var(--admin-success)'; }
+      if (modeLabel)   { modeLabel.textContent = 'Live'; modeLabel.style.color = 'var(--admin-success)'; }
       if (etaLabel)    etaLabel.textContent = 'All users have full access';
       // Hide active info
       if (activeInfo)  activeInfo.style.display = 'none';
@@ -378,7 +395,7 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
     // Turning ON — show confirmation modal
-    if (maintModalTitle) maintModalTitle.textContent = '🛠️ Enable Maintenance Mode';
+    if (maintModalTitle) maintModalTitle.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px; margin-right:4px;"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg> Enable Maintenance Mode';
     maintModalBackdrop.style.display = 'flex';
     // Pre-fill ETA min value to now
     const etaInput = document.getElementById('maintModalEta');
@@ -396,7 +413,7 @@ document.addEventListener('DOMContentLoaded', () => {
   async function applyMaintenance(enable, message, eta, email) {
     const toggleBtn = document.getElementById('btnToggleMaintenance');
     if (toggleBtn) { toggleBtn.disabled = true; }
-    if (btnConfirmMaint) { btnConfirmMaint.disabled = true; btnConfirmMaint.textContent = enable ? '🔒 Enabling…' : '🟢 Disabling…'; }
+    if (btnConfirmMaint) { btnConfirmMaint.disabled = true; btnConfirmMaint.textContent = enable ? 'Enabling…' : 'Disabling…'; }
 
     try {
       const body = JSON.stringify({
@@ -422,7 +439,7 @@ document.addEventListener('DOMContentLoaded', () => {
         updateMaintenanceUI(data.maintenance_mode, currentMaintenanceSettings);
         closeMaintModal();
         showToast(
-          data.maintenance_mode ? '🔒 Maintenance Mode On' : '🟢 Site Live',
+          data.maintenance_mode ? 'Maintenance Mode On' : 'Site Live',
           data.message,
           data.maintenance_mode ? 'warning' : 'success'
         );
@@ -436,7 +453,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (toggleBtn) { toggleBtn.disabled = false; }
       if (btnConfirmMaint) {
         btnConfirmMaint.disabled = false;
-        btnConfirmMaint.textContent = '🔒 Confirm — Enable Maintenance';
+        btnConfirmMaint.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px; margin-right:4px;"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> Confirm — Enable Maintenance';
       }
     }
   }
@@ -504,12 +521,12 @@ document.addEventListener('DOMContentLoaded', () => {
         const isLost = r.report_type === 'lost';
         const typeBadge = isLost ? `<span class="admin-badge warning">Lost</span>` : `<span class="admin-badge info">Found</span>`;
         const dnaBadge = r.has_dna 
-          ? `<button type="button" class="btn-admin sm secondary btn-view-dna" data-report-id="${escapeHtml(r.formatted_id)}" data-db-id="${r.id}" data-type="${isLost ? 'LOST' : 'FOUND'}">🧬 View DNA</button>` 
+          ? `<button type="button" class="btn-admin sm secondary btn-view-dna" data-report-id="${escapeHtml(r.formatted_id)}" data-db-id="${r.id}" data-type="${isLost ? 'LOST' : 'FOUND'}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-1px; margin-right:3px;"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg> View DNA</button>` 
           : `<span style="font-size:0.75rem; color: var(--admin-text-muted);">None</span>`;
         
-        let thumbHtml = `<div style="width:40px;height:40px;border-radius:6px;background:var(--admin-surface-3);display:flex;align-items:center;justify-content:center;font-size:1.2rem;">📦</div>`;
+        let thumbHtml = `<div style="width:40px;height:40px;border-radius:6px;background:var(--admin-surface-3);display:flex;align-items:center;justify-content:center;color:var(--admin-text-muted);"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect width="18" height="18" x="3" y="3" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg></div>`;
         if (r.image_path) {
-          thumbHtml = `<img src="../${escapeHtml(r.image_path)}" class="admin-table-thumb" alt="Report" onerror="this.outerHTML='📦'" />`;
+          thumbHtml = `<img src="../${escapeHtml(r.image_path)}" class="admin-table-thumb" alt="Report" onerror="this.outerHTML='<div class=\\'admin-table-thumb\\' style=\\'display:flex;align-items:center;justify-content:center;\\'><svg width=\\'16\\' height=\\'16\\' viewBox=\\'0 0 24 24\\' fill=\\'none\\' stroke=\\'currentColor\\' stroke-width=\\'2\\'><rect width=\\'18\\' height=\\'18\\' x=\\'3\\' y=\\'3\\' rx=\\'2\\'/></svg></div>'" />`;
         }
 
         html += `
@@ -531,7 +548,7 @@ document.addEventListener('DOMContentLoaded', () => {
             <td>${dnaBadge}</td>
             <td>
               <button type="button" class="btn-admin sm danger btn-delete-report" data-type="${r.report_type}" data-db-id="${r.id}" data-formatted-id="${escapeHtml(r.formatted_id)}" title="Purge from DB, Media Vault, and ChromaDB">
-                🗑️ Purge
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-1px; margin-right:2px;"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/></svg> Purge
               </button>
             </td>
           </tr>
@@ -601,7 +618,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Open DNA Modal
   async function openDnaModal(reportId, dbId, type) {
     if (!dnaModalBackdrop || !dnaModalContent) return;
-    dnaModalTitle.textContent = `🧬 Digital DNA Inspector — ${reportId}`;
+    dnaModalTitle.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px; margin-right:4px;"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg> Digital DNA Inspector — ${escapeHtml(reportId)}`;
     dnaModalContent.textContent = 'Decrypting and retrieving DNA vector payload...';
     dnaModalBackdrop.style.display = 'flex';
 
@@ -651,7 +668,7 @@ document.addEventListener('DOMContentLoaded', () => {
   if (btnSyncChroma) {
     btnSyncChroma.addEventListener('click', async () => {
       btnSyncChroma.disabled = true;
-      btnSyncChroma.textContent = '🚀 Syncing All MySQL Records to ChromaDB...';
+      btnSyncChroma.textContent = 'Syncing All MySQL Records to ChromaDB...';
 
       try {
         const res = await fetch('../Backend/admin_api.php?action=sync_chroma');
@@ -666,7 +683,7 @@ document.addEventListener('DOMContentLoaded', () => {
         showToast('Error', 'Failed to reach AI Vector Server.', 'error');
       } finally {
         btnSyncChroma.disabled = false;
-        btnSyncChroma.textContent = '🚀 Re-index & Sync All Reports to ChromaDB';
+        btnSyncChroma.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px; margin-right:4px;"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/></svg> Re-index &amp; Sync All Reports to ChromaDB';
       }
     });
   }
@@ -694,7 +711,7 @@ document.addEventListener('DOMContentLoaded', () => {
         showToast('Error', 'Server error.', 'error');
       } finally {
         btnPurgeChroma.disabled = false;
-        btnPurgeChroma.textContent = '🧹 Purge All ChromaDB Vectors';
+        btnPurgeChroma.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px; margin-right:4px;"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg> Purge All ChromaDB Vectors';
       }
     });
   }
@@ -730,7 +747,7 @@ document.addEventListener('DOMContentLoaded', () => {
         html += `
           <tr>
             <td>
-              <img src="../${escapeHtml(f.rel_path)}" class="admin-table-thumb" alt="Upload" onerror="this.outerHTML='📄'" />
+              <img src="../${escapeHtml(f.rel_path)}" class="admin-table-thumb" alt="Upload" onerror="this.outerHTML='<div class=\\'admin-table-thumb\\' style=\\'display:flex;align-items:center;justify-content:center;color:var(--admin-text-muted);\\'><svg width=\\'16\\' height=\\'16\\' viewBox=\\'0 0 24 24\\' fill=\\'none\\' stroke=\\'currentColor\\' stroke-width=\\'2\\'><path d=\\'M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z\\'/></svg></div>'" />
             </td>
             <td>
               <strong>${escapeHtml(f.filename)}</strong>
@@ -865,7 +882,7 @@ document.addEventListener('DOMContentLoaded', () => {
         showToast('Error', 'Optimization failed.', 'error');
       } finally {
         btnOptimizeDb.disabled = false;
-        btnOptimizeDb.textContent = '⚡ Optimize & Rebuild MySQL Indexes';
+        btnOptimizeDb.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-1px; margin-right:3px;"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> Optimize &amp; Rebuild MySQL Indexes';
       }
     });
   }

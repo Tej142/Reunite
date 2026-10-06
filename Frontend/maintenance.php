@@ -645,7 +645,7 @@ $etaHuman = $maintEta ? date('M j, Y · H:i T', strtotime($maintEta)) : null;
   <?php if ($isAdmin): ?>
   <!-- Admin-only banner: visible only to logged-in admins -->
   <div class="admin-maint-banner" role="alert">
-    <span>🛠️ Maintenance Mode is ON — only admins can access the site.</span>
+    <span><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px; margin-right:4px;"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg> Maintenance Mode is ON — only admins can access the site.</span>
     <a href="admin.php">Admin Console &rarr;</a>
   </div>
   <?php endif; ?>
@@ -738,7 +738,7 @@ $etaHuman = $maintEta ? date('M j, Y · H:i T', strtotime($maintEta)) : null;
     <!-- Progress simulation -->
     <div class="maint-progress-box">
       <div class="maint-progress-header">
-        <span>🔧 System Restoration</span>
+        <span><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px; margin-right:4px;"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg> System Restoration</span>
         <span class="maint-progress-tag" id="maintProgressTag">Optimizing...</span>
       </div>
       <div class="maint-progress-track" role="progressbar" aria-label="Maintenance progress" aria-valuemin="0" aria-valuemax="100">
@@ -754,7 +754,7 @@ $etaHuman = $maintEta ? date('M j, Y · H:i T', strtotime($maintEta)) : null;
       </button>
       <?php if ($isAdmin): ?>
       <a href="admin.php" class="btn-maint btn-maint-secondary" aria-label="Go to Admin Console">
-        🛡️ Admin Console
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px; margin-right:4px;"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg> Admin Console
       </a>
       <?php endif; ?>
     </div>
@@ -878,7 +878,7 @@ $etaHuman = $maintEta ? date('M j, Y · H:i T', strtotime($maintEta)) : null;
             // Maintenance is OFF — redirect home
             if (ariaStatus) ariaStatus.textContent = 'Maintenance is complete. Redirecting to the homepage.';
             if (pollInterval) clearInterval(pollInterval);
-            if (btn) btn.innerHTML = '✅ Back online! Redirecting…';
+            if (btn) btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="vertical-align:-2px; margin-right:4px;"><path d="M20 6 9 17l-5-5"/></svg> Back online! Redirecting…';
             setTimeout(function () { window.location.href = 'home.php'; }, 800);
           } else {
             if (isManual && btn) {
@@ -890,7 +890,7 @@ $etaHuman = $maintEta ? date('M j, Y · H:i T', strtotime($maintEta)) : null;
         .catch(function () {
           if (isManual && btn) {
             btn.disabled = false;
-            btn.innerHTML = '🔄 Retry Check';
+            btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="vertical-align:-2px; margin-right:4px;"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-.1-8.24"/></svg> Retry Check';
           }
         });
     }

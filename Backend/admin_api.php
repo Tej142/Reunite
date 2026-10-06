@@ -347,10 +347,10 @@ if ($action === 'list_reports') {
 
     if ($conn) {
         if ($type === 'all' || $type === 'lost') {
-            $sql = "SELECT l.*, u.full_name as user_name, u.email as user_email, d.dna_json, d.id as dna_id 
+            $sql = "SELECT l.*, u.full_name as user_name, u.email as user_email, d.encrypted_dna as dna_json, d.dna_id 
                     FROM lost_reports l
                     LEFT JOIN users u ON l.user_id = u.user_id
-                    LEFT JOIN digital_dna d ON (d.report_id = CONCAT('RL-', LPAD(l.id, 5, '0')) OR (d.report_id = l.id AND d.report_type = 'LOST'))
+                    LEFT JOIN digital_dna d ON (d.report_id = l.id AND d.report_type = 'LOST')
                     ORDER BY l.id DESC LIMIT ?";
             $stmt = $conn->prepare($sql);
             if ($stmt) {
@@ -369,10 +369,10 @@ if ($action === 'list_reports') {
         }
 
         if ($type === 'all' || $type === 'found') {
-            $sql = "SELECT f.*, u.full_name as user_name, u.email as user_email, d.dna_json, d.id as dna_id 
+            $sql = "SELECT f.*, u.full_name as user_name, u.email as user_email, d.encrypted_dna as dna_json, d.dna_id 
                     FROM found_reports f
                     LEFT JOIN users u ON f.user_id = u.user_id
-                    LEFT JOIN digital_dna d ON (d.report_id = CONCAT('RF-', LPAD(f.id, 5, '0')) OR (d.report_id = f.id AND d.report_type = 'FOUND'))
+                    LEFT JOIN digital_dna d ON (d.report_id = f.id AND d.report_type = 'FOUND')
                     ORDER BY f.id DESC LIMIT ?";
             $stmt = $conn->prepare($sql);
             if ($stmt) {
@@ -424,13 +424,13 @@ if ($action === 'get_dna') {
         exit;
     }
 
-    $stmt = $conn->prepare("SELECT * FROM digital_dna WHERE report_id = ? OR (report_id = ? AND report_type = ?) LIMIT 1");
+    $stmt = $conn->prepare("SELECT * FROM digital_dna WHERE (report_id = ? AND report_type = ?) LIMIT 1");
     if ($stmt) {
-        $stmt->bind_param("sis", $reportId, $dbId, $type);
+        $stmt->bind_param("is", $dbId, $type);
         $stmt->execute();
         $res = $stmt->get_result();
         if ($row = $res->fetch_assoc()) {
-            $parsed = @json_decode($row['dna_json'], true) ?: $row['dna_json'];
+            $parsed = @json_decode($row['encrypted_dna'], true) ?: $row['encrypted_dna'];
             echo json_encode(['success' => true, 'dna' => $parsed, 'raw' => $row]);
             $stmt->close();
             exit;
@@ -478,9 +478,9 @@ if ($action === 'delete_report') {
 
     // 2. Delete from digital_dna table
     $upperType = strtoupper($reportType);
-    $stmtDna = $conn->prepare("DELETE FROM digital_dna WHERE report_id = ? OR (report_id = ? AND report_type = ?)");
+    $stmtDna = $conn->prepare("DELETE FROM digital_dna WHERE report_id = ? AND report_type = ?");
     if ($stmtDna) {
-        $stmtDna->bind_param("sis", $formattedId, $reportDbId, $upperType);
+        $stmtDna->bind_param("is", $reportDbId, $upperType);
         $stmtDna->execute();
         $stmtDna->close();
     }
@@ -524,7 +524,7 @@ if ($action === 'sync_chroma') {
     $errors = 0;
 
     // Sync Lost Reports
-    $resLost = $conn->query("SELECT l.*, d.dna_json FROM lost_reports l LEFT JOIN digital_dna d ON (d.report_id = CONCAT('RL-', LPAD(l.id, 5, '0')) OR (d.report_id = l.id AND d.report_type = 'LOST'))");
+    $resLost = $conn->query("SELECT l.*, d.encrypted_dna as dna_json FROM lost_reports l LEFT JOIN digital_dna d ON (d.report_id = l.id AND d.report_type = 'LOST')");
     if ($resLost) {
         while ($row = $resLost->fetch_assoc()) {
             $fId = 'RL-' . str_pad($row['id'], 5, '0', STR_PAD_LEFT);
@@ -555,7 +555,7 @@ if ($action === 'sync_chroma') {
     }
 
     // Sync Found Reports
-    $resFound = $conn->query("SELECT f.*, d.dna_json FROM found_reports f LEFT JOIN digital_dna d ON (d.report_id = CONCAT('RF-', LPAD(f.id, 5, '0')) OR (d.report_id = f.id AND d.report_type = 'FOUND'))");
+    $resFound = $conn->query("SELECT f.*, d.encrypted_dna as dna_json FROM found_reports f LEFT JOIN digital_dna d ON (d.report_id = f.id AND d.report_type = 'FOUND')");
     if ($resFound) {
         while ($row = $resFound->fetch_assoc()) {
             $fId = 'RF-' . str_pad($row['id'], 5, '0', STR_PAD_LEFT);

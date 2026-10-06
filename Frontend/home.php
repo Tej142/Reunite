@@ -186,7 +186,7 @@ if (isset($conn) && $conn) {
 
       <!-- Filter Pills -->
       <div class="filter-pills">
-        <button class="filter-pill active" data-filter="all">All items</button>
+        <button class="filter-pill active" data-filter="all">All lost items</button>
         <button class="filter-pill" data-filter="active">Active searches</button>
         <button class="filter-pill" data-filter="matched">Reunited</button>
       </div>

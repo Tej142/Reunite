@@ -111,7 +111,7 @@ document.addEventListener('DOMContentLoaded', () => {
           const confirmBtn = aiReviewFormWrap.querySelector('#btnConfirmDna');
           if (confirmBtn) {
             confirmBtn.disabled = true;
-            confirmBtn.innerHTML = '🚀 Saving to Database &amp; Launching Neural Vector Matcher...';
+            confirmBtn.innerHTML = 'Saving to Database &amp; Launching Neural Vector Matcher...';
           }
 
           try {
