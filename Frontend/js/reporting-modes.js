@@ -34,6 +34,10 @@ document.addEventListener('DOMContentLoaded', () => {
       if (aiStatusText && modeDescriptions[selectedMode]) {
         aiStatusText.innerHTML = modeDescriptions[selectedMode];
       }
+
+      if (selectedMode === 'mode3' && typeof checkAiServerHealth === 'function') {
+        checkAiServerHealth();
+      }
     });
   });
 
@@ -298,6 +302,30 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
+  let isAiServerOffline = false;
+
+  function checkAiServerHealth() {
+    const flaskBaseUrl = window.FLASK_BACKEND_URL || 'https://reunite-ai-backend.onrender.com';
+    const subStatus = document.getElementById('talkAiSubStatus');
+    fetch(`${flaskBaseUrl}/`, { method: 'GET', mode: 'cors' })
+      .then(res => {
+        if (res.ok) {
+          isAiServerOffline = false;
+          if (subStatus) subStatus.textContent = 'Powered by Google Gemini Live Voice';
+          updateVoiceBadgeState();
+        } else {
+          isAiServerOffline = true;
+          if (subStatus) subStatus.innerHTML = '<span style="color:#F59E0B; font-weight:600;">⚠️ AI Server Waking Up (Wait ~30s)</span>';
+          updateVoiceBadgeState();
+        }
+      })
+      .catch(() => {
+        isAiServerOffline = true;
+        if (subStatus) subStatus.innerHTML = '<span style="color:#EF4444; font-weight:600;">⚠️ AI Server Offline / Waking Up</span>';
+        updateVoiceBadgeState();
+      });
+  }
+
   async function handleUserChat(directMessage) {
     if (isAiResponding) return;
     const msg = directMessage || (chatInput ? chatInput.value.trim() : '');
@@ -332,9 +360,17 @@ document.addEventListener('DOMContentLoaded', () => {
         })
       });
 
+      if (!response.ok) {
+        throw new Error(`Server returned HTTP ${response.status} (${response.statusText || 'Offline or waking up'})`);
+      }
+
       const result = await response.json();
       removeThinkingIndicator(thinkingBubble);
       isAiResponding = false;
+      isAiServerOffline = false;
+
+      const subStatus = document.getElementById('talkAiSubStatus');
+      if (subStatus) subStatus.textContent = 'Powered by Google Gemini Live Voice';
 
       if (result.success && result.reply) {
         addChatBubble(result.reply, 'ai');
@@ -371,21 +407,49 @@ document.addEventListener('DOMContentLoaded', () => {
       console.error('Error connecting to Talk to AI endpoint:', err);
       removeThinkingIndicator(thinkingBubble);
       isAiResponding = false;
-      const errReply = "I've noted that in your report draft. Please continue describing the item!";
-      addChatBubble(errReply, 'ai');
+      isAiServerOffline = true;
+
+      const subStatus = document.getElementById('talkAiSubStatus');
+      if (subStatus) {
+        subStatus.innerHTML = '<span style="color:#EF4444; font-weight:600;">⚠️ Server unreachable (waking up or offline)</span>';
+      }
+
+      const errReply = '⚠️ <strong>Unable to reach the AI cloud server:</strong> The service may be waking up from cold sleep (takes ~30–40s on Render) or is temporarily offline. Please wait a few seconds and try again.';
+      addChatBubble(errReply, 'ai', true, () => handleUserChat(msg));
+
       if (isVoiceModeActive) {
-        speakAiReply(errReply);
+        speakAiReply("Unable to reach the AI server right now. Please try again in a few seconds.");
       } else {
         updateVoiceBadgeState();
       }
     }
   }
 
-  function addChatBubble(text, sender) {
+  function addChatBubble(text, sender, isError = false, retryFn = null) {
     if (!chatMessages) return;
     const bubble = document.createElement('div');
-    bubble.className = `chat-bubble ${sender}`;
+    bubble.className = `chat-bubble ${sender}${isError ? ' error-bubble' : ''}`;
+    if (isError) {
+      bubble.style.border = '1px solid rgba(239, 68, 68, 0.4)';
+      bubble.style.backgroundColor = 'rgba(239, 68, 68, 0.1)';
+      bubble.style.color = '#FCA5A5';
+    }
     bubble.innerHTML = text;
+
+    if (retryFn) {
+      const retryBtn = document.createElement('button');
+      retryBtn.type = 'button';
+      retryBtn.innerHTML = '🔄 Retry Message';
+      retryBtn.style.cssText = 'display:inline-block; margin-top:8px; padding:4px 10px; font-size:12px; font-weight:600; color:#fff; background:#C4622D; border:none; border-radius:4px; cursor:pointer;';
+      retryBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        retryBtn.remove();
+        retryFn();
+      });
+      bubble.appendChild(document.createElement('br'));
+      bubble.appendChild(retryBtn);
+    }
+
     chatMessages.appendChild(bubble);
     chatMessages.scrollTop = chatMessages.scrollHeight;
   }
@@ -718,7 +782,10 @@ document.addEventListener('DOMContentLoaded', () => {
   function updateVoiceBadgeState() {
     if (!voiceBadgeText || !voiceLiveBadge) return;
 
-    if (isAiSpeaking) {
+    if (isAiServerOffline) {
+      voiceBadgeText.textContent = 'Server Offline (Waking Up)';
+      voiceLiveBadge.classList.remove('active');
+    } else if (isAiSpeaking) {
       voiceBadgeText.textContent = 'AI Speaking...';
       voiceLiveBadge.classList.add('active');
     } else if (isAiResponding) {
