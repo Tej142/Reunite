@@ -35,7 +35,11 @@ from TALKAI.live_session import LiveSessionConfig
 from TALKAI.dynamic_chat import DynamicTalkAIService
 from normalizers.normalizer import normalize_report
 from AI_Module.utils.time_parser import parse_temporal_expression
+from analyzers.image_analyzer import analyze_image
 
+import uuid
+import time
+from PIL import Image, ImageOps
 import pymysql
 
 app = Flask(__name__)
@@ -232,30 +236,190 @@ def start_report():
 # TALK TO AI CONVERSATIONAL CHAT & DYNAMIC EXTRACTION
 # =========================================================
 
+ALLOWED_IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
+MAX_FILE_SIZE_BYTES = 8 * 1024 * 1024  # 8 MB
+
+def save_and_strip_exif_image(file_storage, report_type: str = "lost"):
+    """
+    Validates file extension and size, strips all EXIF metadata using PIL,
+    saves into media_vault/{lost_reports|found_reports}/, and returns
+    (web_relative_path, abs_system_path).
+    """
+    orig_name = file_storage.filename or "upload.jpg"
+    ext = Path(orig_name).suffix.lower()
+    if ext not in ALLOWED_IMAGE_EXTENSIONS:
+        raise ValueError(f"Unsupported file format '{ext}'. Allowed: JPG, PNG, WebP.")
+
+    subfolder = "found_reports" if report_type.lower() == "found" else "lost_reports"
+    target_dir = VAULT_DIR / subfolder
+    target_dir.mkdir(parents=True, exist_ok=True)
+
+    safe_filename = f"upload_{int(time.time())}_{uuid.uuid4().hex[:8]}{ext}"
+    target_abs = target_dir / safe_filename
+    web_rel = f"media_vault/{subfolder}/{safe_filename}"
+
+    img = Image.open(file_storage.stream)
+    try:
+        img = ImageOps.exif_transpose(img)
+    except Exception:
+        pass
+
+    # Save cleanly without EXIF metadata
+    if ext == ".png" and img.mode in ("RGBA", "LA"):
+        img.save(target_abs, format="PNG")
+    elif ext == ".webp":
+        if img.mode not in ("RGB", "RGBA"):
+            img = img.convert("RGBA" if "A" in img.mode else "RGB")
+        img.save(target_abs, format="WEBP", quality=90)
+    else:
+        if img.mode != "RGB":
+            img = img.convert("RGB")
+        img.save(target_abs, format="JPEG", quality=88)
+
+    return web_rel, str(target_abs)
+
+
+@app.route("/report/talk_to_ai/upload-image", methods=["POST"])
+def talk_to_ai_upload_image():
+    """
+    Direct image upload & vision analysis endpoint for Talk to AI copilot.
+    Validates file, strips EXIF metadata, saves to media_vault, and extracts visual attributes.
+    """
+    try:
+        report_type = request.form.get("report_type", "lost").strip().lower()
+        file = request.files.get("image")
+        if not file or not file.filename:
+            return jsonify({"success": False, "error": "No image file provided."}), 400
+
+        file.seek(0, os.SEEK_END)
+        size = file.tell()
+        file.seek(0)
+        if size > MAX_FILE_SIZE_BYTES:
+            return jsonify({"success": False, "error": "Image exceeds 8MB maximum size limit."}), 400
+
+        web_rel, abs_path = save_and_strip_exif_image(file, report_type)
+
+        analysis_result = analyze_image(abs_path)
+        if not analysis_result or analysis_result.get("success") is False:
+            analysis_result = {
+                "object_type": "",
+                "attributes": {},
+                "visible_features": [],
+                "location": ""
+            }
+
+        return jsonify({
+            "success": True,
+            "image_url": web_rel,
+            "image_analysis": analysis_result
+        }), 200
+
+    except ValueError as ve:
+        return jsonify({"success": False, "error": str(ve)}), 400
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
 @app.route("/report/talk_to_ai/chat", methods=["POST"])
 def talk_to_ai_chat():
+    """
+    Multi-turn conversational chat & dynamic intake endpoint.
+    Supports both JSON payloads (text) and multipart/form-data (text + image attachments).
+    """
     try:
-        data = request.get_json() or {}
-        user_message = data.get("message", "").strip()
-        history = data.get("history", [])
-        report_type = data.get("report_type", "lost").strip().lower()
-        current_draft = data.get("current_draft", {})
+        user_message = ""
+        history = []
+        report_type = "lost"
+        current_draft = {}
+        image_analysis = None
+        image_urls = []
 
-        if not user_message:
+        if request.is_json:
+            data = request.get_json() or {}
+            user_message = data.get("message", "").strip()
+            history = data.get("history", [])
+            report_type = data.get("report_type", "lost").strip().lower()
+            current_draft = data.get("current_draft", {})
+            image_analysis = data.get("image_analysis")
+            image_urls = data.get("image_urls", [])
+        else:
+            # Handle multipart/form-data
+            user_message = request.form.get("message", "").strip()
+            report_type = request.form.get("report_type", "lost").strip().lower()
+            try:
+                history = json.loads(request.form.get("history") or "[]")
+            except Exception:
+                history = []
+            try:
+                current_draft = json.loads(request.form.get("current_draft") or "{}")
+            except Exception:
+                current_draft = {}
+
+            # Handle existing image URLs passed in form
+            raw_img_urls = request.form.get("image_urls")
+            if raw_img_urls:
+                try:
+                    image_urls = json.loads(raw_img_urls)
+                except Exception:
+                    pass
+
+            raw_analysis = request.form.get("image_analysis")
+            if raw_analysis:
+                try:
+                    image_analysis = json.loads(raw_analysis)
+                except Exception:
+                    pass
+
+            # Handle uploaded image files if attached directly
+            files = request.files.getlist("image") or ([request.files.get("image")] if request.files.get("image") else [])
+            for file in files:
+                if file and file.filename:
+                    file.seek(0, os.SEEK_END)
+                    size = file.tell()
+                    file.seek(0)
+                    if size > MAX_FILE_SIZE_BYTES:
+                        return jsonify({"success": False, "error": "Attached photo exceeds 8MB maximum size limit."}), 400
+
+                    web_rel, abs_path = save_and_strip_exif_image(file, report_type)
+                    image_urls.append(web_rel)
+
+                    try:
+                        analysis_res = analyze_image(abs_path)
+                        if analysis_res and analysis_res.get("success") is not False:
+                            if not image_analysis:
+                                image_analysis = analysis_res
+                            else:
+                                for k, v in analysis_res.get("attributes", {}).items():
+                                    image_analysis.setdefault("attributes", {})[k] = v
+                                if analysis_res.get("visible_features"):
+                                    image_analysis.setdefault("visible_features", []).extend(analysis_res["visible_features"])
+                    except Exception as img_err:
+                        print(f"[TalkToAI] Image analysis error notice: {img_err}")
+
+        # If user uploaded photo without text, provide helpful default text
+        if not user_message and (image_urls or image_analysis):
+            user_message = "I've shared a photo of the item."
+
+        if not user_message and not image_urls:
             return jsonify({
                 "success": False,
-                "error": "Message cannot be empty."
+                "error": "Message or photo cannot be empty."
             }), 400
 
         result = DynamicTalkAIService.handle_turn(
             user_message=user_message,
             history=history,
             report_type=report_type,
-            current_draft=current_draft
+            current_draft=current_draft,
+            image_analysis=image_analysis,
+            image_urls=image_urls
         )
 
         return jsonify(result), 200
 
+    except ValueError as ve:
+        return jsonify({"success": False, "error": str(ve)}), 400
     except Exception as e:
         traceback.print_exc()
         return jsonify({

@@ -9,3 +9,5 @@ models/
 AI_Module/chroma_data/
 AI_Module/temp_uploads/
 uploads/
+media_vault/
+scratch/

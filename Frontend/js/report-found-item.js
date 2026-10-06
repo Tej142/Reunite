@@ -123,6 +123,7 @@ document.addEventListener('DOMContentLoaded', () => {
               location: confirmedDna.location || rawData.where || 'Campus',
               date: confirmedDna.attributes?.['Date / Time'] || rawData.when || new Date().toISOString().split('T')[0],
               imageFile: rawData.imageFile || (uploadedFiles.length > 0 ? uploadedFiles[0] : null),
+              imagePath: rawData.imagePath || null,
               dna: confirmedDna
             });
 

@@ -272,10 +272,33 @@ document.addEventListener('DOMContentLoaded', () => {
   const voiceVisualizer = document.getElementById('voiceVisualizer');
   const voiceToggleLabel = document.getElementById('voiceToggleLabel');
 
+  // Photo Upload & Lightbox Elements
+  const btnAttachPhoto = document.getElementById('btnAttachPhoto');
+  const chatPhotoInput = document.getElementById('chatPhotoInput');
+  const chatDropOverlay = document.getElementById('chatDropOverlay');
+  const chatAttachmentBar = document.getElementById('chatAttachmentBar');
+  const attachmentThumbImg = document.getElementById('attachmentThumbImg');
+  const attachmentProgressBar = document.getElementById('attachmentProgressBar');
+  const attachmentFileName = document.getElementById('attachmentFileName');
+  const attachmentFileSize = document.getElementById('attachmentFileSize');
+  const attachmentCounterBadge = document.getElementById('attachmentCounterBadge');
+  const btnRemoveAttachment = document.getElementById('btnRemoveAttachment');
+  const chatSuggestions = document.getElementById('chatSuggestions');
+  const draftPhotosSection = document.getElementById('draftPhotosSection');
+  const draftPhotosList = document.getElementById('draftPhotosList');
+
+  const chatLightboxModal = document.getElementById('chatLightboxModal');
+  const chatLightboxImg = document.getElementById('chatLightboxImg');
+  const chatLightboxCaption = document.getElementById('chatLightboxCaption');
+  const chatLightboxClose = document.getElementById('chatLightboxClose');
+
   let chatHistory = [];
   let isAiResponding = false;
   let isVoiceModeActive = false;
   let isAiSpeaking = false;
+  let attachedPhotos = []; // [{ file, dataUrl, serverUrl, name, size }]
+  let currentStagedPhoto = null; // { file, dataUrl, name, size }
+
   let currentDraft = {
     title: '',
     category: '',
@@ -284,9 +307,241 @@ document.addEventListener('DOMContentLoaded', () => {
     dynamic_attributes: {},
     verification_secret: '',
     contact: '',
-    raw_summary: ''
+    raw_summary: '',
+    from_photo_keys: []
   };
 
+  // -------------------------------------------------------------
+  // Lightbox Modal Controls
+  // -------------------------------------------------------------
+  function openLightbox(src, caption) {
+    if (!chatLightboxModal || !chatLightboxImg) return;
+    chatLightboxImg.src = src;
+    if (chatLightboxCaption) {
+      chatLightboxCaption.textContent = caption || 'Uploaded Photo';
+    }
+    chatLightboxModal.style.display = 'flex';
+    chatLightboxModal.setAttribute('aria-hidden', 'false');
+    if (chatLightboxClose) chatLightboxClose.focus();
+  }
+
+  function closeLightbox() {
+    if (!chatLightboxModal) return;
+    chatLightboxModal.style.display = 'none';
+    chatLightboxModal.setAttribute('aria-hidden', 'true');
+  }
+
+  if (chatLightboxClose) {
+    chatLightboxClose.addEventListener('click', closeLightbox);
+  }
+  if (chatLightboxModal) {
+    chatLightboxModal.addEventListener('click', (e) => {
+      if (e.target === chatLightboxModal) closeLightbox();
+    });
+  }
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && chatLightboxModal && chatLightboxModal.style.display === 'flex') {
+      closeLightbox();
+    }
+  });
+
+  // -------------------------------------------------------------
+  // Client-Side Image Validation, Resizing & Compression (Max 1600px, 8MB)
+  // -------------------------------------------------------------
+  function formatBytes(bytes) {
+    if (!bytes || bytes <= 0) return '0 B';
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(1024));
+    return (bytes / Math.pow(1024, i)).toFixed(1) + ' ' + sizes[i];
+  }
+
+  async function processAndCompressImage(file) {
+    const validMimes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+    const ext = (file.name.split('.').pop() || '').toLowerCase();
+    const validExts = ['jpg', 'jpeg', 'png', 'webp'];
+
+    if (!validMimes.includes(file.type.toLowerCase()) && !validExts.includes(ext)) {
+      throw new Error('Please choose a JPG, PNG, or WebP photo.');
+    }
+
+    const maxBytes = 8 * 1024 * 1024; // 8 MB limit
+    if (file.size > maxBytes) {
+      throw new Error('Photo size exceeds 8 MB. Please choose a smaller photo.');
+    }
+
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = () => reject(new Error('Could not read image file.'));
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onerror = () => reject(new Error('Invalid image file data.'));
+        img.onload = () => {
+          const MAX_DIM = 1600;
+          let width = img.width;
+          let height = img.height;
+
+          if (width > MAX_DIM || height > MAX_DIM) {
+            if (width > height) {
+              height = Math.round((height * MAX_DIM) / width);
+              width = MAX_DIM;
+            } else {
+              width = Math.round((width * MAX_DIM) / height);
+              height = MAX_DIM;
+            }
+          }
+
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+
+          const isPng = file.type === 'image/png' || ext === 'png';
+          const outType = isPng ? 'image/png' : 'image/jpeg';
+          const outQuality = isPng ? 0.92 : 0.88;
+
+          canvas.toBlob((blob) => {
+            if (!blob) {
+              resolve({ file, dataUrl: e.target.result });
+              return;
+            }
+            const cleanName = file.name.replace(/\.[^.]+$/, '') + (isPng ? '.png' : '.jpg');
+            const compressedFile = new File([blob], cleanName, {
+              type: outType,
+              lastModified: Date.now()
+            });
+            const dataUrl = canvas.toDataURL(outType, outQuality);
+            resolve({ file: compressedFile, dataUrl });
+          }, outType, outQuality);
+        };
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  // -------------------------------------------------------------
+  // Photo Staging Chip & Input Handlers
+  // -------------------------------------------------------------
+  async function stagePhoto(file) {
+    if (!file) return;
+
+    if (attachedPhotos.length >= 3) {
+      const msg = 'Maximum of 3 photos reached for this report.';
+      if (window.ReuniteToast) window.ReuniteToast.info('Photo Limit', msg);
+      else alert(msg);
+      return;
+    }
+
+    try {
+      if (attachmentProgressBar) attachmentProgressBar.style.width = '25%';
+
+      const { file: processedFile, dataUrl } = await processAndCompressImage(file);
+      currentStagedPhoto = {
+        file: processedFile,
+        dataUrl: dataUrl,
+        name: file.name,
+        size: formatBytes(processedFile.size)
+      };
+
+      if (chatAttachmentBar) chatAttachmentBar.style.display = 'flex';
+      if (attachmentThumbImg) attachmentThumbImg.src = dataUrl;
+      if (attachmentFileName) attachmentFileName.textContent = file.name;
+      if (attachmentFileSize) attachmentFileSize.textContent = currentStagedPhoto.size;
+      if (attachmentCounterBadge) {
+        attachmentCounterBadge.textContent = `${attachedPhotos.length + 1}/3 photos`;
+      }
+      if (attachmentProgressBar) {
+        attachmentProgressBar.style.width = '100%';
+        setTimeout(() => {
+          if (attachmentProgressBar) attachmentProgressBar.style.width = '0%';
+        }, 300);
+      }
+
+      if (btnAttachPhoto) btnAttachPhoto.classList.remove('pulse-highlight');
+    } catch (err) {
+      console.warn('Photo processing notice:', err);
+      if (window.ReuniteToast) window.ReuniteToast.error('Invalid Photo', err.message);
+      else alert(err.message);
+      clearStagedPhoto();
+    }
+  }
+
+  function clearStagedPhoto() {
+    currentStagedPhoto = null;
+    if (chatAttachmentBar) chatAttachmentBar.style.display = 'none';
+    if (chatPhotoInput) chatPhotoInput.value = '';
+    if (attachmentProgressBar) attachmentProgressBar.style.width = '0%';
+  }
+
+  if (btnRemoveAttachment) {
+    btnRemoveAttachment.addEventListener('click', clearStagedPhoto);
+  }
+
+  if (btnAttachPhoto && chatPhotoInput) {
+    btnAttachPhoto.addEventListener('click', () => {
+      chatPhotoInput.click();
+    });
+
+    chatPhotoInput.addEventListener('change', () => {
+      if (chatPhotoInput.files && chatPhotoInput.files[0]) {
+        stagePhoto(chatPhotoInput.files[0]);
+      }
+    });
+  }
+
+  // Drag and drop onto chat panel
+  const chatPanel = document.querySelector('.chat-panel') || document.getElementById('mode3Container');
+  if (chatPanel) {
+    ['dragenter', 'dragover'].forEach(eventName => {
+      chatPanel.addEventListener(eventName, (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (chatDropOverlay) chatDropOverlay.classList.add('active');
+      });
+    });
+
+    ['dragleave', 'dragend'].forEach(eventName => {
+      chatPanel.addEventListener(eventName, (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (e.relatedTarget && chatPanel.contains(e.relatedTarget)) return;
+        if (chatDropOverlay) chatDropOverlay.classList.remove('active');
+      });
+    });
+
+    chatPanel.addEventListener('drop', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (chatDropOverlay) chatDropOverlay.classList.remove('active');
+      if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]) {
+        stagePhoto(e.dataTransfer.files[0]);
+      }
+    });
+  }
+
+  // Paste from clipboard (Ctrl+V)
+  window.addEventListener('paste', (e) => {
+    const mode3 = document.getElementById('mode3Container');
+    if (!mode3 || !mode3.classList.contains('active')) return;
+
+    if (e.clipboardData && e.clipboardData.items) {
+      for (const item of e.clipboardData.items) {
+        if (item.type && item.type.indexOf('image') !== -1) {
+          const file = item.getAsFile();
+          if (file) {
+            e.preventDefault();
+            stagePhoto(file);
+            break;
+          }
+        }
+      }
+    }
+  });
+
+  // -------------------------------------------------------------
+  // Chat Actions & Input Bindings
+  // -------------------------------------------------------------
   if (btnSendChat && chatInput) {
     btnSendChat.addEventListener('click', () => handleUserChat());
     chatInput.addEventListener('keypress', (e) => {
@@ -304,8 +559,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
   let isAiServerOffline = false;
 
+  function getFlaskBaseUrl() {
+    return (typeof window !== 'undefined' && window.FLASK_BACKEND_URL) ? window.FLASK_BACKEND_URL : 'https://reunite-ai-backend.onrender.com';
+  }
+
   function checkAiServerHealth() {
-    const flaskBaseUrl = window.FLASK_BACKEND_URL || 'https://reunite-ai-backend.onrender.com';
+    const flaskBaseUrl = getFlaskBaseUrl();
     const subStatus = document.getElementById('talkAiSubStatus');
     fetch(`${flaskBaseUrl}/`, { method: 'GET', mode: 'cors' })
       .then(res => {
@@ -329,36 +588,66 @@ document.addEventListener('DOMContentLoaded', () => {
   async function handleUserChat(directMessage) {
     if (isAiResponding) return;
     const msg = directMessage || (chatInput ? chatInput.value.trim() : '');
-    if (!msg) return;
+    const photoToSend = currentStagedPhoto;
 
-    // Temporarily pause recognition while processing/speaking AI reply
+    if (!msg && !photoToSend) return;
+
+    // Temporarily pause speech recognition while processing/speaking AI reply
     pauseRecognition();
 
-    // Add user bubble
-    addChatBubble(msg, 'user');
-    chatHistory.push({ role: 'user', text: msg });
+    // Add user bubble (with photo thumbnail if attached)
+    if (photoToSend) {
+      addUserPhotoBubble(photoToSend.dataUrl, msg, photoToSend.name);
+      chatHistory.push({ role: 'user', text: msg || 'Attached photo of the item.' });
+    } else {
+      addChatBubble(msg, 'user');
+      chatHistory.push({ role: 'user', text: msg });
+    }
+
     if (chatInput) chatInput.value = '';
+    clearStagedPhoto();
 
     // Show AI thinking bubble
-    const thinkingBubble = showThinkingIndicator();
+    const thinkingBubble = showThinkingIndicator(photoToSend ? 'Looking at your photo...' : null);
     isAiResponding = true;
     updateVoiceBadgeState();
+    updateDraftSyncStatus(true);
 
-    const flaskBaseUrl = window.FLASK_BACKEND_URL || 'https://reunite-ai-backend.onrender.com';
+    const flaskBaseUrl = getFlaskBaseUrl();
 
     try {
-      const response = await fetch(`${flaskBaseUrl}/report/talk_to_ai/chat`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          message: msg,
-          history: chatHistory,
-          report_type: isFoundPage ? 'found' : 'lost',
-          current_draft: currentDraft
-        })
-      });
+      let response;
+      if (photoToSend) {
+        const formData = new FormData();
+        formData.append('image', photoToSend.file);
+        formData.append('message', msg || 'Here is a photo of the item.');
+        formData.append('history', JSON.stringify(chatHistory));
+        formData.append('report_type', isFoundPage ? 'found' : 'lost');
+        formData.append('current_draft', JSON.stringify(currentDraft));
+        const existingUrls = attachedPhotos.map(p => p.serverUrl).filter(Boolean);
+        if (existingUrls.length > 0) {
+          formData.append('image_urls', JSON.stringify(existingUrls));
+        }
+
+        response = await fetch(`${flaskBaseUrl}/report/talk_to_ai/chat`, {
+          method: 'POST',
+          body: formData
+        });
+      } else {
+        response = await fetch(`${flaskBaseUrl}/report/talk_to_ai/chat`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            message: msg,
+            history: chatHistory,
+            report_type: isFoundPage ? 'found' : 'lost',
+            current_draft: currentDraft,
+            image_urls: attachedPhotos.map(p => p.serverUrl).filter(Boolean)
+          })
+        });
+      }
 
       if (!response.ok) {
         throw new Error(`Server returned HTTP ${response.status} (${response.statusText || 'Offline or waking up'})`);
@@ -368,18 +657,40 @@ document.addEventListener('DOMContentLoaded', () => {
       removeThinkingIndicator(thinkingBubble);
       isAiResponding = false;
       isAiServerOffline = false;
+      updateDraftSyncStatus(false);
 
       const subStatus = document.getElementById('talkAiSubStatus');
       if (subStatus) subStatus.textContent = 'Powered by Google Gemini Live Voice';
 
       if (result.success && result.reply) {
+        if (photoToSend) {
+          const returnedUrls = result.image_urls || [];
+          const serverUrl = returnedUrls.length > 0 ? returnedUrls[returnedUrls.length - 1] : null;
+          attachedPhotos.push({
+            file: photoToSend.file,
+            dataUrl: photoToSend.dataUrl,
+            serverUrl: serverUrl,
+            name: photoToSend.name
+          });
+          renderDraftPhotos();
+        }
+
         addChatBubble(result.reply, 'ai');
         chatHistory.push({ role: 'assistant', text: result.reply });
+
+        // Merge attributes tagged "From photo"
+        if (Array.isArray(result.from_photo_keys) && result.from_photo_keys.length > 0) {
+          currentDraft.from_photo_keys = Array.from(new Set([
+            ...(currentDraft.from_photo_keys || []),
+            ...result.from_photo_keys
+          ]));
+        }
 
         if (result.draft) {
           currentDraft = {
             ...currentDraft,
             ...result.draft,
+            from_photo_keys: currentDraft.from_photo_keys || [],
             dynamic_attributes: {
               ...(currentDraft.dynamic_attributes || {}),
               ...(result.draft.dynamic_attributes || {})
@@ -387,6 +698,9 @@ document.addEventListener('DOMContentLoaded', () => {
           };
           renderDynamicDraft(currentDraft, result.is_ready_to_submit);
         }
+
+        // Handle photo request quick reply chips
+        handlePhotoRequestPrompt(result.photo_requested);
 
         // If Voice Mode is active, speak the reply aloud and resume listening after
         if (isVoiceModeActive) {
@@ -408,6 +722,7 @@ document.addEventListener('DOMContentLoaded', () => {
       removeThinkingIndicator(thinkingBubble);
       isAiResponding = false;
       isAiServerOffline = true;
+      updateDraftSyncStatus(false);
 
       const subStatus = document.getElementById('talkAiSubStatus');
       if (subStatus) {
@@ -421,6 +736,76 @@ document.addEventListener('DOMContentLoaded', () => {
         speakAiReply("Unable to reach the AI server right now. Please try again in a few seconds.");
       } else {
         updateVoiceBadgeState();
+      }
+    }
+  }
+
+  function addUserPhotoBubble(dataUrl, captionText, fileName) {
+    if (!chatMessages) return;
+    const bubble = document.createElement('div');
+    bubble.className = 'chat-bubble user image-bubble';
+
+    const card = document.createElement('div');
+    card.className = 'chat-image-card';
+    card.title = 'Click to view enlarged photo';
+
+    const img = document.createElement('img');
+    img.src = dataUrl;
+    img.alt = fileName || 'Uploaded item photo';
+    img.addEventListener('click', () => {
+      openLightbox(dataUrl, fileName || 'Uploaded Photo');
+    });
+    card.appendChild(img);
+    bubble.appendChild(card);
+
+    if (captionText) {
+      const caption = document.createElement('div');
+      caption.className = 'chat-image-caption';
+      caption.textContent = captionText;
+      bubble.appendChild(caption);
+    }
+
+    chatMessages.appendChild(bubble);
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+  }
+
+  function handlePhotoRequestPrompt(isRequested) {
+    if (!chatSuggestions) return;
+
+    if (isRequested && attachedPhotos.length < 3) {
+      chatSuggestions.innerHTML = `
+        <div class="prompt-chip photo-chip-action" id="chipUploadPhoto">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px; margin-right:4px;">
+            <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+            <circle cx="12" cy="13" r="4"/>
+          </svg> Upload a photo
+        </div>
+        <div class="prompt-chip photo-chip-skip" id="chipSkipPhoto">Skip for now</div>
+      `;
+
+      const uploadChip = document.getElementById('chipUploadPhoto');
+      const skipChip = document.getElementById('chipSkipPhoto');
+
+      if (uploadChip && chatPhotoInput) {
+        uploadChip.addEventListener('click', () => {
+          chatPhotoInput.click();
+          if (btnAttachPhoto) btnAttachPhoto.classList.remove('pulse-highlight');
+        });
+      }
+
+      if (skipChip) {
+        skipChip.addEventListener('click', () => {
+          if (btnAttachPhoto) btnAttachPhoto.classList.remove('pulse-highlight');
+          handleUserChat('Skip photo for now');
+        });
+      }
+
+      if (btnAttachPhoto) {
+        btnAttachPhoto.classList.add('pulse-highlight');
+      }
+    } else {
+      if (btnAttachPhoto) {
+        btnAttachPhoto.classList.remove('pulse-highlight');
       }
     }
   }
@@ -454,11 +839,15 @@ document.addEventListener('DOMContentLoaded', () => {
     chatMessages.scrollTop = chatMessages.scrollHeight;
   }
 
-  function showThinkingIndicator() {
+  function showThinkingIndicator(customText = null) {
     if (!chatMessages) return null;
     const thinking = document.createElement('div');
     thinking.className = 'chat-bubble thinking';
-    thinking.innerHTML = '<span class="dot"></span><span class="dot"></span><span class="dot"></span>';
+    let textHtml = '';
+    if (customText) {
+      textHtml = `<span style="font-size:12px; margin-left:8px; color:var(--text-secondary);">${escapeHtml(customText)}</span>`;
+    }
+    thinking.innerHTML = `<span class="dot"></span><span class="dot"></span><span class="dot"></span>${textHtml}`;
     chatMessages.appendChild(thinking);
     chatMessages.scrollTop = chatMessages.scrollHeight;
     return thinking;
@@ -470,48 +859,137 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  function updateDraftSyncStatus(isSyncing) {
+    const liveDraftCard = document.querySelector('.live-draft-card');
+    const badge = liveDraftCard ? liveDraftCard.querySelector('.live-badge') : null;
+    if (badge) {
+      if (isSyncing) {
+        badge.innerHTML = '<span class="live-dot" style="animation:pulse 0.8s infinite;"></span> AI Syncing...';
+      } else {
+        badge.innerHTML = '<span class="live-dot"></span> Live';
+      }
+    }
+  }
+
+  function renderDraftPhotos() {
+    if (!draftPhotosSection || !draftPhotosList) return;
+
+    if (attachedPhotos.length === 0) {
+      draftPhotosSection.style.display = 'none';
+      draftPhotosList.innerHTML = '';
+      return;
+    }
+
+    draftPhotosSection.style.display = 'block';
+    draftPhotosList.innerHTML = '';
+
+    attachedPhotos.forEach((photo, idx) => {
+      const card = document.createElement('div');
+      card.className = 'draft-photo-thumb';
+      card.title = `${photo.name || 'Photo'} - Click to enlarge`;
+
+      const img = document.createElement('img');
+      img.src = photo.dataUrl;
+      img.alt = photo.name || 'Photo';
+      img.addEventListener('click', () => {
+        openLightbox(photo.dataUrl, photo.name || 'Evidence Photo');
+      });
+
+      const removeBtn = document.createElement('button');
+      removeBtn.type = 'button';
+      removeBtn.className = 'btn-draft-photo-remove';
+      removeBtn.title = 'Remove photo';
+      removeBtn.setAttribute('aria-label', 'Remove photo');
+      removeBtn.innerHTML = '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
+
+      removeBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        attachedPhotos.splice(idx, 1);
+        if (attachmentCounterBadge) {
+          attachmentCounterBadge.textContent = `${attachedPhotos.length}/3 photos`;
+        }
+
+        // If no photos remain, clear photo-derived attributes
+        if (attachedPhotos.length === 0) {
+          const photoKeys = currentDraft.from_photo_keys || [];
+          photoKeys.forEach(k => {
+            if (currentDraft.dynamic_attributes && currentDraft.dynamic_attributes[k]) {
+              delete currentDraft.dynamic_attributes[k];
+            }
+          });
+          currentDraft.from_photo_keys = [];
+        }
+
+        renderDraftPhotos();
+        renderDynamicDraft(currentDraft, false);
+        addChatBubble('<em>Photo removed from report draft.</em>', 'ai');
+      });
+
+      card.appendChild(img);
+      card.appendChild(removeBtn);
+      draftPhotosList.appendChild(card);
+    });
+  }
+
   // Fully dynamic right-side attribute card renderer
   function renderDynamicDraft(draft, isReady) {
     if (!dynamicDraftContainer) return;
 
     const attributes = draft.dynamic_attributes || {};
-    const hasCore = Boolean(draft.title || draft.category || draft.location || draft.time || draft.verification_secret || draft.contact || Object.keys(attributes).length > 0);
+    const hasCore = Boolean(
+      draft.title ||
+      draft.category ||
+      draft.location ||
+      draft.time ||
+      draft.verification_secret ||
+      draft.contact ||
+      Object.keys(attributes).length > 0 ||
+      attachedPhotos.length > 0
+    );
 
     if (!hasCore) {
       dynamicDraftContainer.innerHTML = `
         <div class="draft-empty-state" id="draftEmptyState">
           <div class="draft-empty-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"/></svg></div>
           <div class="draft-empty-text"><strong>Live Attributes Extractor</strong></div>
-          <div class="draft-empty-sub">Speak or type your conversation. The AI will dynamically extract and display all item attributes, location, and marks here in real time.</div>
+          <div class="draft-empty-sub">Speak, type, or attach photos. The AI will dynamically analyze item features, colors, brands, and marks here in real time.</div>
         </div>
       `;
       if (btnDraftSubmit) btnDraftSubmit.disabled = true;
       return;
     }
 
+    const fromPhotoKeys = (draft.from_photo_keys || []).map(k => String(k).toLowerCase());
+    const isFromPhoto = (key) => fromPhotoKeys.includes(String(key).toLowerCase());
+
+    const photoBadgeHtml = '<span class="draft-tag-badge from-photo"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg> From photo</span>';
+
     let html = '';
 
     // 1. Title / Item Type Card
     if (draft.title) {
+      const isPhotoItem = isFromPhoto('title') || isFromPhoto('item type') || isFromPhoto('object_type');
       html += `
         <div class="draft-item updated">
           <div class="draft-item-header">
             <span class="draft-label"><span class="draft-label-icon"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2H2v10l9.29 9.29c.94.94 2.48.94 3.42 0l6.58-6.58c.94-.94.94-2.48 0-3.42L12 2Z"/><path d="M7 7h.01"/></svg></span> ${isFoundPage ? 'Found Item' : 'Lost Item'}</span>
-            <span class="draft-tag-badge">Identified</span>
+            ${isPhotoItem ? photoBadgeHtml : '<span class="draft-tag-badge">Identified</span>'}
           </div>
-          <div class="draft-value">${escapeHtml(draft.title)}</div>
+          <div class="draft-value" contenteditable="true" spellcheck="false" data-field="title" title="Click to edit">${escapeHtml(draft.title)}</div>
         </div>
       `;
     }
 
     // 2. Category Card
     if (draft.category) {
+      const isPhotoCat = isFromPhoto('category');
       html += `
         <div class="draft-item">
           <div class="draft-item-header">
             <span class="draft-label"><span class="draft-label-icon"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg></span> Category</span>
+            ${isPhotoCat ? photoBadgeHtml : ''}
           </div>
-          <div class="draft-value">${escapeHtml(draft.category)}</div>
+          <div class="draft-value" contenteditable="true" spellcheck="false" data-field="category" title="Click to edit">${escapeHtml(draft.category)}</div>
         </div>
       `;
     }
@@ -524,7 +1002,7 @@ document.addEventListener('DOMContentLoaded', () => {
             <span class="draft-label"><span class="draft-label-icon"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"/><circle cx="12" cy="10" r="3"/></svg></span> ${isFoundPage ? 'Found Location' : 'Lost Location'}</span>
             <span class="draft-tag-badge">Location</span>
           </div>
-          <div class="draft-value">${escapeHtml(draft.location)}</div>
+          <div class="draft-value" contenteditable="true" spellcheck="false" data-field="location" title="Click to edit">${escapeHtml(draft.location)}</div>
         </div>
       `;
     }
@@ -536,22 +1014,23 @@ document.addEventListener('DOMContentLoaded', () => {
           <div class="draft-item-header">
             <span class="draft-label"><span class="draft-label-icon"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span> Date / Time Context</span>
           </div>
-          <div class="draft-value">${escapeHtml(draft.time)}</div>
+          <div class="draft-value" contenteditable="true" spellcheck="false" data-field="time" title="Click to edit">${escapeHtml(draft.time)}</div>
         </div>
       `;
     }
 
-    // 5. Dynamic Discovered Attributes (e.g. Brand, Dial Color, Strap, Scratches, Engravings, etc.)
+    // 5. Dynamic Discovered Attributes (Color, Brand, Strap, Scratches, Engravings, etc.)
     for (const [key, value] of Object.entries(attributes)) {
       if (value && String(value).trim() !== '') {
         const icon = getAttributeIcon(key);
+        const photoTagged = isFromPhoto(key);
         html += `
           <div class="draft-item updated">
             <div class="draft-item-header">
               <span class="draft-label"><span class="draft-label-icon">${icon}</span> ${escapeHtml(key)}</span>
-              <span class="draft-tag-badge">Detail</span>
+              ${photoTagged ? photoBadgeHtml : '<span class="draft-tag-badge">Detail</span>'}
             </div>
-            <div class="draft-value">${escapeHtml(String(value))}</div>
+            <div class="draft-value" contenteditable="true" spellcheck="false" data-field="attr_${escapeHtml(key)}" title="Click to edit">${escapeHtml(String(value))}</div>
           </div>
         `;
       }
@@ -565,7 +1044,7 @@ document.addEventListener('DOMContentLoaded', () => {
             <span class="draft-label"><span class="draft-label-icon"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span> Private Verification Detail</span>
             <span class="draft-tag-badge">Private</span>
           </div>
-          <div class="draft-value">${escapeHtml(draft.verification_secret)}</div>
+          <div class="draft-value" contenteditable="true" spellcheck="false" data-field="verification_secret" title="Click to edit">${escapeHtml(draft.verification_secret)}</div>
         </div>
       `;
     }
@@ -577,7 +1056,7 @@ document.addEventListener('DOMContentLoaded', () => {
           <div class="draft-item-header">
             <span class="draft-label"><span class="draft-label-icon"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg></span> Contact Info</span>
           </div>
-          <div class="draft-value">${escapeHtml(draft.contact)}</div>
+          <div class="draft-value" contenteditable="true" spellcheck="false" data-field="contact" title="Click to edit">${escapeHtml(draft.contact)}</div>
         </div>
       `;
     }
@@ -594,9 +1073,35 @@ document.addEventListener('DOMContentLoaded', () => {
     dynamicDraftContainer.innerHTML = html;
     dynamicDraftContainer.scrollTop = dynamicDraftContainer.scrollHeight;
 
-    // Enable submit if sufficient details captured
+    // Attach editable listeners to persist changes in currentDraft
+    dynamicDraftContainer.querySelectorAll('.draft-value[contenteditable="true"]').forEach(el => {
+      const field = el.getAttribute('data-field');
+      const updateValue = () => {
+        const newVal = el.innerText.trim();
+        if (field === 'title') currentDraft.title = newVal;
+        else if (field === 'category') currentDraft.category = newVal;
+        else if (field === 'location') currentDraft.location = newVal;
+        else if (field === 'time') currentDraft.time = newVal;
+        else if (field === 'verification_secret') currentDraft.verification_secret = newVal;
+        else if (field === 'contact') currentDraft.contact = newVal;
+        else if (field && field.startsWith('attr_')) {
+          const attrKey = field.substring(5);
+          if (!currentDraft.dynamic_attributes) currentDraft.dynamic_attributes = {};
+          currentDraft.dynamic_attributes[attrKey] = newVal;
+        }
+      };
+      el.addEventListener('blur', updateValue);
+      el.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          el.blur();
+        }
+      });
+    });
+
+    // Enable submit button if minimum details or photo captured
     if (btnDraftSubmit) {
-      const ready = isReady || (draft.title && (draft.location || Object.keys(attributes).length > 0));
+      const ready = isReady || (draft.title && (draft.location || Object.keys(attributes).length > 0 || attachedPhotos.length > 0));
       btnDraftSubmit.disabled = !ready;
     }
   }
@@ -745,18 +1250,16 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    window.speechSynthesis.cancel(); // Cancel any previous speech
+    window.speechSynthesis.cancel();
     isAiSpeaking = true;
     updateVoiceBadgeState();
     startVisualizerAnimation();
 
-    // Clean markdown/HTML if any from spoken text
     const cleanText = text.replace(/<[^>]*>?/gm, '').replace(/[*_#`~]/g, '');
     const utterance = new SpeechSynthesisUtterance(cleanText);
     utterance.rate = 1.0;
     utterance.pitch = 1.0;
 
-    // Pick pleasant English voice if available
     const voices = window.speechSynthesis.getVoices();
     const naturalVoice = voices.find(v => v.lang.startsWith('en') && (v.name.includes('Natural') || v.name.includes('Google') || v.name.includes('Samantha')));
     if (naturalVoice) utterance.voice = naturalVoice;
@@ -766,7 +1269,6 @@ document.addEventListener('DOMContentLoaded', () => {
       updateVoiceBadgeState();
       stopVisualizerAnimation();
       if (isVoiceModeActive) {
-        // Automatically listen for user's next response!
         setTimeout(() => {
           startRecognitionSafe();
         }, 400);
@@ -860,7 +1362,7 @@ document.addEventListener('DOMContentLoaded', () => {
       btnDraftSubmit.textContent = 'Synthesizing Digital DNA...';
 
       let combinedDescription = currentDraft.raw_summary || `${currentDraft.title || 'Item'} ${isFoundPage ? 'found' : 'lost'} at ${currentDraft.location || 'unknown'}.`;
-      
+
       const attrList = [];
       for (const [k, v] of Object.entries(currentDraft.dynamic_attributes || {})) {
         attrList.push(`${k}: ${v}`);
@@ -876,11 +1378,15 @@ document.addEventListener('DOMContentLoaded', () => {
         verification: currentDraft.verification_secret || ''
       };
 
+      const primaryPhotoFile = attachedPhotos.length > 0 ? attachedPhotos[0].file : null;
+      const primaryPhotoUrl = attachedPhotos.length > 0 ? attachedPhotos[0].serverUrl : null;
+
       try {
         let dna = null;
         if (window.FlaskAIService) {
           const aiResult = await window.FlaskAIService.submitReportToFlask({
             description: combinedDescription,
+            imageFile: primaryPhotoFile,
             meta: meta
           });
 
@@ -902,7 +1408,9 @@ document.addEventListener('DOMContentLoaded', () => {
             description: combinedDescription,
             where: currentDraft.location,
             when: currentDraft.time,
-            verification: currentDraft.verification_secret
+            verification: currentDraft.verification_secret,
+            imageFile: primaryPhotoFile,
+            imagePath: primaryPhotoUrl
           });
         } else {
           showSuccessState(combinedDescription, { ...meta, dna });
@@ -916,7 +1424,9 @@ document.addEventListener('DOMContentLoaded', () => {
             description: combinedDescription,
             where: currentDraft.location,
             when: currentDraft.time,
-            verification: currentDraft.verification_secret
+            verification: currentDraft.verification_secret,
+            imageFile: primaryPhotoFile,
+            imagePath: primaryPhotoUrl
           });
         } else {
           showSuccessState(combinedDescription, { ...meta, dna });

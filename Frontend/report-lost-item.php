@@ -290,27 +290,67 @@
           </button>
         </div>
 
-        <div class="chat-messages" id="chatMessages">
+        <!-- Chat Drag-and-Drop Overlay -->
+        <div class="chat-drop-overlay" id="chatDropOverlay" style="display:none;" aria-hidden="true">
+          <div class="drop-overlay-content">
+            <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+              <circle cx="8.5" cy="8.5" r="1.5"/>
+              <polyline points="21 15 16 10 5 21"/>
+            </svg>
+            <div class="drop-overlay-text">Drop your photo here</div>
+            <div class="drop-overlay-sub">JPG, PNG, or WebP up to 8MB</div>
+          </div>
+        </div>
+
+        <div class="chat-messages" id="chatMessages" aria-live="polite">
           <div class="chat-bubble ai">
             Hello! I'm your AI Lost Item Copilot. Click <strong>Start Voice Mode</strong> to speak naturally via live audio, or type in the box below. Tell me what you're missing, where you lost it, and any private details!
           </div>
         </div>
 
-        <div class="chat-suggestions">
+        <div class="chat-suggestions" id="chatSuggestions">
           <div class="prompt-chip">"I lost my brown wallet at Washington Square Park"</div>
           <div class="prompt-chip">"Lost my blue iPhone on the train yesterday"</div>
           <div class="prompt-chip">"Lost house keys with a yellow keychain on subway"</div>
         </div>
 
+        <!-- Attachment Staging Preview Chip -->
+        <div class="chat-attachment-bar" id="chatAttachmentBar" style="display:none;">
+          <div class="attachment-preview-card" id="attachmentPreviewCard">
+            <div class="attachment-thumb-wrap">
+              <img id="attachmentThumbImg" src="" alt="Photo thumbnail" />
+              <div class="attachment-progress-bar" id="attachmentProgressBar"></div>
+            </div>
+            <div class="attachment-meta">
+              <span class="attachment-filename" id="attachmentFileName">photo.jpg</span>
+              <span class="attachment-filesize" id="attachmentFileSize">1.2 MB</span>
+            </div>
+            <span class="attachment-counter-badge" id="attachmentCounterBadge">1/3 photos</span>
+            <button type="button" class="btn-remove-attachment" id="btnRemoveAttachment" title="Remove photo" aria-label="Remove photo">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </div>
+        </div>
+
         <div class="chat-input-bar">
-          <button type="button" class="btn-mic-inline" id="btnMicInline" title="Toggle microphone">
+          <!-- Camera / Photo Attach Button -->
+          <button type="button" class="btn-attach-photo" id="btnAttachPhoto" title="Attach or take photo of item (up to 3)" aria-label="Attach photo">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+              <circle cx="12" cy="13" r="4"/>
+            </svg>
+          </button>
+          <input type="file" id="chatPhotoInput" accept="image/jpeg,image/png,image/webp" capture="environment" style="display:none;" />
+
+          <button type="button" class="btn-mic-inline" id="btnMicInline" title="Toggle microphone" aria-label="Toggle voice microphone">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/>
               <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
               <line x1="12" y1="19" x2="12" y2="22"/>
             </svg>
           </button>
-          <input type="text" id="chatInput" placeholder="Speak or type what you lost..." />
+          <input type="text" id="chatInput" placeholder="Speak, type, or attach a photo..." aria-label="Chat message input" />
           <button type="button" class="btn-send" id="btnSendChat" aria-label="Send message">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
           </button>
@@ -325,6 +365,17 @@
             Live Report Draft
           </div>
           <span class="mode-badge" id="draftLiveStatusBadge">AI Syncing</span>
+        </div>
+
+        <!-- Uploaded Evidence Photos Drawer in Draft -->
+        <div class="draft-photos-section" id="draftPhotosSection" style="display:none;">
+          <div class="draft-photos-header">
+            <span class="draft-photos-title">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+              Evidence Photos (<span id="draftPhotosCount">0</span>/3)
+            </span>
+          </div>
+          <div class="draft-photos-strip" id="draftPhotosStrip"></div>
         </div>
 
         <div class="draft-fields-list" id="dynamicDraftContainer">
@@ -371,6 +422,17 @@
     <p>We're searching active found items now. You'll get an email the moment something matches.</p>
     <div class="id" id="reportId"></div>
     <div class="ai-dna-results" id="aiDnaResults" style="display:none;"></div>
+  </div>
+
+  <!-- Accessible Lightbox Modal for Chat Evidence Photos -->
+  <div class="chat-lightbox-overlay" id="chatLightboxModal" role="dialog" aria-modal="true" aria-label="Enlarged image view" style="display:none;">
+    <div class="chat-lightbox-content">
+      <button type="button" class="chat-lightbox-close" id="chatLightboxClose" aria-label="Close enlarged photo view">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+      <img id="chatLightboxImg" src="" alt="Enlarged photo preview" />
+      <div class="chat-lightbox-caption" id="chatLightboxCaption"></div>
+    </div>
   </div>
 </main>
 

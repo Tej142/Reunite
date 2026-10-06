@@ -729,6 +729,8 @@ async function submitReportToBackend(payload = {}) {
 
   if (payload.imageFile) {
     formData.append('image', payload.imageFile);
+  } else if (payload.imagePath) {
+    formData.append('image_path', payload.imagePath);
   }
 
   if (payload.dna) {
