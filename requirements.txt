@@ -3,10 +3,14 @@ flask
 flask-cors
 python-dotenv
 requests
+gunicorn
+pymysql
+cryptography
 
 # LLMs & AI APIs
 google-genai
 mistralai==1.8.2
+pydantic
 
 # Image Processing & Math
 pillow
@@ -20,3 +24,4 @@ huggingface_hub
 
 # Testing & Utilities
 faker
+

@@ -41,11 +41,10 @@ while True:
     i += 1
 
 if not GEMINI_API_KEYS:
-    raise ValueError(
-        "GEMINI_API_KEY not found. Please add it to your .env file."
-    )
-
-GEMINI_API_KEY = GEMINI_API_KEYS[0]
+    print("[Config Notice] GEMINI_API_KEY not found in environment. Set GEMINI_API_KEY in Render environment variables.")
+    GEMINI_API_KEY = "placeholder_key"
+else:
+    GEMINI_API_KEY = GEMINI_API_KEYS[0]
 GEMINI_MODEL = "gemini-2.5-flash"
 
 STANDARD_MODELS = [
@@ -80,7 +79,12 @@ def is_quota_or_transient_error(e: Exception) -> bool:
 CALL_TIMEOUT_SECONDS = 25
 
 # Initialize the genai clients for each key
-clients = [genai.Client(api_key=key) for key in GEMINI_API_KEYS]
+clients = []
+for key in GEMINI_API_KEYS:
+    try:
+        clients.append(genai.Client(api_key=key))
+    except Exception:
+        pass
 
 class FailoverModels:
     def generate_content(self, model, contents, config=None, **kwargs):
