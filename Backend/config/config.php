@@ -89,15 +89,16 @@ define('FRONTEND_URL', '../Frontend');
 $conn = null;
 try {
     mysqli_report(MYSQLI_REPORT_OFF);
-    $conn = new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME, (int)DB_PORT);
+    $conn = @new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME, (int)DB_PORT);
 
-    if ($conn->connect_error) {
+    if ($conn && $conn->connect_error) {
         // Log connection error without crashing immediately for non-DB endpoints
         error_log("Database Connection Failed: " . $conn->connect_error);
-    } else {
+        $conn = null;
+    } elseif ($conn) {
         $conn->set_charset("utf8mb4");
     }
-} catch (Exception $e) {
+} catch (Throwable $e) {
     error_log("Database Exception: " . $e->getMessage());
     $conn = null;
 }
