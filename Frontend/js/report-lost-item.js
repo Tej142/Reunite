@@ -5,6 +5,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const previewGrid = document.getElementById('previewGrid');
   const successState = document.getElementById('successState');
   const reportId = document.getElementById('reportId');
+  const aiReviewContainer = document.getElementById('aiReviewContainer');
+  const aiReviewFormWrap = document.getElementById('aiReviewFormWrap');
 
   // In-memory array of selected File objects
   let uploadedFiles = [];
@@ -75,6 +77,84 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  function transitionToReview(dna, rawData = {}) {
+    const selector = document.querySelector('.mode-selector-wrapper');
+    const aiBanner = document.querySelector('.ai-status-banner');
+    const containers = document.querySelectorAll('.mode-container');
+
+    if (selector) selector.style.display = 'none';
+    if (aiBanner) aiBanner.style.display = 'none';
+    containers.forEach(c => c.style.display = 'none');
+    if (lostForm) lostForm.style.display = 'none';
+
+    if (aiReviewContainer && aiReviewFormWrap && window.FlaskAIService) {
+      aiReviewContainer.style.display = 'block';
+      aiReviewContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+      window.FlaskAIService.renderAiDnaCard(dna, aiReviewFormWrap, {
+        location: rawData.where || rawData.location || '',
+        when: rawData.when || rawData.date || '',
+        isReview: true,
+        onBack: () => {
+          aiReviewContainer.style.display = 'none';
+          if (selector) selector.style.display = 'block';
+          if (aiBanner) aiBanner.style.display = 'block';
+          const activeContainer = document.getElementById('mode1Container');
+          if (activeContainer) activeContainer.classList.add('active');
+          containers.forEach(c => {
+            if (c.id === 'mode1Container') c.style.display = 'block';
+          });
+          if (lostForm) lostForm.style.display = 'block';
+          lostForm.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        },
+        onConfirm: async (confirmedDna) => {
+          const confirmBtn = aiReviewFormWrap.querySelector('#btnConfirmDna');
+          if (confirmBtn) {
+            confirmBtn.disabled = true;
+            confirmBtn.innerHTML = 'Saving to Database &amp; Launching Neural Vector Matcher...';
+          }
+
+          try {
+            const result = await window.FlaskAIService.submitReportToBackend({
+              reportType: 'lost',
+              title: confirmedDna.object_type || rawData.title || 'Lost Item',
+              category: confirmedDna.category || confirmedDna.object_type || 'General',
+              description: rawData.description || confirmedDna.object_type || '',
+              location: confirmedDna.location || rawData.where || 'Campus',
+              date: confirmedDna.attributes?.['Date / Time'] || rawData.when || new Date().toISOString().split('T')[0],
+              imageFile: rawData.imageFile || (uploadedFiles.length > 0 ? uploadedFiles[0] : null),
+              dna: confirmedDna
+            });
+
+            const savedId = (result && result.data && result.data.report_id) ? result.data.report_id : ('RL-' + Math.random().toString(36).slice(2, 8).toUpperCase());
+
+            // Fire live vector similarity search
+            window.FlaskAIService.searchMatchesWithFlask({
+              query_text: rawData.description || confirmedDna.object_type,
+              item_id: savedId,
+              report_type: 'lost'
+            });
+
+            if (window.ReuniteToast) {
+              window.ReuniteToast.success('Report Registered', `Missing item report ${savedId} indexed in ChromaDB successfully.`, 4500);
+            }
+
+            aiReviewContainer.style.display = 'none';
+            transitionToSuccess(savedId, confirmedDna, confirmedDna.location || rawData.where, confirmedDna.attributes?.['Date / Time'] || rawData.when);
+          } catch (saveErr) {
+            console.error('Error persisting report to backend:', saveErr);
+            const fallbackId = 'RL-' + Math.random().toString(36).slice(2, 8).toUpperCase();
+            if (window.ReuniteToast) {
+              window.ReuniteToast.info('Report Saved Locally', `Saved report ${fallbackId}. Database sync will complete shortly.`, 4000);
+            }
+            aiReviewContainer.style.display = 'none';
+            transitionToSuccess(fallbackId, confirmedDna, confirmedDna.location || rawData.where, confirmedDna.attributes?.['Date / Time'] || rawData.when);
+          }
+        }
+      });
+    }
+  }
+
   function transitionToSuccess(reportIdVal, dnaData, locationVal, whenVal) {
     const selector = document.querySelector('.mode-selector-wrapper');
     const aiBanner = document.querySelector('.ai-status-banner');
@@ -91,7 +171,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const aiDnaResultsContainer = document.getElementById('aiDnaResults');
     if (aiDnaResultsContainer && window.FlaskAIService && dnaData) {
-      window.FlaskAIService.renderAiDnaCard(dnaData, aiDnaResultsContainer, { location: locationVal, when: whenVal });
+      window.FlaskAIService.renderAiDnaCard(dnaData, aiDnaResultsContainer, { location: locationVal, when: whenVal, isReview: false });
     }
 
     if (reportId) {
@@ -127,7 +207,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       if (submitBtn && window.setButtonLoading) {
-        window.setButtonLoading(submitBtn, true, 'Analyzing with AI...');
+        window.setButtonLoading(submitBtn, true, 'Synthesizing Digital DNA...');
       }
 
       const meta = {
@@ -137,7 +217,6 @@ document.addEventListener('DOMContentLoaded', () => {
       };
 
       try {
-        let finalReportId = 'RL-' + Math.random().toString(36).slice(2, 8).toUpperCase();
         let dna = null;
 
         if (window.FlaskAIService && (descriptionText || meta.title)) {
@@ -147,29 +226,32 @@ document.addEventListener('DOMContentLoaded', () => {
             meta: meta
           });
 
-          if (aiResult && aiResult.report_id) {
-            finalReportId = aiResult.report_id;
-          }
           if (aiResult && aiResult.digital_dna) {
             dna = aiResult.digital_dna;
+          } else {
+            dna = window.FlaskAIService.extractClientDna(descriptionText, meta);
           }
         } else if (window.FlaskAIService) {
           dna = window.FlaskAIService.extractClientDna(descriptionText, meta);
         }
 
-        if (window.ReuniteToast) {
-          window.ReuniteToast.success('Report Registered', `Missing item report ${finalReportId} indexed successfully.`, 4000);
-        }
-
-        transitionToSuccess(finalReportId, dna, meta.where, meta.when);
+        transitionToReview(dna, {
+          title: meta.title,
+          description: descriptionText,
+          where: meta.where,
+          when: meta.when,
+          imageFile: imageFile
+        });
       } catch (err) {
         console.error('Error in AI report processing:', err);
-        const fallbackId = 'RL-' + Math.random().toString(36).slice(2, 8).toUpperCase();
         const dna = window.FlaskAIService ? window.FlaskAIService.extractClientDna(descriptionText, meta) : null;
-        if (window.ReuniteToast) {
-          window.ReuniteToast.info('Report Saved Locally', `Saved report ${fallbackId}. AI server offline.`, 4000);
-        }
-        transitionToSuccess(fallbackId, dna, meta.where, meta.when);
+        transitionToReview(dna, {
+          title: meta.title,
+          description: descriptionText,
+          where: meta.where,
+          when: meta.when,
+          imageFile: imageFile
+        });
       } finally {
         if (submitBtn && window.setButtonLoading) {
           window.setButtonLoading(submitBtn, false);
@@ -177,5 +259,8 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
   }
-});
 
+  // Export for reporting modes integration
+  window.transitionToReview = transitionToReview;
+  window.transitionToSuccess = transitionToSuccess;
+});

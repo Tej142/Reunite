@@ -7,16 +7,20 @@ The **`Backend/`** folder connects the frontend to the MySQL database (`lost_con
 ## 📁 Directory Structure
 
 ```
-reunitel/Backend/
-├── config/
-│   └── config.php          # Database connection (lost_connect_db) & session initialization
-├── functions.php           # Security (AES-256), JSON response formatters, & access logging
-├── login.php               # Student login handler (supports College PIN, Email, & Phone)
-├── registration.php        # Student registration handler with password hashing
-├── logout.php              # Session clearing and redirect
-├── profile.php             # Profile data retrieval, user updates, and password changes
-├── reports.php             # Saves lost & found item reports directly into the database
-└── schema.sql              # MySQL database schema for lost_connect_db
+reunitel/
+├── media_vault/
+│   ├── lost_reports/       # User uploaded photos for lost item reports
+│   └── found_reports/      # User uploaded photos for found item reports
+├── Backend/
+│   ├── config/
+│   │   └── config.php      # Database connection (lost_connect_db) & session initialization
+│   ├── functions.php       # Security (AES-256), JSON response formatters, & access logging
+│   ├── login.php           # Student login handler (supports College PIN, Email, & Phone)
+│   ├── registration.php    # Student registration handler with password hashing
+│   ├── logout.php          # Session clearing and redirect
+│   ├── profile.php         # Profile data retrieval, user updates, and password changes
+│   ├── reports.php         # Saves lost & found item reports directly into the database
+│   └── schema.sql          # MySQL database schema for lost_connect_db
 ```
 
 ---

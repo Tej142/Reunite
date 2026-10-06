@@ -30,7 +30,8 @@ if ($action === 'create' || ($method === 'POST' && ($action === '' || $action ==
     // Handle Image Upload if provided
     $imageWebPath = null;
     if (isset($_FILES['image']) && $_FILES['image']['error'] === UPLOAD_ERR_OK) {
-        $uploadDir = __DIR__ . '/../AI_Module/temp_uploads/';
+        $subFolder = ($type === 'found') ? 'found_reports' : 'lost_reports';
+        $uploadDir = __DIR__ . '/../media_vault/' . $subFolder . '/';
         if (!is_dir($uploadDir)) {
             mkdir($uploadDir, 0777, true);
         }
@@ -38,40 +39,136 @@ if ($action === 'create' || ($method === 'POST' && ($action === '' || $action ==
         $filename = 'upload_' . time() . '_' . rand(1000, 9999) . '.' . $ext;
         $targetFile = $uploadDir . $filename;
         if (move_uploaded_file($_FILES['image']['tmp_name'], $targetFile)) {
-            $imageWebPath = 'AI_Module/temp_uploads/' . $filename;
+            $imageWebPath = 'media_vault/' . $subFolder . '/' . $filename;
         }
+    } elseif (!empty($data['image_path'])) {
+        $imageWebPath = trim($data['image_path']);
     }
 
     $insertedId = null;
+    $dnaId = null;
+
+    // Extract Digital DNA JSON if provided
+    $rawDna = $data['digital_dna'] ?? $data['dna'] ?? null;
+    $dnaJson = null;
+    if (!empty($rawDna)) {
+        if (is_array($rawDna)) {
+            $dnaJson = json_encode($rawDna, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        } elseif (is_string($rawDna)) {
+            $decoded = json_decode($rawDna, true);
+            if ($decoded !== null) {
+                $dnaJson = $rawDna;
+                if (($category === 'General' || empty($category)) && !empty($decoded['object_type'])) {
+                    $category = trim($decoded['object_type']);
+                }
+            }
+        }
+    }
+
     if ($conn) {
         $status = 'active';
+        
+        // Smart Temporal Resolution (Resolves "yesterday", "today morning", "2 days ago", etc.)
+        $temporalRes = resolveReportDateTime($dateLostFound, $description);
+        $reportDate = $temporalRes['date'];
+        $reportTime = $temporalRes['time'];
+
         if ($reportType === 'found') {
-            $stmt = $conn->prepare("INSERT INTO found_reports (user_id, category, description, location, image_path, status) VALUES (?, ?, ?, ?, ?, ?)");
+            $stmt = $conn->prepare("INSERT INTO found_reports (user_id, category, title, description, location, date_found, found_time, image_path, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
             if ($stmt) {
-                $stmt->bind_param("isssss", $userId, $category, $description, $location, $imageWebPath, $status);
+                $stmt->bind_param("issssssss", $userId, $category, $title, $description, $location, $reportDate, $reportTime, $imageWebPath, $status);
                 $stmt->execute();
                 $insertedId = $stmt->insert_id;
                 $stmt->close();
             }
         } else {
-            $stmt = $conn->prepare("INSERT INTO lost_reports (user_id, category, description, location, status) VALUES (?, ?, ?, ?, ?)");
+            $stmt = $conn->prepare("INSERT INTO lost_reports (user_id, category, title, description, location, date_lost, lost_time, image_path, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
             if ($stmt) {
-                $stmt->bind_param("issss", $userId, $category, $description, $location, $status);
+                $stmt->bind_param("issssssss", $userId, $category, $title, $description, $location, $reportDate, $reportTime, $imageWebPath, $status);
                 $stmt->execute();
                 $insertedId = $stmt->insert_id;
                 $stmt->close();
             }
         }
+
+        // Save Digital DNA to digital_dna table if present
+        if ($insertedId && !empty($dnaJson)) {
+            $upperType = strtoupper($reportType);
+            $stmtDna = $conn->prepare("INSERT INTO digital_dna (report_type, report_id, category, encrypted_dna) VALUES (?, ?, ?, ?)");
+            if ($stmtDna) {
+                $stmtDna->bind_param("siss", $upperType, $insertedId, $category, $dnaJson);
+                $stmtDna->execute();
+                $dnaId = $stmtDna->insert_id;
+                $stmtDna->close();
+            }
+        }
     }
 
-    logAccess($userId, "Report Created ($reportType)", "Category: $category");
+    $formattedReportId = ($reportType === 'found' ? 'RF-' : 'RL-') . str_pad($insertedId ?: rand(100, 999), 5, '0', STR_PAD_LEFT);
 
-    sendJsonResponse(true, ucfirst($reportType) . " report saved to database successfully!", [
+    // ChromaDB Multimodal Embedding & Storage
+    try {
+        $flaskUrl = (defined('FLASK_AI_URL') ? FLASK_AI_URL : 'http://127.0.0.1:5000') . '/report/embed-and-store';
+        $embedPayload = [
+            'report_id' => $formattedReportId,
+            'db_id' => $insertedId,
+            'report_type' => $reportType,
+            'category' => $category,
+            'title' => $title,
+            'description' => $description,
+            'location' => $location,
+            'date' => $reportDate ?? date('Y-m-d'),
+            'image_path' => $imageWebPath,
+            'digital_dna' => !empty($dnaJson) ? json_decode($dnaJson, true) : null
+        ];
+
+        $ch = curl_init($flaskUrl);
+        if ($ch) {
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_POST, true);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($embedPayload));
+            curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
+            curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 1);
+            curl_setopt($ch, CURLOPT_TIMEOUT, 4);
+            curl_exec($ch);
+            curl_close($ch);
+        }
+    } catch (Exception $embedErr) {
+        error_log("[ChromaDB] Embed error notice: " . $embedErr->getMessage());
+    }
+
+    // Trigger Real-Time Matchmaking & Instant Notification Dispatch
+    $realtimeMatches = [];
+    if ($insertedId && function_exists('runRealtimeMatchmaking')) {
+        try {
+            $realtimeMatches = runRealtimeMatchmaking(
+                $insertedId,
+                $reportType,
+                $category,
+                $title,
+                $description,
+                $location,
+                $imageWebPath,
+                $userId
+            );
+        } catch (Exception $mErr) {
+            error_log("[Matchmaking] Real-time engine notice: " . $mErr->getMessage());
+        }
+    }
+
+    logAccess($userId, "Report Created ($reportType)", "Category: $category, ID: $formattedReportId");
+
+    sendJsonResponse(true, ucfirst($reportType) . " report saved to database and ChromaDB successfully!", [
         'id' => $insertedId,
+        'report_id' => $formattedReportId,
+        'dna_id' => $dnaId,
         'report_type' => $reportType,
         'category' => $category,
+        'title' => $title,
         'location' => $location,
-        'image_url' => $imageWebPath
+        'image_url' => $imageWebPath,
+        'matches_found' => count($realtimeMatches),
+        'matches' => $realtimeMatches
     ]);
 }
 
@@ -83,7 +180,7 @@ if ($action === 'list' || $method === 'GET') {
 
     if ($conn) {
         if ($type === 'all' || $type === 'lost') {
-            $stmt = $conn->prepare("SELECT id, user_id, category, description, location, status, created_at, 'lost' as report_type FROM lost_reports ORDER BY id DESC LIMIT ?");
+            $stmt = $conn->prepare("SELECT id, user_id, category, title, description, location, image_path, status, created_at, 'lost' as report_type FROM lost_reports ORDER BY id DESC LIMIT ?");
             if ($stmt) {
                 $stmt->bind_param("i", $limit);
                 $stmt->execute();
@@ -96,7 +193,7 @@ if ($action === 'list' || $method === 'GET') {
         }
 
         if ($type === 'all' || $type === 'found') {
-            $stmt = $conn->prepare("SELECT id, user_id, category, description, location, image_path, status, created_at, 'found' as report_type FROM found_reports ORDER BY id DESC LIMIT ?");
+            $stmt = $conn->prepare("SELECT id, user_id, category, title, description, location, image_path, status, created_at, 'found' as report_type FROM found_reports ORDER BY id DESC LIMIT ?");
             if ($stmt) {
                 $stmt->bind_param("i", $limit);
                 $stmt->execute();
@@ -116,3 +213,4 @@ if ($action === 'list' || $method === 'GET') {
 }
 
 sendJsonResponse(false, "Invalid report action.", [], 400);
+

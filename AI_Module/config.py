@@ -6,15 +6,15 @@ from dotenv import load_dotenv
 from google import genai
 from mistralai import Mistral
 
-ENV_PATH = Path(__file__).parent / ".env"
-PARENT_ENV_PATH = Path(__file__).parent.parent / ".env"
+# Load DB & linking defaults from .env.example, then load API keys from .env
+ROOT_DIR = Path(__file__).resolve().parent.parent
+ROOT_EXAMPLE_PATH = ROOT_DIR / ".env.example"
+ROOT_ENV_PATH = ROOT_DIR / ".env"
 
-if ENV_PATH.exists():
-    load_dotenv(dotenv_path=ENV_PATH, override=True)
-elif PARENT_ENV_PATH.exists():
-    load_dotenv(dotenv_path=PARENT_ENV_PATH, override=True)
-else:
-    load_dotenv(override=True)
+if ROOT_EXAMPLE_PATH.exists():
+    load_dotenv(dotenv_path=ROOT_EXAMPLE_PATH, override=False)
+if ROOT_ENV_PATH.exists():
+    load_dotenv(dotenv_path=ROOT_ENV_PATH, override=True)
 
 # ==========================================
 # Gemini

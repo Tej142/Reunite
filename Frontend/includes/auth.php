@@ -11,6 +11,9 @@ function init_session() {
     if (session_status() === PHP_SESSION_NONE) {
         session_start();
     }
+    if (function_exists('enforceMaintenanceMode')) {
+        enforceMaintenanceMode();
+    }
 }
 
 function set_permanent_auth_cookie($userData) {
@@ -100,9 +103,11 @@ function is_logged_in() {
 
 function get_current_user_data() {
     init_session();
+    $userId = $_SESSION['user_id'] ?? ($_SESSION['user']['user_id'] ?? ($_SESSION['user']['id'] ?? null));
     if (function_exists('getCurrentUser')) {
         $user = getCurrentUser();
         if ($user) {
+            $user['user_id'] = $user['user_id'] ?? $userId;
             $user['name'] = $user['full_name'] ?? ($user['name'] ?? ($_SESSION['full_name'] ?? 'Student'));
             return $user;
         }
@@ -110,6 +115,7 @@ function get_current_user_data() {
     $name = $_SESSION['full_name'] ?? ($_SESSION['user']['name'] ?? 'Student');
     $bCode = $_SESSION['branch'] ?? ($_SESSION['user']['branch'] ?? 'cme');
     return [
+        'user_id' => $userId,
         'name' => $name,
         'full_name' => $name,
         'pin' => $_SESSION['pin'] ?? ($_SESSION['user']['pin'] ?? ''),

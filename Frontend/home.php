@@ -3,6 +3,49 @@ require_once __DIR__ . '/includes/auth.php';
 // Require user to be logged in to view the Homepage Dashboard
 require_login();
 $user = get_current_user_data();
+
+// Live statistics from MySQL
+$homeStats = [
+    'items_reunited' => 0,
+    'active_searches' => 0,
+    'reported_this_week' => 0,
+    'match_accuracy' => '99.4%'
+];
+
+if (isset($conn) && $conn) {
+    // Lost reports summary
+    $lRes = $conn->query("SELECT 
+        COUNT(*) as total,
+        SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as active,
+        SUM(CASE WHEN status IN ('matched', 'claimed', 'closed') THEN 1 ELSE 0 END) as reunited,
+        SUM(CASE WHEN created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY) THEN 1 ELSE 0 END) as week_count
+        FROM lost_reports");
+    if ($lRes && $lRow = $lRes->fetch_assoc()) {
+        $homeStats['active_searches'] += (int)($lRow['active'] ?? 0);
+        $homeStats['items_reunited'] += (int)($lRow['reunited'] ?? 0);
+        $homeStats['reported_this_week'] += (int)($lRow['week_count'] ?? 0);
+    }
+    // Found reports summary
+    $fRes = $conn->query("SELECT 
+        COUNT(*) as total,
+        SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as active,
+        SUM(CASE WHEN status IN ('matched', 'claimed', 'closed') THEN 1 ELSE 0 END) as reunited,
+        SUM(CASE WHEN created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY) THEN 1 ELSE 0 END) as week_count
+        FROM found_reports");
+    if ($fRes && $fRow = $fRes->fetch_assoc()) {
+        $homeStats['active_searches'] += (int)($fRow['active'] ?? 0);
+        $homeStats['items_reunited'] += (int)($fRow['reunited'] ?? 0);
+        $homeStats['reported_this_week'] += (int)($fRow['week_count'] ?? 0);
+    }
+    // Match accuracy calculation
+    $mRes = $conn->query("SELECT AVG(similarity_score) as avg_score, COUNT(*) as match_count FROM matches");
+    if ($mRes && $mRow = $mRes->fetch_assoc()) {
+        $avg = (float)($mRow['avg_score'] ?? 0);
+        if ($avg > 0) {
+            $homeStats['match_accuracy'] = round($avg <= 1 ? $avg * 100 : $avg, 1) . '%';
+        }
+    }
+}
 ?>
 <!doctype html>
 <html lang="en">
@@ -107,24 +150,24 @@ $user = get_current_user_data();
   <div class="stats-container">
     <div class="stats-grid">
       <div class="stat-item">
-        <div class="stat-val serif">1,847</div>
+        <div class="stat-val serif"><?php echo number_format($homeStats['items_reunited']); ?></div>
         <div class="stat-label">Items reunited</div>
-        <div class="stat-note">since launch &middot; March 2024</div>
+        <div class="stat-note">verified safe handoffs</div>
       </div>
       <div class="stat-item">
-        <div class="stat-val serif">143</div>
+        <div class="stat-val serif"><?php echo number_format($homeStats['active_searches']); ?></div>
         <div class="stat-label">Active searches</div>
         <div class="stat-note">open right now</div>
       </div>
       <div class="stat-item">
-        <div class="stat-val serif">38</div>
+        <div class="stat-val serif"><?php echo number_format($homeStats['reported_this_week']); ?></div>
         <div class="stat-label">Reported this week</div>
-        <div class="stat-note">across 14 campus hubs</div>
+        <div class="stat-note">across campus hubs</div>
       </div>
       <div class="stat-item">
-        <div class="stat-val serif">99.4%</div>
+        <div class="stat-val serif"><?php echo htmlspecialchars($homeStats['match_accuracy']); ?></div>
         <div class="stat-label">Match accuracy</div>
-        <div class="stat-note">powered by AI analysis</div>
+        <div class="stat-note">powered by CLIP &amp; DINOv2 AI</div>
       </div>
     </div>
   </div>
@@ -143,7 +186,7 @@ $user = get_current_user_data();
 
       <!-- Filter Pills -->
       <div class="filter-pills">
-        <button class="filter-pill active" data-filter="all">All items</button>
+        <button class="filter-pill active" data-filter="all">All lost items</button>
         <button class="filter-pill" data-filter="active">Active searches</button>
         <button class="filter-pill" data-filter="matched">Reunited</button>
       </div>

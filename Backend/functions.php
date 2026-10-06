@@ -30,6 +30,111 @@ function decryptData($data) {
 }
 
 /**
+ * Read maintenance settings from DB (with json file fallback).
+ * Returns array: [enabled, message, eta, support_email]
+ */
+function getMaintenanceSettings() {
+    global $conn;
+    static $cached = null;
+    if ($cached !== null) return $cached;
+
+    // Primary: DB
+    if ($conn) {
+        $q = @$conn->query("SELECT enabled, message, eta, support_email FROM maintenance_settings ORDER BY id DESC LIMIT 1");
+        if ($q && $row = $q->fetch_assoc()) {
+            $cached = [
+                'enabled'       => (bool)(int)$row['enabled'],
+                'message'       => $row['message'] ?: null,
+                'eta'           => $row['eta'] ?: null,
+                'support_email' => $row['support_email'] ?: null,
+            ];
+            return $cached;
+        }
+    }
+
+    // Fallback: json file
+    $file = __DIR__ . '/config/maintenance.json';
+    if (file_exists($file)) {
+        $data = @json_decode(file_get_contents($file), true);
+        if ($data) {
+            $cached = [
+                'enabled'       => !empty($data['maintenance_mode']),
+                'message'       => $data['message'] ?? null,
+                'eta'           => $data['eta'] ?? null,
+                'support_email' => $data['support_email'] ?? null,
+            ];
+            return $cached;
+        }
+    }
+
+    $cached = ['enabled' => false, 'message' => null, 'eta' => null, 'support_email' => null];
+    return $cached;
+}
+
+/**
+ * Check if platform is currently in Maintenance Mode
+ */
+function isMaintenanceModeActive() {
+    $s = getMaintenanceSettings();
+    return $s['enabled'];
+}
+
+/**
+ * Enforce maintenance mode on every incoming request.
+ * - Admins pass through.
+ * - API callers get JSON 503 + Retry-After.
+ * - Page requests get redirected to maintenance.php.
+ */
+function enforceMaintenanceMode() {
+    if (!isMaintenanceModeActive()) return;
+
+    // Allow active admin sessions
+    if (!empty($_SESSION['reunite_admin_auth']) && $_SESSION['reunite_admin_auth'] === true) {
+        return;
+    }
+
+    // Allow admin login route and maintenance page itself
+    $script = basename($_SERVER['SCRIPT_NAME'] ?? ($_SERVER['PHP_SELF'] ?? ''));
+    $allowedScripts = ['maintenance.php', 'admin.php', 'admin_api.php', 'maintenance-status.php'];
+    if (in_array($script, $allowedScripts)) return;
+
+    // Compute Retry-After value
+    $settings    = getMaintenanceSettings();
+    $retryAfter  = 30;
+    if (!empty($settings['eta'])) {
+        $diff = strtotime($settings['eta']) - time();
+        if ($diff > 0) $retryAfter = min($diff, 3600);
+    }
+
+    // JSON API callers
+    $isJson = function_exists('isApiRequest') && isApiRequest();
+    $accept  = strtolower($_SERVER['HTTP_ACCEPT'] ?? '');
+    $ct      = strtolower($_SERVER['CONTENT_TYPE'] ?? '');
+    if ($isJson || str_contains($accept, 'application/json') || str_contains($ct, 'application/json')) {
+        http_response_code(503);
+        header('Content-Type: application/json; charset=utf-8');
+        header('Retry-After: ' . $retryAfter);
+        echo json_encode([
+            'success'          => false,
+            'maintenance_mode' => true,
+            'message'          => $settings['message'] ?? 'Platform is undergoing scheduled maintenance. Please try again shortly.',
+            'eta'              => $settings['eta'],
+            'support_email'    => $settings['support_email'],
+        ]);
+        exit;
+    }
+
+    // Page request — redirect to maintenance page
+    $uri = $_SERVER['REQUEST_URI'] ?? '';
+    $inFrontend = str_contains($uri, '/Frontend/') || file_exists('maintenance.php');
+    $target = $inFrontend ? 'maintenance.php' : 'Frontend/maintenance.php';
+    header('HTTP/1.1 503 Service Unavailable');
+    header('Retry-After: ' . $retryAfter);
+    header('Location: ' . $target);
+    exit;
+}
+
+/**
  * Clean and sanitize user inputs
  */
 function sanitizeInput($data) {
@@ -184,10 +289,14 @@ function logAccess($userId, $action, $details = '') {
 
     try {
         $ip = $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1';
-        $device = substr($_SERVER['HTTP_USER_AGENT'] ?? 'Unknown', 0, 255);
+        $uId = (!empty($userId) && (int)$userId > 0) ? (int)$userId : null;
+        $device = substr($_SERVER['HTTP_USER_AGENT'] ?? '', 0, 80);
+        $finalDetails = !empty($details) ? (substr($details, 0, 180) . ($device ? ' [' . $device . ']' : '')) : ($device ?: 'System');
+        $finalDetails = substr($finalDetails, 0, 255);
+
         $stmt = $conn->prepare("INSERT INTO access_logs (user_id, action, ip_address, device_info) VALUES (?, ?, ?, ?)");
         if ($stmt) {
-            $stmt->bind_param("isss", $userId, $action, $ip, $device);
+            $stmt->bind_param("isss", $uId, $action, $ip, $finalDetails);
             $stmt->execute();
             $stmt->close();
         }
@@ -664,4 +773,235 @@ function consumePasswordResetToken($token, $newPassword) {
 
     return ['success' => false, 'message' => 'Failed to update password in database.'];
 }
+
+/**
+ * Executes Vector + Hybrid Real-Time Matchmaking and generates user notifications
+ */
+function runRealtimeMatchmaking($insertedId, $reportType, $category, $title, $description, $location, $imageWebPath, $userId) {
+    global $conn;
+    if (!$conn || !$insertedId) return [];
+
+    $createdMatches = [];
+    $targetType = ($reportType === 'found') ? 'lost' : 'found';
+    $targetTable = ($reportType === 'found') ? 'lost_reports' : 'found_reports';
+
+    // 1. Query Vector Matches from Flask AI Engine
+    $vectorMatches = [];
+    try {
+        $flaskUrl = (defined('FLASK_AI_URL') ? FLASK_AI_URL : 'http://127.0.0.1:5000') . '/report/search-matches';
+        $searchPayload = [
+            'text' => "$category. $title. $description. $location.",
+            'report_id' => ($reportType === 'found' ? 'RF-' : 'RL-') . str_pad($insertedId, 5, '0', STR_PAD_LEFT),
+            'report_type' => $targetType,
+            'image_path' => $imageWebPath,
+            'top_k' => 10
+        ];
+        $ch = curl_init($flaskUrl);
+        if ($ch) {
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_POST, true);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($searchPayload));
+            curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
+            curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 2);
+            curl_setopt($ch, CURLOPT_TIMEOUT, 5);
+            $res = curl_exec($ch);
+            curl_close($ch);
+            if ($res) {
+                $decoded = json_decode($res, true);
+                if (!empty($decoded['matches'])) {
+                    $vectorMatches = $decoded['matches'];
+                }
+            }
+        }
+    } catch (Exception $e) {
+        error_log("[Matchmaking] Vector search notice: " . $e->getMessage());
+    }
+
+    $matchedDbIds = [];
+
+    // Process Vector Matches
+    foreach ($vectorMatches as $vm) {
+        $meta = $vm['metadata'] ?? [];
+        $matchedId = (int)($meta['db_id'] ?? 0);
+        $score = (float)($vm['match_percentage'] ?? 0);
+
+        if ($matchedId > 0 && $score >= 35.0) {
+            $matchedDbIds[$matchedId] = $score;
+        }
+    }
+
+    // 2. Hybrid / Fallback DB Similarity Matcher
+    $queryOpposite = "SELECT id, user_id, title, description, category, location FROM `$targetTable` WHERE status = 'active' AND id != ?";
+    $stmtOpp = $conn->prepare($queryOpposite);
+    if ($stmtOpp) {
+        $stmtOpp->bind_param("i", $insertedId);
+        $stmtOpp->execute();
+        $resOpp = $stmtOpp->get_result();
+        
+        $tokens1 = array_unique(array_filter(preg_split('/[\s,\.\-_]+/', strtolower("$title $description $category $location"))));
+        
+        while ($opp = $resOpp->fetch_assoc()) {
+            $oppId = (int)$opp['id'];
+            if (isset($matchedDbIds[$oppId])) continue; // Already matched by vector engine
+
+            $oppTokens = array_unique(array_filter(preg_split('/[\s,\.\-_]+/', strtolower("{$opp['title']} {$opp['description']} {$opp['category']} {$opp['location']}"))));
+            $common = array_intersect($tokens1, $oppTokens);
+            
+            // Remove common stop words
+            $stopWords = ['the','a','an','in','on','at','near','by','is','was','of','for','and','or','with','i','my','to','from'];
+            $meaningfulCommon = array_diff($common, $stopWords);
+
+            $score = 0;
+            if (strcasecmp($category, $opp['category']) === 0 && !empty($category) && $category !== 'General') {
+                $score += 40;
+            }
+            if (!empty($meaningfulCommon)) {
+                $score += min(count($meaningfulCommon) * 20, 50);
+            }
+            if (!empty($location) && !empty($opp['location']) && (stripos($location, $opp['location']) !== false || stripos($opp['location'], $location) !== false)) {
+                $score += 15;
+            }
+
+            if ($score >= 45) {
+                $matchedDbIds[$oppId] = min($score, 98.0);
+            }
+        }
+        $stmtOpp->close();
+    }
+
+    // 3. Insert into `matches` and trigger `notifications`
+    foreach ($matchedDbIds as $oppId => $score) {
+        $lostId = ($reportType === 'found') ? $oppId : $insertedId;
+        $foundId = ($reportType === 'found') ? $insertedId : $oppId;
+
+        // Check if match already exists
+        $checkStmt = $conn->prepare("SELECT id FROM matches WHERE lost_report_id = ? AND found_report_id = ?");
+        if ($checkStmt) {
+            $checkStmt->bind_param("ii", $lostId, $foundId);
+            $checkStmt->execute();
+            $checkRes = $checkStmt->get_result();
+            if ($checkRes->num_rows > 0) {
+                $checkStmt->close();
+                continue; // Already recorded
+            }
+            $checkStmt->close();
+        }
+
+        // Insert into matches table
+        $insMatch = $conn->prepare("INSERT INTO matches (lost_report_id, found_report_id, similarity_score, status, created_at) VALUES (?, ?, ?, 'pending', NOW())");
+        $matchId = null;
+        if ($insMatch) {
+            $scoreDecimal = number_format($score, 2, '.', '');
+            $insMatch->bind_param("iid", $lostId, $foundId, $scoreDecimal);
+            $insMatch->execute();
+            $matchId = $insMatch->insert_id;
+            $insMatch->close();
+        }
+
+        // Fetch details of both reports to construct personalized notifications
+        $lostInfo = $conn->query("SELECT user_id, title FROM lost_reports WHERE id = $lostId")->fetch_assoc();
+        $foundInfo = $conn->query("SELECT user_id, title FROM found_reports WHERE id = $foundId")->fetch_assoc();
+
+        if ($lostInfo && $foundInfo) {
+            $lostUserId = (int)$lostInfo['user_id'];
+            $foundUserId = (int)$foundInfo['user_id'];
+            $emojiRegex = '/[\x{1F300}-\x{1FAFF}\x{1F000}-\x{1F2FF}\x{2300}-\x{23FF}\x{2600}-\x{27BF}\x{2B00}-\x{2BFF}\x{FE00}-\x{FE0F}\x{200D}]/u';
+            $lostTitle = trim(preg_replace('/\s+/', ' ', preg_replace($emojiRegex, '', $lostInfo['title'] ?? '')));
+            $foundTitle = trim(preg_replace('/\s+/', ' ', preg_replace($emojiRegex, '', $foundInfo['title'] ?? '')));
+            $scoreDisplay = round($score) . '%';
+
+            // Notification for Lost Report Owner
+            if ($lostUserId > 0) {
+                $nTitle = "Potential Match: " . substr($foundTitle, 0, 40);
+                $nMsg = "A found item '" . $foundTitle . "' matches your lost report '" . $lostTitle . "' with {$scoreDisplay} similarity.";
+                $nLink = "item.php?match_id=" . ($matchId ?: 1);
+                $nStmt = $conn->prepare("INSERT INTO notifications (user_id, title, report_type, report_id, type, message, link, is_read, created_at) VALUES (?, ?, 'LOST', ?, 'match', ?, ?, 0, NOW())");
+                if ($nStmt) {
+                    $nStmt->bind_param("isiss", $lostUserId, $nTitle, $lostId, $nMsg, $nLink);
+                    $nStmt->execute();
+                    $nStmt->close();
+                }
+            }
+
+            // Notification for Found Report Owner (if different user)
+            if ($foundUserId > 0 && $foundUserId !== $lostUserId) {
+                $nTitle = "Potential Match: " . substr($lostTitle, 0, 40);
+                $nMsg = "Your reported found item '" . $foundTitle . "' has a {$scoreDisplay} match with a lost item ('" . $lostTitle . "').";
+                $nLink = "item.php?match_id=" . ($matchId ?: 1);
+                $nStmt = $conn->prepare("INSERT INTO notifications (user_id, title, report_type, report_id, type, message, link, is_read, created_at) VALUES (?, ?, 'FOUND', ?, 'match', ?, ?, 0, NOW())");
+                if ($nStmt) {
+                    $nStmt->bind_param("isiss", $foundUserId, $nTitle, $foundId, $nMsg, $nLink);
+                    $nStmt->execute();
+                    $nStmt->close();
+                }
+            }
+
+            $createdMatches[] = [
+                'match_id' => $matchId,
+                'lost_id' => $lostId,
+                'found_id' => $foundId,
+                'similarity_score' => $score,
+                'lost_title' => $lostTitle,
+                'found_title' => $foundTitle
+            ];
+        }
+    }
+
+    return $createdMatches;
+}
+
+/**
+ * Smart Temporal Resolver for Reports
+ * Parses relative expressions ("yesterday", "today", "2 days ago") into exact server dates and times
+ */
+function resolveReportDateTime($dateInput = '', $descInput = '') {
+    $now = time();
+    $resolvedDate = date('Y-m-d', $now);
+    $resolvedTime = null;
+
+    $combined = strtolower(trim("$dateInput $descInput"));
+
+    // 1. Day before yesterday / 2 days ago
+    if (str_contains($combined, 'day before yesterday') || str_contains($combined, 'day before yesturday') || preg_match('/\b2\s*days?\s*ago\b/', $combined)) {
+        $resolvedDate = date('Y-m-d', strtotime('-2 days', $now));
+    } elseif (preg_match('/\b(\d+)\s*days?\s*ago\b/', $combined, $m)) {
+        $days = (int)$m[1];
+        $resolvedDate = date('Y-m-d', strtotime("-$days days", $now));
+    } elseif (str_contains($combined, 'yesterday') || str_contains($combined, 'yesturday') || str_contains($combined, 'last night')) {
+        $resolvedDate = date('Y-m-d', strtotime('-1 day', $now));
+        if (str_contains($combined, 'night')) $resolvedTime = '21:00:00';
+    } elseif (str_contains($combined, 'today') || str_contains($combined, 'this morning') || str_contains($combined, 'this afternoon')) {
+        $resolvedDate = date('Y-m-d', $now);
+        if (str_contains($combined, 'morning')) $resolvedTime = '09:30:00';
+        elseif (str_contains($combined, 'afternoon')) $resolvedTime = '14:00:00';
+    } elseif (preg_match('/\b(\d{4})-(\d{1,2})-(\d{1,2})\b/', $combined, $m)) {
+        $resolvedDate = sprintf('%04d-%02d-%02d', $m[1], $m[2], $m[3]);
+    } elseif (preg_match('#\b(\d{1,2})[/\-](\d{1,2})[/\-](\d{4})\b#', $combined, $m)) {
+        $resolvedDate = sprintf('%04d-%02d-%02d', $m[3], $m[2], $m[1]);
+    } elseif (!empty($dateInput) && ($parsed = strtotime($dateInput))) {
+        $resolvedDate = date('Y-m-d', $parsed);
+    }
+
+    // Time parsing (e.g. 3:30 pm, 15:00, 4 pm)
+    if (preg_match('/\b(?:at|around|@)?\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b/i', $combined, $tm)) {
+        $hr = (int)$tm[1];
+        $min = !empty($tm[2]) ? (int)$tm[2] : 0;
+        $ampm = strtolower($tm[3]);
+        if ($ampm === 'pm' && $hr < 12) $hr += 12;
+        elseif ($ampm === 'am' && $hr == 12) $hr = 0;
+        $resolvedTime = sprintf('%02d:%02d:00', $hr, $min);
+    } elseif (preg_match('/\b(?:at|around|@)?\s*([01]?\d|2[0-3]):([0-5]\d)(?::([0-5]\d))?\b/', $combined, $tm)) {
+        $hr = (int)$tm[1];
+        $min = (int)$tm[2];
+        $sec = !empty($tm[3]) ? (int)$tm[3] : 0;
+        $resolvedTime = sprintf('%02d:%02d:%02d', $hr, $min, $sec);
+    }
+
+    return [
+        'date' => $resolvedDate,
+        'time' => $resolvedTime
+    ];
+}
+
+
 

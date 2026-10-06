@@ -366,7 +366,7 @@ input.valid {
 }
 
 .forgot-password-link {
-  font-size: 16px;
+  font-size: 12px;
   font-weight: 500;
   color: var(--accent);
   text-decoration: none;

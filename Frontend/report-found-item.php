@@ -94,7 +94,7 @@
       <div class="ai-status-left">
         <div class="ai-pulse-dot"></div>
         <div class="ai-status-text" id="aiStatusText">
-          ⚡ <strong>AI Vision & Text Parser:</strong> Upload photos & describe your item directly. AI will parse details and index tags automatically.
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px; margin-right:4px;"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> <strong>AI Vision & Text Parser:</strong> Upload photos & describe your item directly. AI will parse details and index tags automatically.
         </div>
       </div>
     </div>
@@ -177,7 +177,7 @@
 
         <div class="form-footer">
           <p class="footer-note">By submitting, this item is indexed in active searches. We will alert you immediately if any lost report matches it.</p>
-          <button type="submit" class="btn-submit">⚡ Analyze with AI &amp; Review Details &rarr;</button>
+          <button type="submit" class="btn-submit btn-ai-analyze">Process &amp; Extract Features</button>
         </div>
       </form>
     </div>
@@ -202,27 +202,27 @@
           
           <div class="option-tiles-grid">
             <div class="option-tile" data-value="electronics">
-              <div class="option-tile-icon">📱</div>
+              <div class="option-tile-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="14" height="20" x="5" y="2" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg></div>
               <div class="option-tile-label">Electronics</div>
             </div>
             <div class="option-tile" data-value="keys">
-              <div class="option-tile-icon">🔑</div>
+              <div class="option-tile-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m21 2-2 2m-1.5 1.5L13 10l-4-4-5 5a5.5 5.5 0 1 0 7.78 7.78l5-5-2-2 2.5-2.5 2 2 2-2z"/><circle cx="7.5" cy="16.5" r=".5" fill="currentColor"/></svg></div>
               <div class="option-tile-label">Keys</div>
             </div>
             <div class="option-tile" data-value="wallets">
-              <div class="option-tile-icon">💼</div>
+              <div class="option-tile-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/></svg></div>
               <div class="option-tile-label">Wallets & Bags</div>
             </div>
             <div class="option-tile" data-value="clothing">
-              <div class="option-tile-icon">🧥</div>
+              <div class="option-tile-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.38 3.46 16 2a4 4 0 0 1-8 0L3.62 3.46a2 2 0 0 0-1.34 2.23l.58 3.47a1 1 0 0 0 .99.84H6v10c0 1.1.9 2 2 2h8a2 2 0 0 0 2-2V10h2.15a1 1 0 0 0 .99-.84l.58-3.47a2 2 0 0 0-1.34-2.23z"/></svg></div>
               <div class="option-tile-label">Clothing</div>
             </div>
             <div class="option-tile" data-value="documents">
-              <div class="option-tile-icon">📄</div>
+              <div class="option-tile-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg></div>
               <div class="option-tile-label">Documents</div>
             </div>
             <div class="option-tile" data-value="other">
-              <div class="option-tile-icon">📦</div>
+              <div class="option-tile-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m7.5 4.27 9 5.15"/><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg></div>
               <div class="option-tile-label">Other Item</div>
             </div>
           </div>
@@ -289,10 +289,10 @@
         <div class="chat-card">
           <div class="chat-header">
             <div class="chat-avatar-title">
-              <div class="chat-avatar">🤖</div>
+              <div class="chat-avatar"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="18" height="12" x="3" y="8" rx="2"/><path d="M12 2v6"/><circle cx="8" cy="14" r="1" fill="currentColor"/><circle cx="16" cy="14" r="1" fill="currentColor"/></svg></div>
               <div>
                 <div class="chat-name">Reunite AI Voice &amp; Chat Copilot</div>
-                <div class="chat-sub" id="talkAiSubStatus">⚡ Powered by Google Gemini Live Voice WebSocket</div>
+                <div class="chat-sub" id="talkAiSubStatus">Powered by Google Gemini Live Voice</div>
               </div>
             </div>
             <div class="voice-header-badge" id="voiceLiveBadge">
@@ -318,7 +318,7 @@
 
           <div class="chat-messages" id="chatMessages">
             <div class="chat-bubble ai">
-              Hello! 👋 I'm your AI Reporting Copilot. Click <strong>Start Voice Mode</strong> to describe the found item naturally by voice, or type in the box below.
+              Hello! I'm your AI Reporting Copilot. Click <strong>Start Voice Mode</strong> to describe the found item naturally by voice, or type in the box below.
             </div>
           </div>
 
@@ -355,14 +355,14 @@
 
           <div class="draft-fields-list" id="dynamicDraftContainer">
             <div class="draft-empty-state" id="draftEmptyState">
-              <div class="draft-empty-icon">✨</div>
+              <div class="draft-empty-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"/></svg></div>
               <div class="draft-empty-text"><strong>Live Attributes Extractor</strong></div>
               <div class="draft-empty-sub">Speak or type your conversation. The AI will dynamically extract and display all item attributes, location, and marks here in real time.</div>
             </div>
           </div>
 
           <div class="draft-footer">
-            <button type="button" class="btn-draft-submit" id="btnDraftSubmit" disabled>Submit Report</button>
+            <button type="button" class="btn-draft-submit btn-ai-analyze" id="btnDraftSubmit" disabled>Process &amp; Extract Features</button>
           </div>
         </div>
 
@@ -375,11 +375,11 @@
     <div class="ai-review-container" id="aiReviewContainer" style="display:none;">
       <div class="ai-review-step-badge">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-        Step 2 of 2: Review &amp; Edit Details
+        Step 2: Inspect Neural Digital DNA &amp; Confirm Features
       </div>
-      <h2 class="serif ai-review-title">Verify &amp; Fine-Tune Extracted Information</h2>
+      <h2 class="serif ai-review-title">Verify &amp; Confirm Extracted Feature Vectors</h2>
       <p class="ai-review-subtitle">
-        Our AI analyzed the found item description and photo. <strong>You can edit any field below or add/remove tags</strong> to ensure all details are 100% accurate before final submission.
+        Our neural engine separated the found item report into <strong>Visible Public Features</strong> and <strong>Protected Private Verification Keys</strong>. You can fine-tune any field before launching the neural matching engine.
       </p>
       <div id="aiReviewFormWrap"></div>
     </div>

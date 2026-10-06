@@ -5,3 +5,8 @@ __pycache__/
 *.env
 Backend/.env
 test.py
+chroma_data/
+models/
+AI_Module/chroma_data/
+AI_Module/temp_uploads/
+uploads/

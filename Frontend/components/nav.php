@@ -12,15 +12,14 @@ $is_home = ($current_page === 'home.php');
 $is_profile = ($current_page === 'profile.php');
 ?>
 <script>
-  // AI Backend Service URL (Render cloud backend in production, local fallback in dev)
+  // Local Flask AI Server Endpoint
   (function() {
-    var isLocal = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
-    window.FLASK_BACKEND_URL = window.FLASK_BACKEND_URL || (isLocal ? 'http://127.0.0.1:5000' : 'https://reunite-ai-backend.onrender.com');
-    console.log('⚡ [Reunite] Connected Flask Backend URL:', window.FLASK_BACKEND_URL);
+    window.FLASK_BACKEND_URL = 'http://127.0.0.1:5000';
+    console.log('[Reunite] Connected Local Flask Backend URL:', window.FLASK_BACKEND_URL);
   })();
 </script>
 <script src="js/microinteractions.js"></script>
-<nav>
+<nav class="reunite-main-nav">
   <div class="nav-inner">
     <a href="<?php echo $logged_in ? 'home.php' : 'index.php'; ?>" class="brand">
       <svg width="28" height="28" viewBox="0 0 28 28" fill="none" aria-hidden="true">
@@ -60,6 +59,27 @@ $is_profile = ($current_page === 'profile.php');
           </svg>
         </button>
 
+<?php
+// Query dynamic notifications for the logged in user
+$userNotifs = [];
+$unreadNotifCount = 0;
+if ($logged_in && isset($conn) && $conn) {
+    $currUid = $user['user_id'] ?? ($_SESSION['user_id'] ?? 0);
+    $nStmt = $conn->prepare("SELECT notification_id, title, message, link, is_read, created_at, type FROM notifications WHERE user_id = ? OR user_id = 0 ORDER BY created_at DESC LIMIT 8");
+    if ($nStmt) {
+        $nStmt->bind_param("i", $currUid);
+        $nStmt->execute();
+        $nRes = $nStmt->get_result();
+        while ($nRow = $nRes->fetch_assoc()) {
+            $userNotifs[] = $nRow;
+            if (empty($nRow['is_read'])) {
+                $unreadNotifCount++;
+            }
+        }
+        $nStmt->close();
+    }
+}
+?>
         <?php if ($logged_in): ?>
           <!-- Notification Bell with Dropdown -->
           <div class="nav-notif-wrap">
@@ -68,30 +88,52 @@ $is_profile = ($current_page === 'profile.php');
                 <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
                 <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
               </svg>
-              <span class="notif-badge-dot"></span>
+              <?php if ($unreadNotifCount > 0): ?>
+                <span class="notif-badge-dot" id="navNotifBadgeDot"></span>
+              <?php else: ?>
+                <span class="notif-badge-dot" id="navNotifBadgeDot" style="display:none;"></span>
+              <?php endif; ?>
             </button>
             <div class="nav-notif-dropdown" id="navNotifDropdown">
-              <div class="notif-dropdown-header">
-                <span>Notifications</span>
-                <span class="notif-count-badge">2 New</span>
+              <div class="notif-dropdown-header" style="display:flex;justify-content:space-between;align-items:center;">
+                <div style="display:flex;align-items:center;gap:0.5rem;">
+                  <span style="font-weight:700;">Notifications</span>
+                  <span class="notif-count-badge" id="navNotifCountBadge"><?php echo $unreadNotifCount > 0 ? (int)$unreadNotifCount . ' New' : 'All caught up'; ?></span>
+                </div>
+                <button type="button" id="navNotifMarkAllBtn" style="background:none;border:none;color:var(--brand);font-size:0.75rem;font-weight:600;cursor:pointer;display:<?php echo $unreadNotifCount > 0 ? 'inline-block' : 'none'; ?>;">Mark all read</button>
               </div>
-              <div class="notif-dropdown-list">
-                <a href="search.php" class="notif-dropdown-item unread">
-                  <span class="notif-item-icon">✨</span>
-                  <div class="notif-item-info">
-                    <p class="notif-item-title">New AI Match Detected!</p>
-                    <p class="notif-item-desc">A Blue Leather Wallet was reported in Central Library.</p>
-                    <span class="notif-item-time">10m ago</span>
+              <div class="notif-dropdown-list" id="navNotifList">
+                <?php if (!empty($userNotifs)): ?>
+                  <?php foreach ($userNotifs as $notif): 
+                    $isUnread = empty($notif['is_read']);
+                    $iconSvg = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>';
+                    if (stripos($notif['title'], 'match') !== false) {
+                        $iconSvg = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>';
+                    } elseif (stripos($notif['title'], 'claim') !== false) {
+                        $iconSvg = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>';
+                    } elseif (stripos($notif['title'], 'found') !== false) {
+                        $iconSvg = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>';
+                    }
+                    $timeStr = !empty($notif['created_at']) ? date('M d, H:i', strtotime($notif['created_at'])) : 'Recently';
+                    $linkUrl = !empty($notif['link']) ? htmlspecialchars($notif['link']) : 'search.php';
+                  ?>
+                    <a href="<?php echo $linkUrl; ?>" class="notif-dropdown-item <?php echo $isUnread ? 'unread' : ''; ?>" data-notif-id="<?php echo $notif['notification_id']; ?>">
+                      <span class="notif-item-icon"><?php echo $iconSvg; ?></span>
+                      <div class="notif-item-info">
+                        <p class="notif-item-title"><?php echo htmlspecialchars($notif['title'] ?? 'Notification'); ?></p>
+                        <p class="notif-item-desc"><?php echo htmlspecialchars($notif['message'] ?? ''); ?></p>
+                        <span class="notif-item-time"><?php echo $timeStr; ?></span>
+                      </div>
+                    </a>
+                  <?php endforeach; ?>
+                <?php else: ?>
+                  <div class="notif-dropdown-empty" style="padding: 1.5rem 1rem; text-align: center; color: var(--muted); font-size: 0.8125rem;">
+                    <div style="display: flex; justify-content: center; margin-bottom: 0.35rem; color: var(--muted-2);">
+                      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
+                    </div>
+                    No notifications yet
                   </div>
-                </a>
-                <a href="search.php" class="notif-dropdown-item unread">
-                  <span class="notif-item-icon">📱</span>
-                  <div class="notif-item-info">
-                    <p class="notif-item-title">Item Verified in Directory</p>
-                    <p class="notif-item-desc">Your report for iPhone 13 has been indexed.</p>
-                    <span class="notif-item-time">1h ago</span>
-                  </div>
-                </a>
+                <?php endif; ?>
               </div>
             </div>
           </div>
@@ -249,25 +291,9 @@ $is_profile = ($current_page === 'profile.php');
             });
           });
         }
-
-        // Notification popover
-        if (notifBtn && notifDropdown) {
-          notifBtn.addEventListener('click', function(e) {
-            e.stopPropagation();
-            if (drawer) {
-              drawer.classList.remove('open');
-              if (btn) btn.classList.remove('active');
-            }
-            notifDropdown.classList.toggle('open');
-          });
-          document.addEventListener('click', function(e) {
-            if (!notifDropdown.contains(e.target) && !notifBtn.contains(e.target)) {
-              notifDropdown.classList.remove('open');
-            }
-          });
-        }
       })();
     </script>
+    <script src="js/notifications.js"></script>
   <?php endif; ?>
 
   <script>

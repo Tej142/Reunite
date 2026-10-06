@@ -1,0 +1,463 @@
+/* ==========================================================================
+   Reunite Professional Footer Styling with Support Hub & Contact
+   ========================================================================== */
+
+.site-footer {
+  background: var(--bg-alt, #161311);
+  border-top: 1px solid var(--border, rgba(255, 255, 255, 0.08));
+  color: var(--ink, #F7F3EE);
+  padding: 68px 24px 36px;
+  position: relative;
+  overflow: hidden;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  margin-top: auto;
+}
+
+.site-footer::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 75%;
+  height: 1.5px;
+  background: linear-gradient(90deg, transparent 0%, var(--accent, #E06D38) 50%, transparent 100%);
+  opacity: 0.7;
+}
+
+.footer-container {
+  max-width: 1240px;
+  margin: 0 auto;
+}
+
+/* ── Top Grid (Brand + 3 Navigation Columns + Support Hub) ───────── */
+.footer-top-grid {
+  display: grid;
+  grid-template-columns: 1.8fr 1.1fr 1.1fr 1.4fr;
+  gap: 40px;
+  margin-bottom: 52px;
+}
+
+/* Brand Column */
+.footer-brand-col {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.footer-brand-logo {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  text-decoration: none;
+  color: var(--ink, #F7F3EE);
+}
+
+.footer-brand-logo svg {
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  flex-shrink: 0;
+}
+
+.footer-brand-title {
+  font-family: 'Fraunces', serif;
+  font-size: 1.6rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--ink, #F7F3EE);
+}
+
+.footer-tagline {
+  font-size: 0.9rem;
+  line-height: 1.6;
+  color: var(--muted, #A89D94);
+  max-width: 320px;
+  margin: 0;
+}
+
+/* Status Pill */
+.footer-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  background: rgba(16, 185, 129, 0.08);
+  border: 1px solid rgba(16, 185, 129, 0.22);
+  border-radius: 999px;
+  color: #10B981;
+  font-size: 0.78rem;
+  font-weight: 600;
+  width: fit-content;
+  letter-spacing: 0.2px;
+}
+
+.status-dot-pulse {
+  width: 8px;
+  height: 8px;
+  background: #10B981;
+  border-radius: 50%;
+  box-shadow: 0 0 8px #10B981;
+  animation: footerDotPulse 2s infinite ease-in-out;
+}
+
+@keyframes footerDotPulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(0.85); }
+}
+
+/* Links Columns */
+.footer-col-title {
+  font-family: 'Inter', sans-serif;
+  font-size: 0.82rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink, #F7F3EE);
+  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.footer-nav-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.footer-nav-list a {
+  color: var(--muted, #A89D94);
+  font-size: 0.9rem;
+  text-decoration: none;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.footer-nav-list a:hover {
+  color: var(--accent, #E06D38);
+  transform: translateX(3px);
+}
+
+.footer-nav-badge {
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(224, 109, 56, 0.15);
+  color: var(--accent, #E06D38);
+  border: 1px solid rgba(224, 109, 56, 0.3);
+  text-transform: uppercase;
+}
+
+/* ── Direct Support & Contact Hub Column ─────────────────────────── */
+.footer-support-card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.contact-item-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  text-decoration: none;
+  color: var(--ink, #F7F3EE);
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.06));
+  border-radius: 12px;
+  transition: all 0.25s ease;
+}
+
+.contact-item-row:hover {
+  background: rgba(224, 109, 56, 0.1);
+  border-color: rgba(224, 109, 56, 0.35);
+  transform: translateY(-2px);
+}
+
+.contact-icon-box {
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  background: rgba(224, 109, 56, 0.15);
+  color: var(--accent, #E06D38);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.95rem;
+  flex-shrink: 0;
+}
+
+.contact-text-wrap {
+  display: flex;
+  flex-direction: column;
+}
+
+.contact-label {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted, #A89D94);
+  font-weight: 600;
+}
+
+.contact-val {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--ink, #F7F3EE);
+}
+
+/* Support Action Button */
+.btn-footer-support {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  padding: 12px 18px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #E06D38 0%, #C45524 100%);
+  color: #FFFFFF !important;
+  font-size: 0.92rem;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  box-shadow: 0 4px 18px rgba(224, 109, 56, 0.35);
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  text-decoration: none;
+  width: 100%;
+}
+
+.btn-footer-support:hover {
+  background: linear-gradient(135deg, #EE7A45 0%, #D85C29 100%);
+  box-shadow: 0 6px 24px rgba(224, 109, 56, 0.5);
+  transform: translateY(-2px);
+}
+
+.btn-footer-support svg {
+  flex-shrink: 0;
+}
+
+/* ── Divider ─────────────────────────────────────────────────────── */
+.footer-divider {
+  height: 1px;
+  background: var(--border, rgba(255, 255, 255, 0.08));
+  margin-bottom: 28px;
+}
+
+/* ── Bottom Bar ─────────────────────────────────────────────────── */
+.footer-bottom-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+  font-size: 0.84rem;
+  color: var(--muted-2, #756B63);
+}
+
+.footer-legal-links {
+  display: flex;
+  gap: 20px;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.footer-legal-links a {
+  color: var(--muted, #A89D94);
+  text-decoration: none;
+  transition: color 0.2s ease;
+}
+
+.footer-legal-links a:hover {
+  color: var(--accent, #E06D38);
+}
+
+/* ==========================================================================
+   Interactive Support Modal Dialog
+   ========================================================================== */
+.support-modal-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  z-index: 99999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  opacity: 0;
+  visibility: hidden;
+  transition: all 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.support-modal-backdrop.open {
+  opacity: 1;
+  visibility: visible;
+}
+
+.support-modal-card {
+  background: #1C1814;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 20px;
+  width: 100%;
+  max-width: 540px;
+  padding: 28px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8);
+  position: relative;
+  transform: scale(0.95);
+  transition: transform 0.28s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  color: #F7F3EE;
+}
+
+.support-modal-backdrop.open .support-modal-card {
+  transform: scale(1);
+}
+
+.support-modal-close {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 50%;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #A89D94;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.support-modal-close:hover {
+  background: rgba(239, 68, 68, 0.2);
+  color: #EF4444;
+  border-color: #EF4444;
+}
+
+.support-modal-header {
+  margin-bottom: 20px;
+}
+
+.support-modal-header h3 {
+  font-family: 'Fraunces', serif;
+  font-size: 1.4rem;
+  margin: 0 0 6px 0;
+  color: #F7F3EE;
+}
+
+.support-modal-header p {
+  font-size: 0.88rem;
+  color: #A89D94;
+  margin: 0;
+  line-height: 1.5;
+}
+
+.support-quick-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.support-tile {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 14px;
+  padding: 16px;
+  text-decoration: none;
+  color: #F7F3EE;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  transition: all 0.2s ease;
+}
+
+.support-tile:hover {
+  background: rgba(224, 109, 56, 0.12);
+  border-color: rgba(224, 109, 56, 0.4);
+  transform: translateY(-2px);
+}
+
+.support-tile-icon {
+  font-size: 1.3rem;
+  margin-bottom: 4px;
+}
+
+.support-tile-title {
+  font-weight: 600;
+  font-size: 0.92rem;
+}
+
+.support-tile-desc {
+  font-size: 0.75rem;
+  color: #A89D94;
+  line-height: 1.3;
+}
+
+.support-direct-box {
+  background: rgba(224, 109, 56, 0.08);
+  border: 1px solid rgba(224, 109, 56, 0.2);
+  border-radius: 14px;
+  padding: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.support-direct-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.support-direct-info strong {
+  font-size: 0.88rem;
+  color: #F7F3EE;
+}
+
+.support-direct-info span {
+  font-size: 0.78rem;
+  color: #A89D94;
+}
+
+/* ── Responsive Adjustments ───────────────────────────────────────── */
+@media (max-width: 1024px) {
+  .footer-top-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 36px;
+  }
+}
+
+@media (max-width: 640px) {
+  .site-footer {
+    padding: 48px 18px 28px;
+  }
+
+  .footer-top-grid {
+    grid-template-columns: 1fr;
+    gap: 32px;
+  }
+
+  .support-quick-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .footer-bottom-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 14px;
+  }
+}

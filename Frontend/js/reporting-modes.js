@@ -8,9 +8,9 @@ document.addEventListener('DOMContentLoaded', () => {
   const aiStatusText = document.getElementById('aiStatusText');
 
   const modeDescriptions = {
-    mode1: '⚡ <strong>AI Vision & Text Parser:</strong> Upload photos & describe your item directly. AI will parse details and index tags automatically.',
-    mode2: '🎯 <strong>Guided Choice Assistant:</strong> Step-by-step interactive questionnaire with AI smart prompts tailored for rapid input.',
-    mode3: '🎙️ <strong>Talk to AI Live Copilot:</strong> Natural voice & chat intake assistant. Dynamically understands natural slang, asks tailored item-specific questions, and extracts attributes in real time.'
+    mode1: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px; margin-right:4px;"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> <strong>AI Vision & Text Parser:</strong> Upload photos & describe your item directly. AI will parse details and index tags automatically.',
+    mode2: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px; margin-right:4px;"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg> <strong>Guided Choice Assistant:</strong> Step-by-step interactive questionnaire with AI smart prompts tailored for rapid input.',
+    mode3: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px; margin-right:4px;"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg> <strong>Talk to AI Live Copilot:</strong> Natural voice & chat intake assistant. Dynamically understands natural slang, asks tailored item-specific questions, and extracts attributes in real time.'
   };
 
   modeCards.forEach(card => {
@@ -62,23 +62,23 @@ document.addEventListener('DOMContentLoaded', () => {
     const detectedTags = [];
 
     if (lower.includes('iphone') || lower.includes('phone') || lower.includes('laptop') || lower.includes('airpods') || lower.includes('ipad')) {
-      detectedTags.push('📱 Electronics');
+      detectedTags.push('Electronics');
     }
     if (lower.includes('wallet') || lower.includes('bag') || lower.includes('purse') || lower.includes('backpack')) {
-      detectedTags.push('💼 Wallets & Bags');
+      detectedTags.push('Wallets & Bags');
     }
     if (lower.includes('key') || lower.includes('fob')) {
-      detectedTags.push('🔑 Keys');
+      detectedTags.push('Keys');
     }
-    if (lower.includes('black')) detectedTags.push('🎨 Color: Black');
-    if (lower.includes('blue')) detectedTags.push('🎨 Color: Blue');
-    if (lower.includes('brown') || lower.includes('leather')) detectedTags.push('🎨 Material: Leather');
+    if (lower.includes('black')) detectedTags.push('Color: Black');
+    if (lower.includes('blue')) detectedTags.push('Color: Blue');
+    if (lower.includes('brown') || lower.includes('leather')) detectedTags.push('Material: Leather');
     if (lower.includes('subway') || lower.includes('park') || lower.includes('train') || lower.includes('street')) {
-      detectedTags.push('📍 Location detail detected');
+      detectedTags.push('Location detail detected');
     }
 
     if (detectedTags.length === 0) {
-      detectedTags.push('🏷️ Standard Item', '✨ Auto-Indexed');
+      detectedTags.push('Standard Item', 'Auto-Indexed');
     }
 
     if (aiTagsList) {
@@ -180,11 +180,11 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     if (btnNext) {
-      btnNext.textContent = currentStep === totalSteps ? 'Submit Report' : 'Next Step →';
+      btnNext.textContent = currentStep === totalSteps ? 'Process & Extract Features' : 'Next Step →';
     }
   }
 
-  function submitGuidedReport() {
+  async function submitGuidedReport() {
     const whereInput = document.getElementById('guidedWhere');
     const whenInput = document.getElementById('guidedWhen');
     const emailInput = document.getElementById('guidedEmail');
@@ -195,9 +195,63 @@ document.addEventListener('DOMContentLoaded', () => {
     if (emailInput) guidedState.email = emailInput.value;
     if (verificationInput) guidedState.verification = verificationInput.value;
 
-    const summaryText = `${guidedState.color} ${guidedState.category || 'item'}. Condition: ${guidedState.condition || 'good'}. ${guidedState.brand ? 'Brand: ' + guidedState.brand : ''}`;
+    const summaryText = `${guidedState.color ? guidedState.color + ' ' : ''}${guidedState.category || 'item'}. Condition: ${guidedState.condition || 'good'}. ${guidedState.brand ? 'Brand: ' + guidedState.brand : ''}`;
     
-    showSuccessState(summaryText);
+    if (btnNext && window.setButtonLoading) {
+      window.setButtonLoading(btnNext, true, 'Synthesizing Digital DNA...');
+    }
+
+    const meta = {
+      title: `${guidedState.color ? guidedState.color + ' ' : ''}${guidedState.category || 'Item'}`,
+      where: guidedState.where || '',
+      when: guidedState.when || '',
+      verification: guidedState.verification || ''
+    };
+
+    try {
+      let dna = null;
+      if (window.FlaskAIService) {
+        const aiResult = await window.FlaskAIService.submitReportToFlask({
+          description: summaryText,
+          meta: meta
+        });
+        if (aiResult && aiResult.digital_dna) {
+          dna = aiResult.digital_dna;
+        } else {
+          dna = window.FlaskAIService.extractClientDna(summaryText, meta);
+        }
+      }
+
+      if (typeof window.transitionToReview === 'function') {
+        window.transitionToReview(dna, {
+          title: meta.title,
+          description: summaryText,
+          where: meta.where,
+          when: meta.when,
+          verification: meta.verification
+        });
+      } else {
+        showSuccessState(summaryText, { ...meta, dna });
+      }
+    } catch (e) {
+      console.error('Error extracting DNA from guided state:', e);
+      const dna = window.FlaskAIService ? window.FlaskAIService.extractClientDna(summaryText, meta) : null;
+      if (typeof window.transitionToReview === 'function') {
+        window.transitionToReview(dna, {
+          title: meta.title,
+          description: summaryText,
+          where: meta.where,
+          when: meta.when,
+          verification: meta.verification
+        });
+      } else {
+        showSuccessState(summaryText, { ...meta, dna });
+      }
+    } finally {
+      if (btnNext && window.setButtonLoading) {
+        window.setButtonLoading(btnNext, false);
+      }
+    }
   }
 
   // 4. Mode 3 Talk to AI Chat & Dynamic Attribute Extractor Logic
@@ -362,7 +416,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!hasCore) {
       dynamicDraftContainer.innerHTML = `
         <div class="draft-empty-state" id="draftEmptyState">
-          <div class="draft-empty-icon">✨</div>
+          <div class="draft-empty-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"/></svg></div>
           <div class="draft-empty-text"><strong>Live Attributes Extractor</strong></div>
           <div class="draft-empty-sub">Speak or type your conversation. The AI will dynamically extract and display all item attributes, location, and marks here in real time.</div>
         </div>
@@ -378,7 +432,7 @@ document.addEventListener('DOMContentLoaded', () => {
       html += `
         <div class="draft-item updated">
           <div class="draft-item-header">
-            <span class="draft-label"><span class="draft-label-icon">🏷️</span> ${isFoundPage ? 'Found Item' : 'Lost Item'}</span>
+            <span class="draft-label"><span class="draft-label-icon"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2H2v10l9.29 9.29c.94.94 2.48.94 3.42 0l6.58-6.58c.94-.94.94-2.48 0-3.42L12 2Z"/><path d="M7 7h.01"/></svg></span> ${isFoundPage ? 'Found Item' : 'Lost Item'}</span>
             <span class="draft-tag-badge">Identified</span>
           </div>
           <div class="draft-value">${escapeHtml(draft.title)}</div>
@@ -391,7 +445,7 @@ document.addEventListener('DOMContentLoaded', () => {
       html += `
         <div class="draft-item">
           <div class="draft-item-header">
-            <span class="draft-label"><span class="draft-label-icon">📂</span> Category</span>
+            <span class="draft-label"><span class="draft-label-icon"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg></span> Category</span>
           </div>
           <div class="draft-value">${escapeHtml(draft.category)}</div>
         </div>
@@ -403,7 +457,7 @@ document.addEventListener('DOMContentLoaded', () => {
       html += `
         <div class="draft-item updated">
           <div class="draft-item-header">
-            <span class="draft-label"><span class="draft-label-icon">📍</span> ${isFoundPage ? 'Found Location' : 'Lost Location'}</span>
+            <span class="draft-label"><span class="draft-label-icon"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"/><circle cx="12" cy="10" r="3"/></svg></span> ${isFoundPage ? 'Found Location' : 'Lost Location'}</span>
             <span class="draft-tag-badge">Location</span>
           </div>
           <div class="draft-value">${escapeHtml(draft.location)}</div>
@@ -416,7 +470,7 @@ document.addEventListener('DOMContentLoaded', () => {
       html += `
         <div class="draft-item">
           <div class="draft-item-header">
-            <span class="draft-label"><span class="draft-label-icon">🕒</span> Date / Time Context</span>
+            <span class="draft-label"><span class="draft-label-icon"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span> Date / Time Context</span>
           </div>
           <div class="draft-value">${escapeHtml(draft.time)}</div>
         </div>
@@ -444,7 +498,7 @@ document.addEventListener('DOMContentLoaded', () => {
       html += `
         <div class="draft-item updated">
           <div class="draft-item-header">
-            <span class="draft-label"><span class="draft-label-icon">🔐</span> Private Verification Detail</span>
+            <span class="draft-label"><span class="draft-label-icon"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span> Private Verification Detail</span>
             <span class="draft-tag-badge">Private</span>
           </div>
           <div class="draft-value">${escapeHtml(draft.verification_secret)}</div>
@@ -457,7 +511,7 @@ document.addEventListener('DOMContentLoaded', () => {
       html += `
         <div class="draft-item">
           <div class="draft-item-header">
-            <span class="draft-label"><span class="draft-label-icon">📧</span> Contact Info</span>
+            <span class="draft-label"><span class="draft-label-icon"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg></span> Contact Info</span>
           </div>
           <div class="draft-value">${escapeHtml(draft.contact)}</div>
         </div>
@@ -468,7 +522,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (draft.raw_summary) {
       html += `
         <div class="draft-summary-pill">
-          💡 <em>"${escapeHtml(draft.raw_summary)}"</em>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-1px; margin-right:4px;"><path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"/><path d="M9 18h6"/><path d="M10 22h4"/></svg> <em>"${escapeHtml(draft.raw_summary)}"</em>
         </div>
       `;
     }
@@ -485,13 +539,25 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function getAttributeIcon(key) {
     const k = (key || '').toLowerCase();
-    if (k.includes('color') || k.includes('dial')) return '🎨';
-    if (k.includes('brand') || k.includes('model') || k.includes('make')) return '🏷️';
-    if (k.includes('strap') || k.includes('case') || k.includes('material')) return '⚙️';
-    if (k.includes('scratch') || k.includes('mark') || k.includes('dent') || k.includes('damage') || k.includes('engrav')) return '🔍';
-    if (k.includes('key') || k.includes('chain') || k.includes('tag')) return '🔑';
-    if (k.includes('serial') || k.includes('imei') || k.includes('number')) return '🔢';
-    return '✨';
+    if (k.includes('color') || k.includes('dial')) {
+      return '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="13.5" cy="6.5" r=".5" fill="currentColor"/><circle cx="17.5" cy="10.5" r=".5" fill="currentColor"/><circle cx="8.5" cy="7.5" r=".5" fill="currentColor"/><circle cx="6.5" cy="12.5" r=".5" fill="currentColor"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/></svg>';
+    }
+    if (k.includes('brand') || k.includes('model') || k.includes('make')) {
+      return '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2H2v10l9.29 9.29c.94.94 2.48.94 3.42 0l6.58-6.58c.94-.94.94-2.48 0-3.42L12 2Z"/><path d="M7 7h.01"/></svg>';
+    }
+    if (k.includes('strap') || k.includes('case') || k.includes('material')) {
+      return '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>';
+    }
+    if (k.includes('scratch') || k.includes('mark') || k.includes('dent') || k.includes('damage') || k.includes('engrav')) {
+      return '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>';
+    }
+    if (k.includes('key') || k.includes('chain') || k.includes('tag')) {
+      return '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m21 2-2 2m-1.5 1.5L13 10l-4-4-5 5a5.5 5.5 0 1 0 7.78 7.78l5-5-2-2 2.5-2.5 2 2 2-2z"/><circle cx="7.5" cy="16.5" r=".5" fill="currentColor"/></svg>';
+    }
+    if (k.includes('serial') || k.includes('imei') || k.includes('number')) {
+      return '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" x1="4" x2="20" y2="4"/><line x1="4" x1="4" x2="20" y2="20"/><line x1="10" y1="2" x2="6" y2="22"/><line x1="18" y1="2" x2="14" y2="22"/></svg>';
+    }
+    return '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"/></svg>';
   }
 
   function escapeHtml(str) {
@@ -724,9 +790,9 @@ document.addEventListener('DOMContentLoaded', () => {
   if (btnDraftSubmit) {
     btnDraftSubmit.addEventListener('click', async () => {
       btnDraftSubmit.disabled = true;
-      btnDraftSubmit.textContent = 'Submitting & Extracting DNA...';
+      btnDraftSubmit.textContent = 'Synthesizing Digital DNA...';
 
-      let combinedDescription = currentDraft.raw_summary || `${currentDraft.title || 'Item'} lost at ${currentDraft.location || 'unknown'}.`;
+      let combinedDescription = currentDraft.raw_summary || `${currentDraft.title || 'Item'} ${isFoundPage ? 'found' : 'lost'} at ${currentDraft.location || 'unknown'}.`;
       
       const attrList = [];
       for (const [k, v] of Object.entries(currentDraft.dynamic_attributes || {})) {
@@ -736,45 +802,61 @@ document.addEventListener('DOMContentLoaded', () => {
         combinedDescription += ` (${attrList.join(', ')})`;
       }
 
-      const flaskBaseUrl = window.FLASK_BACKEND_URL || (window.location.protocol + '//' + (window.location.hostname || '127.0.0.1') + ':5000');
+      const meta = {
+        title: currentDraft.title || 'Reported Item',
+        where: currentDraft.location || '',
+        when: currentDraft.time || '',
+        verification: currentDraft.verification_secret || ''
+      };
 
       try {
-        const response = await fetch(`${flaskBaseUrl}/new-report`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
+        let dna = null;
+        if (window.FlaskAIService) {
+          const aiResult = await window.FlaskAIService.submitReportToFlask({
             description: combinedDescription,
-            location: currentDraft.location,
+            meta: meta
+          });
+
+          if (aiResult && aiResult.digital_dna) {
+            dna = aiResult.digital_dna;
+          } else {
+            dna = window.FlaskAIService.extractClientDna(combinedDescription, meta);
+          }
+        }
+
+        // If dynamic attributes were found in Talk to AI, merge them into the DNA
+        if (dna && currentDraft.dynamic_attributes) {
+          dna.attributes = { ...(dna.attributes || {}), ...currentDraft.dynamic_attributes };
+        }
+
+        if (typeof window.transitionToReview === 'function') {
+          window.transitionToReview(dna, {
+            title: currentDraft.title,
+            description: combinedDescription,
             where: currentDraft.location,
             when: currentDraft.time,
-            title: currentDraft.title,
-            category: currentDraft.category
-          })
-        });
-
-        const resData = await response.json();
-        if (resData.success) {
-          showSuccessState(combinedDescription, {
-            title: currentDraft.title,
-            where: currentDraft.location,
-            verification: currentDraft.verification_secret,
-            reportId: resData.report_id,
-            dna: resData.digital_dna
-          });
-        } else {
-          showSuccessState(combinedDescription, {
-            title: currentDraft.title,
-            where: currentDraft.location,
             verification: currentDraft.verification_secret
           });
+        } else {
+          showSuccessState(combinedDescription, { ...meta, dna });
         }
       } catch (e) {
-        console.error('Error submitting report to backend:', e);
-        showSuccessState(combinedDescription, {
-          title: currentDraft.title,
-          where: currentDraft.location,
-          verification: currentDraft.verification_secret
-        });
+        console.error('Error synthesizing DNA from Talk to AI:', e);
+        const dna = window.FlaskAIService ? window.FlaskAIService.extractClientDna(combinedDescription, meta) : null;
+        if (typeof window.transitionToReview === 'function') {
+          window.transitionToReview(dna, {
+            title: currentDraft.title,
+            description: combinedDescription,
+            where: currentDraft.location,
+            when: currentDraft.time,
+            verification: currentDraft.verification_secret
+          });
+        } else {
+          showSuccessState(combinedDescription, { ...meta, dna });
+        }
+      } finally {
+        btnDraftSubmit.disabled = false;
+        btnDraftSubmit.textContent = 'Process & Extract Features';
       }
     });
   }

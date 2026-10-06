@@ -32,6 +32,17 @@ reunitel/
 │   ├── report-lost-item.php  # Lost item reporting interface
 │   ├── report-found-item.php # Found item submission interface
 │   └── home.php              # Student dashboard & community board
+├── Backend/                  # Core PHP Backend Services & MySQL (lost_connect_db)
+│   ├── config/
+│   │   └── config.php        # Database configuration, MySQLi connection, and session init
+│   ├── functions.php         # Security (AES-256), JSON responses, access logs, & helpers
+│   ├── login.php             # Student login handler (supports College PIN, Email, & Phone)
+│   ├── registration.php      # Student registration with password hashing and validation
+│   ├── logout.php            # Session termination & redirect
+│   ├── profile.php           # User profile info, statistics, updates, & password change
+│   ├── reports.php           # Direct database persistence for lost_reports & found_reports
+│   ├── schema.sql            # Full MySQL database schema dump
+│   └── README.md             # Backend architecture & API reference
 ├── AI_Module/                # Core AI Engine (Analyzers, Prompts, Config, Utilities)
 │   ├── analyzers/            # Gemini Vision & Text feature extractors
 │   ├── compare/              # Gemini similarity & DNA match evaluation
@@ -74,9 +85,19 @@ reunitel/
 * **📱 Responsive Cross-Device UI**:
   * Fully adaptive mobile, tablet, laptop, and desktop layouts across all pages with touch-optimized controls, auto-scrolling category pill bars, fluid typography (`clamp()`), and adaptive modal dialogs.
 
+### 2. 🗄️ Core PHP Backend & Database Services (`Backend/`)
+* **Technology**: PHP 8.x, MySQLi (`lost_connect_db`), OpenSSL AES-256-CBC.
+* **Role**: Handles database persistence for student accounts, authentication, profile management, and saving lost/found reports.
+* **Key Modules**:
+  * **`config/config.php`**: Database connection to `lost_connect_db`, session management, and configuration constants.
+  * **`functions.php`**: Security utilities (encryption/decryption), input sanitizers, standardized JSON API responses, and access logging.
+  * **`login.php` & `registration.php`**: Student authentication supporting College PIN, Email, and Phone with bcrypt password hashing.
+  * **`profile.php`**: Student profile retrieval, profile updates, and password reset endpoints.
+  * **`reports.php`**: Direct database insertion and listing for `lost_reports` and `found_reports`.
+
 ---
 
-### 2. 🔌 Middleware REST API (`flask_server.py`)
+### 3. 🔌 Middleware REST API (`flask_server.py`)
 * **Technology**: Python, Flask, Flask-CORS.
 * **Role**: Operates as a lightweight HTTP server bridging the PHP frontend to the Python AI engine.
 * **Endpoints**:

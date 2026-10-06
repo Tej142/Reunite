@@ -1,6 +1,13 @@
+from datetime import datetime
+
 def build_report_prompt(description: str) -> str:
+    now = datetime.now()
+    server_time_str = now.strftime("%Y-%m-%d (%A) %H:%M:%S")
+
     return f"""
 You are an expert NLP Entity Extraction Specialist for a Campus Lost & Found System.
+
+Current Server Date & Time: {server_time_str}
 
 Your objective is to extract structured details, attributes, locations, and identifying characteristics from the user's item report.
 
@@ -17,7 +24,8 @@ GUIDELINES:
    - Material: (e.g. Leather, Metal Chain, Steel, Fabric, Plastic)
    - Condition: (e.g. New, Used, Scratched, Cracked screen)
    - Stated Location (Where): Extract any location stated in "Location (Where):" or in text (e.g. "IT LAB", "Central Library 2nd Floor", "Cafeteria"). Store it in the root "location" field. NEVER leave it empty if a location is provided.
-   - Stated Date/Time (When): Extract any date or time mentioned in "Date/Time (When):", "Time (When):", or in text (e.g. "Today", "Yesterday around 3 PM"). Add "Date / Time" to attributes.
+   - Stated Date/Time (When): Extract any date or time mentioned in "Date/Time (When):", "Time (When):", or in text (e.g. "Today", "Yesterday around 3 PM", "2 days ago", "last Friday"). Add "Date / Time" to attributes.
+   - Resolved Date & Time: Based on the Current Server Date ({now.strftime('%Y-%m-%d')}), resolve relative terms (e.g. "yesterday" -> {(now - (datetime.now() - datetime.now())).strftime('%Y-%m-%d')}) into "resolved_date" (YYYY-MM-DD) and "resolved_time" (HH:MM:SS).
 
 3. Extract Visible / Descriptive Features:
    - Unique stickers, engravings, keychains, scratches, phone cases, strap types, contents, etc.
@@ -40,9 +48,11 @@ Return ONLY valid JSON with this exact structure:
         "Material": "Stainless Steel",
         "Condition": "Good",
         "Distinguishing Marks": "Minor scratch on clasp",
-        "Date / Time": "Today"
+        "Date / Time": "Yesterday around 3 PM"
     }},
     "location": "IT LAB",
+    "resolved_date": "2026-10-04",
+    "resolved_time": "15:00:00",
     "visible_features": [
         "Black metallic strap",
         "Analog dial with date window"

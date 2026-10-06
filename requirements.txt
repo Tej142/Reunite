@@ -1,8 +1,22 @@
-google-genai
-python-dotenv
+# Core Framework & Web
 flask
 flask-cors
+python-dotenv
 requests
-mistralai==1.8.2
-pillow
 
+# LLMs & AI APIs
+google-genai
+mistralai==1.8.2
+
+# Image Processing & Math
+pillow
+numpy
+
+# Local Vector Search & Embeddings (DINOv2 & CLIP)
+onnxruntime
+tokenizers
+chromadb
+huggingface_hub
+
+# Testing & Utilities
+faker

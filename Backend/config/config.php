@@ -9,14 +9,15 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
-// Automatically load environment variables from .env if present
+// Automatically load environment variables: .env.example (DB & linking credentials) + .env (API keys)
 (function() {
-    $envPaths = [
-        __DIR__ . '/.env',
-        dirname(__DIR__) . '/.env',
-        dirname(__DIR__, 2) . '/.env'
+    $rootDir = dirname(__DIR__, 2);
+    $filesToLoad = [
+        $rootDir . '/.env.example',
+        $rootDir . '/.env'
     ];
-    foreach ($envPaths as $path) {
+
+    foreach ($filesToLoad as $path) {
         if (file_exists($path) && is_readable($path)) {
             $lines = file($path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
             foreach ($lines as $line) {
@@ -26,13 +27,10 @@ if (session_status() === PHP_SESSION_NONE) {
                     list($key, $val) = explode('=', $line, 2);
                     $key = trim($key);
                     $val = trim($val, " \t\n\r\0\x0B\"'");
-                    if (!isset($_ENV[$key])) {
-                        $_ENV[$key] = $val;
-                        putenv("$key=$val");
-                    }
+                    $_ENV[$key] = $val;
+                    putenv("$key=$val");
                 }
             }
-            break;
         }
     }
 })();
@@ -59,14 +57,15 @@ define('DB_PORT', (int)get_config_val('DB_PORT', 3306));
 // Encryption & Security Keys
 define('ENCRYPTION_KEY', get_config_val('APP_ENC_KEY', 'reunite_secret_encryption_key_2024'));
 define('ENCRYPTION_IV', substr(hash('sha256', 'reunite_iv_2024'), 0, 16));
+define('ADMIN_MASTER_KEY', get_config_val('ADMIN_MASTER_KEY', 'admin@reunite2024'));
 
-// ── Email API Provider Configuration (Paste API Key in .env or below) ──
-// 1. Brevo (Sendinblue) API (https://app.brevo.com/settings/keys/api)
+// ── Email API Provider Configuration (Read from root .env) ──
+// 1. Brevo (Sendinblue) API
 define('BREVO_API_KEY', get_config_val('BREVO_API_KEY', ''));
 define('BREVO_SENDER_EMAIL', get_config_val('BREVO_SENDER_EMAIL', 'charante153624@gmail.com'));
 define('BREVO_SENDER_NAME', get_config_val('BREVO_SENDER_NAME', 'REUNITE TEAM'));
 
-// 2. Resend API (https://resend.com/api-keys)
+// 2. Resend API
 define('RESEND_API_KEY', get_config_val('RESEND_API_KEY', ''));
 define('RESEND_SENDER_EMAIL', get_config_val('RESEND_SENDER_EMAIL', 'onboarding@resend.dev'));
 define('RESEND_SENDER_NAME', get_config_val('RESEND_SENDER_NAME', 'REUNITE TEAM'));
@@ -79,9 +78,8 @@ define('SMTP_PASS', get_config_val('SMTP_PASS', ''));
 define('SMTP_FROM_EMAIL', get_config_val('SMTP_FROM_EMAIL', get_config_val('SMTP_USER', 'charante153624@gmail.com')));
 define('SMTP_FROM_NAME', get_config_val('SMTP_FROM_NAME', 'REUNITE TEAM'));
 
-// Python Flask AI Backend Endpoint (Render cloud backend in production, local in dev)
-$isLocalHost = in_array(strtolower($_SERVER['SERVER_NAME'] ?? ($_SERVER['HTTP_HOST'] ?? 'localhost')), ['localhost', '127.0.0.1']);
-define('FLASK_AI_URL', get_config_val('FLASK_BACKEND_URL', $isLocalHost ? 'http://127.0.0.1:5000' : 'https://reunite-ai-backend.onrender.com'));
+// Python Flask AI Backend Endpoint (Cloud deployment)
+define('FLASK_AI_URL', get_config_val('FLASK_AI_URL', get_config_val('FLASK_BACKEND_URL', 'https://reunite-ai-backend.onrender.com')));
 
 // App URLs & Paths
 define('BASE_PATH', dirname(__DIR__));
