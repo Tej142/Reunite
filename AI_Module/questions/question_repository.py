@@ -14,10 +14,10 @@ def get_db_connection():
     """
 
     return mysql.connector.connect(
-        host="localhost",
-        user="root",
-        password="",
-        database="lost_connect_db"
+        host=DB_HOST,
+        user=DB_USER,
+        password=DB_PASSWORD,
+        database=DB_NAME
     )
 
 

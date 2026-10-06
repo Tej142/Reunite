@@ -27,7 +27,8 @@ def sync_all():
     
     # Check if MySQL is accessible via HTTP endpoint
     try:
-        resp = requests.get("http://localhost/pw/reunitel/Backend/reports.php?action=list&type=all&limit=200", timeout=5)
+        prod_url = os.getenv("PRODUCTION_SITE_URL", "https://reunite.site.je")
+        resp = requests.get(f"{prod_url}/Backend/reports.php?action=list&type=all&limit=200", timeout=10)
         if resp.status_code == 200:
             data = resp.json()
             reports = data.get("data", {}).get("reports", []) or data.get("reports", [])
