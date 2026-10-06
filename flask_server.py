@@ -1,3 +1,8 @@
+"""
+Reunite Multimodal AI Flask Microservice
+Core Neural Vision & NLP Engine for Lost & Found Matching
+"""
+
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 
