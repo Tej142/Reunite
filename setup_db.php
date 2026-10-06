@@ -1,9 +1,60 @@
 <?php
 /**
- * REUNITE PLATFORM — ONE-CLICK PRODUCTION DATABASE MIGRATOR & SETUP
- * Run this by opening: https://reunite.site.je/setup_db.php (or your domain) in your browser.
+ * REUNITE PLATFORM — ONE-CLICK PRODUCTION DATABASE MIGRATOR & CONFIGURATOR
+ * Access via: https://reunite.site.je/setup_db.php
  */
 
+$rootDir = __DIR__;
+$envFile = $rootDir . '/.env';
+$message = '';
+$messageType = '';
+
+// Handle POST request to update database credentials
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_and_migrate'])) {
+    $host = trim($_POST['db_host'] ?? '');
+    $user = trim($_POST['db_user'] ?? '');
+    $pass = trim($_POST['db_pass'] ?? '');
+    $name = trim($_POST['db_name'] ?? '');
+    $port = (int)($_POST['db_port'] ?? 3306);
+
+    // Test connection first
+    mysqli_report(MYSQLI_REPORT_OFF);
+    $testConn = @new mysqli($host, $user, $pass, $name, $port);
+    if ($testConn && !$testConn->connect_error) {
+        $testConn->set_charset("utf8mb4");
+
+        // Write or update .env file
+        $envContent = "# Reunite Production Environment Configuration\n";
+        $envContent .= "DB_HOST=" . $host . "\n";
+        $envContent .= "DB_USER=" . $user . "\n";
+        $envContent .= "DB_PASS=" . $pass . "\n";
+        $envContent .= "DB_NAME=" . $name . "\n";
+        $envContent .= "DB_PORT=" . $port . "\n";
+        $envContent .= "APP_ENC_KEY=reunite_secret_encryption_key_2024\n";
+        $envContent .= "FLASK_BACKEND_URL=https://reunite-ai-backend.onrender.com\n";
+        $envContent .= "FLASK_AI_URL=https://reunite-ai-backend.onrender.com\n";
+        
+        // Preserve any existing keys if .env exists
+        if (file_exists($envFile)) {
+            $existing = file($envFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+            foreach ($existing as $line) {
+                if (strpos($line, 'BREVO_') === 0 || strpos($line, 'GEMINI_') === 0 || strpos($line, 'MISTRAL_') === 0) {
+                    $envContent .= $line . "\n";
+                }
+            }
+        }
+
+        @file_put_contents($envFile, $envContent);
+        $message = "Connected successfully! Credentials saved to .env.";
+        $messageType = "ok";
+    } else {
+        $err = $testConn ? $testConn->connect_error : "Unknown connection error";
+        $message = "Connection failed: " . $err;
+        $messageType = "err";
+    }
+}
+
+// Load configurations
 require_once __DIR__ . '/Backend/config/config.php';
 require_once __DIR__ . '/Backend/functions.php';
 
@@ -15,7 +66,7 @@ header('Content-Type: text/html; charset=utf-8');
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Reunite Database Auto-Migrator</title>
+  <title>Reunite Database Auto-Migrator & Configuration</title>
   <style>
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #12100E; color: #EDE5DE; padding: 40px 20px; line-height: 1.6; }
     .container { max-width: 780px; margin: 0 auto; background: #1C1917; border: 1px solid #332B25; border-radius: 12px; padding: 32px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
@@ -24,29 +75,69 @@ header('Content-Type: text/html; charset=utf-8');
     .status-ok { background: rgba(34, 197, 94, 0.1); border: 1px solid rgba(34, 197, 94, 0.3); color: #4ADE80; }
     .status-warn { background: rgba(234, 179, 8, 0.1); border: 1px solid rgba(234, 179, 8, 0.3); color: #FACC15; }
     .status-err { background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); color: #F87171; }
-    .btn { display: inline-block; background: #C4622D; color: #fff; text-decoration: none; padding: 12px 24px; border-radius: 8px; font-weight: 600; margin-top: 20px; }
+    .btn { display: inline-block; background: #C4622D; color: #fff; text-decoration: none; padding: 12px 24px; border-radius: 8px; font-weight: 600; border: none; cursor: pointer; font-size: 15px; }
     .btn:hover { background: #E07A44; }
+    .form-group { margin-bottom: 16px; }
+    label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; color: #D5CCC3; }
+    input[type="text"], input[type="password"] { width: 100%; box-sizing: border-box; padding: 10px 12px; background: #25201C; border: 1px solid #3D342D; border-radius: 6px; color: #EDE5DE; font-size: 14px; }
+    input:focus { outline: none; border-color: #C4622D; }
+    .config-card { background: #161412; border: 1px solid #2B2520; border-radius: 8px; padding: 20px; margin-top: 20px; }
     pre { background: #0A0908; padding: 12px; border-radius: 6px; overflow-x: auto; color: #A89F91; font-size: 13px; }
   </style>
 </head>
 <body>
 <div class="container">
-  <h1>⚡ Reunite Database Migration & Setup</h1>
+  <h1>⚡ Reunite Database Migration & Configuration</h1>
+
+<?php if (!empty($message)): ?>
+  <div class="status-item <?php echo $messageType === 'ok' ? 'status-ok' : 'status-err'; ?>">
+    <span><?php echo htmlspecialchars($message); ?></span>
+    <span><?php echo strtoupper($messageType); ?></span>
+  </div>
+<?php endif; ?>
 
 <?php
 if (!$conn) {
     echo '<div class="status-item status-err">';
-    echo '<span><strong>Connection Failed:</strong> Unable to connect to MySQL database.</span>';
-    echo '<span>Error</span>';
+    echo '<span><strong>Connection Failed:</strong> Cannot connect to MySQL with current settings.</span>';
+    echo '<span>NOT CONNECTED</span>';
     echo '</div>';
-    echo '<p>Please check your database credentials in <code>.env</code> or <code>.env.example</code>.</p>';
-    echo '<pre>DB_HOST: ' . htmlspecialchars(DB_HOST) . "\nDB_NAME: " . htmlspecialchars(DB_NAME) . "\nDB_USER: " . htmlspecialchars(DB_USER) . '</pre>';
+    
+    echo '<div class="config-card">';
+    echo '<h3>Enter InfinityFree MySQL Credentials</h3>';
+    echo '<p style="font-size:13px; color:#A89F91; margin-bottom:16px;">Get these from your InfinityFree Control Panel &rarr; MySQL Databases section:</p>';
+    echo '<form method="POST">';
+    echo '<div class="form-group">';
+    echo '<label>MySQL Hostname (e.g. sql108.infinityfree.com or sql204.epizy.com)</label>';
+    echo '<input type="text" name="db_host" value="' . htmlspecialchars(DB_HOST === 'localhost' ? '' : DB_HOST) . '" placeholder="sqlXXX.infinityfree.com" required>';
+    echo '</div>';
+    
+    echo '<div class="form-group">';
+    echo '<label>MySQL Database Name (e.g. if0_36541234_lost_connect_db)</label>';
+    echo '<input type="text" name="db_name" value="' . htmlspecialchars(DB_NAME === 'lost_connect_db' ? '' : DB_NAME) . '" placeholder="if0_XXXXXXXX_lost_connect_db" required>';
+    echo '</div>';
+
+    echo '<div class="form-group">';
+    echo '<label>MySQL Username (e.g. if0_36541234)</label>';
+    echo '<input type="text" name="db_user" value="' . htmlspecialchars(DB_USER === 'root' ? '' : DB_USER) . '" placeholder="if0_XXXXXXXX" required>';
+    echo '</div>';
+
+    echo '<div class="form-group">';
+    echo '<label>MySQL Password (your vPanel/Account Password)</label>';
+    echo '<input type="password" name="db_pass" placeholder="Enter your vPanel password" required>';
+    echo '</div>';
+
+    echo '<input type="hidden" name="db_port" value="3306">';
+    echo '<button type="submit" name="save_and_migrate" class="btn">Save Credentials & Auto-Migrate Tables &rarr;</button>';
+    echo '</form>';
+    echo '</div>';
+
     echo '</div></body></html>';
     exit;
 }
 
 echo '<div class="status-item status-ok">';
-echo '<span><strong>Database Connected:</strong> Connected to MySQL database `' . htmlspecialchars(DB_NAME) . '`</span>';
+echo '<span><strong>Database Connected:</strong> Connected to MySQL database `' . htmlspecialchars(DB_NAME) . '` on `' . htmlspecialchars(DB_HOST) . '`</span>';
 echo '<span>SUCCESS</span>';
 echo '</div>';
 
@@ -271,7 +362,6 @@ if ($checkUser && $checkUser->num_rows === 0) {
         $insertUser->close();
     }
 } else {
-    // Make sure password is known and correct
     $passHash = password_hash('charan142009', PASSWORD_DEFAULT);
     $conn->query("UPDATE `users` SET password_hash = '$passHash', status = 'active' WHERE pin = '24155-cm-002'");
     echo "<div class='status-item status-ok'><span>Student account <strong>24155-cm-002</strong> verified & active!</span><span>READY</span></div>";
