@@ -12,10 +12,10 @@ $is_home = ($current_page === 'home.php');
 $is_profile = ($current_page === 'profile.php');
 ?>
 <script>
-  // Local Flask AI Server Endpoint
+  // Cloud Python Flask AI Microservice Endpoint (Render)
   (function() {
-    window.FLASK_BACKEND_URL = 'http://127.0.0.1:5000';
-    console.log('[Reunite] Connected Local Flask Backend URL:', window.FLASK_BACKEND_URL);
+    window.FLASK_BACKEND_URL = 'https://reunite-ai-backend.onrender.com';
+    console.log('[Reunite] Connected Cloud Flask AI URL:', window.FLASK_BACKEND_URL);
   })();
 </script>
 <script src="js/microinteractions.js"></script>

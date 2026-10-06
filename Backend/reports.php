@@ -108,7 +108,7 @@ if ($action === 'create' || ($method === 'POST' && ($action === '' || $action ==
 
     // ChromaDB Multimodal Embedding & Storage
     try {
-        $flaskUrl = (defined('FLASK_AI_URL') ? FLASK_AI_URL : 'http://127.0.0.1:5000') . '/report/embed-and-store';
+        $flaskUrl = (defined('FLASK_AI_URL') ? FLASK_AI_URL : 'https://reunite-ai-backend.onrender.com') . '/report/embed-and-store';
         $embedPayload = [
             'report_id' => $formattedReportId,
             'db_id' => $insertedId,

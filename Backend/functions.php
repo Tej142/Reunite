@@ -788,7 +788,7 @@ function runRealtimeMatchmaking($insertedId, $reportType, $category, $title, $de
     // 1. Query Vector Matches from Flask AI Engine
     $vectorMatches = [];
     try {
-        $flaskUrl = (defined('FLASK_AI_URL') ? FLASK_AI_URL : 'http://127.0.0.1:5000') . '/report/search-matches';
+        $flaskUrl = (defined('FLASK_AI_URL') ? FLASK_AI_URL : 'https://reunite-ai-backend.onrender.com') . '/report/search-matches';
         $searchPayload = [
             'text' => "$category. $title. $description. $location.",
             'report_id' => ($reportType === 'found' ? 'RF-' : 'RL-') . str_pad($insertedId, 5, '0', STR_PAD_LEFT),

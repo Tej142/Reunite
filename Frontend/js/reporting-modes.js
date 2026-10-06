@@ -316,7 +316,7 @@ document.addEventListener('DOMContentLoaded', () => {
     isAiResponding = true;
     updateVoiceBadgeState();
 
-    const flaskBaseUrl = window.FLASK_BACKEND_URL || (window.location.protocol + '//' + (window.location.hostname || '127.0.0.1') + ':5000');
+    const flaskBaseUrl = window.FLASK_BACKEND_URL || 'https://reunite-ai-backend.onrender.com';
 
     try {
       const response = await fetch(`${flaskBaseUrl}/report/talk_to_ai/chat`, {

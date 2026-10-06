@@ -191,10 +191,9 @@ document.addEventListener('DOMContentLoaded', () => {
           if (outageBannerDesc) outageBannerDesc.textContent = 'Both the Python Flask AI Server and MySQL database are unreachable. All site operations, vector searches, and data lookups are halted.';
           if (outageBannerHint) outageBannerHint.innerHTML = '1. Start MySQL in XAMPP &nbsp;|&nbsp; 2. Start Flask: <span class="admin-code-snippet">python flask_server.py</span>';
           if (adminUserPillName) adminUserPillName.textContent = 'Dual Server Outage';
-        } else if (!isAiOnline) {
-          if (outageBannerTitle) outageBannerTitle.textContent = 'Python Flask AI Server (127.0.0.1:5000) is OFFLINE';
-          if (outageBannerDesc) outageBannerDesc.textContent = 'The local AI multi-modal engine is unreachable. Visual ONNX vision parsing, DINOv2 & CLIP vector embeddings, and neural late-fusion matching are currently paused.';
-          if (outageBannerHint) outageBannerHint.innerHTML = 'Run this command to start the AI server: <span class="admin-code-snippet">python flask_server.py</span>';
+          if (outageBannerTitle) outageBannerTitle.textContent = 'Python Flask AI Cloud Server is OFFLINE';
+          if (outageBannerDesc) outageBannerDesc.textContent = 'The cloud AI multi-modal engine (reunite-ai-backend.onrender.com) is waking up or unreachable. Visual ONNX vision parsing, DINOv2 & CLIP vector embeddings, and neural late-fusion matching are currently paused.';
+          if (outageBannerHint) outageBannerHint.innerHTML = 'Check Render.com dashboard or restart your AI backend web service.';
           if (adminUserPillName) adminUserPillName.textContent = 'AI Server Offline';
         } else {
           if (outageBannerTitle) outageBannerTitle.textContent = 'MySQL Database Connection Failed';

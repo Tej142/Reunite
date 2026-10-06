@@ -1,6 +1,6 @@
 /**
  * Reunite Flask AI Backend Service Integration
- * Handles HTTP requests from Frontend to Flask AI Server (http://127.0.0.1:5000)
+ * Handles HTTP requests from Frontend to Flask AI Cloud Server (https://reunite-ai-backend.onrender.com)
  * and provides dynamic AI attribute extraction and form rendering.
  */
 
