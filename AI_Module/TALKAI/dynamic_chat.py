@@ -9,6 +9,7 @@ _ai_mod_dir = str(Path(__file__).parent.parent)
 if _ai_mod_dir not in sys.path:
     sys.path.insert(0, _ai_mod_dir)
 
+from config import client, GEMINI_MODEL, mistral_client, MISTRAL_MODEL
 from utils.time_parser import parse_temporal_expression
 
 def _enrich_draft_with_time(draft: dict, user_message: str) -> dict:

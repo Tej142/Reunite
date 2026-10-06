@@ -17,6 +17,15 @@ if ROOT_ENV_PATH.exists():
     load_dotenv(dotenv_path=ROOT_ENV_PATH, override=True)
 
 # ==========================================
+# Database Configuration
+# ==========================================
+DB_HOST = os.getenv("DB_HOST", "localhost")
+DB_USER = os.getenv("DB_USER", "root")
+DB_PASSWORD = os.getenv("DB_PASS", "")  # alias: DB_PASS in .env.example
+DB_NAME = os.getenv("DB_NAME", "lost_connect_db")
+DB_PORT = int(os.getenv("DB_PORT", 3306))
+
+# ==========================================
 # Gemini
 # ==========================================
 
@@ -177,9 +186,9 @@ client = FailoverClient()
 
 MISTRAL_API_KEY = os.getenv("MISTRAL_API_KEY")
 MISTRAL_MODEL = "mistral-small-latest"
-mistral_client = Mistral(api_key=MISTRAL_API_KEY)
 
 if not MISTRAL_API_KEY:
-    raise ValueError(
-        "MISTRAL_API_KEY not found. Please add it to your .env file."
-    )
+    print("[Config Notice] MISTRAL_API_KEY not found. Mistral fallback will be disabled. Set it in Render env vars.")
+    mistral_client = None
+else:
+    mistral_client = Mistral(api_key=MISTRAL_API_KEY)
