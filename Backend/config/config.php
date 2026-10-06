@@ -47,11 +47,11 @@ function get_config_val($key, $default = '') {
     return $default;
 }
 
-// Database Credentials
-define('DB_HOST', get_config_val('DB_HOST', 'localhost'));
-define('DB_USER', get_config_val('DB_USER', 'root'));
-define('DB_PASS', get_config_val('DB_PASS', ''));
-define('DB_NAME', get_config_val('DB_NAME', 'lost_connect_db'));
+// Database Credentials (Production InfinityFree Cloud DB)
+define('DB_HOST', get_config_val('DB_HOST', 'sql306.infinityfree.com'));
+define('DB_USER', get_config_val('DB_USER', 'if0_42705202'));
+define('DB_PASS', get_config_val('DB_PASS', 'reunitePVBVC123'));
+define('DB_NAME', get_config_val('DB_NAME', 'if0_42705202_lost_connect_db'));
 define('DB_PORT', (int)get_config_val('DB_PORT', 3306));
 
 // Encryption & Security Keys
@@ -87,18 +87,20 @@ define('FRONTEND_URL', '../Frontend');
 
 // Establish MySQLi Database Connection
 $conn = null;
+$db_connection_error = '';
 try {
     mysqli_report(MYSQLI_REPORT_OFF);
     $conn = @new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME, (int)DB_PORT);
 
     if ($conn && $conn->connect_error) {
-        // Log connection error without crashing immediately for non-DB endpoints
+        $db_connection_error = $conn->connect_error;
         error_log("Database Connection Failed: " . $conn->connect_error);
         $conn = null;
     } elseif ($conn) {
         $conn->set_charset("utf8mb4");
     }
 } catch (Throwable $e) {
+    $db_connection_error = $e->getMessage();
     error_log("Database Exception: " . $e->getMessage());
     $conn = null;
 }

@@ -36,12 +36,13 @@ header('Content-Type: text/html; charset=utf-8');
 
 <?php
 if (!$conn) {
+    global $db_connection_error;
     echo '<div class="status-item status-err">';
-    echo '<span><strong>Connection Failed:</strong> Cannot connect to MySQL with current settings.</span>';
+    echo '<span><strong>Connection Failed:</strong> ' . htmlspecialchars($db_connection_error ?: 'Cannot connect to MySQL with current settings.') . '</span>';
     echo '<span>NOT CONNECTED</span>';
     echo '</div>';
-    echo '<p style="color:#A89F91;">Current target credentials from <code>.env.example</code> / <code>.env</code>:</p>';
-    echo '<pre>DB_HOST: ' . htmlspecialchars(DB_HOST) . "\nDB_NAME: " . htmlspecialchars(DB_NAME) . "\nDB_USER: " . htmlspecialchars(DB_USER) . '</pre>';
+    echo '<p style="color:#A89F91;">Current target credentials from <code>.env.example</code> / <code>.env</code> / <code>config.php</code>:</p>';
+    echo '<pre>DB_HOST: ' . htmlspecialchars(DB_HOST) . "\nDB_NAME: " . htmlspecialchars(DB_NAME) . "\nDB_USER: " . htmlspecialchars(DB_USER) . "\nERROR:   " . htmlspecialchars($db_connection_error) . '</pre>';
     echo '</div></body></html>';
     exit;
 }
