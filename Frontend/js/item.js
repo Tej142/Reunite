@@ -127,39 +127,92 @@ function closeClaimVerificationModal() {
   }
 }
 
-function handleClaimProofSubmit(e, itemId) {
+async function handleClaimProofSubmit(e, itemId) {
   e.preventDefault();
   const form = document.getElementById('claimProofForm');
   const submitBtn = document.getElementById('btnSubmitProof');
   const dialog = document.getElementById('claimModalDialog');
+  const secretProof = document.getElementById('claimSecretProof')?.value.trim();
+  const studentName = document.getElementById('claimStudentName')?.value.trim();
+  const studentEmail = document.getElementById('claimStudentEmail')?.value.trim();
 
+  if (!secretProof) {
+    if (window.ReuniteToast) window.ReuniteToast.error('Missing Proof', 'Please describe ownership details.');
+    return;
+  }
+
+  const rawId = parseInt(String(itemId).replace(/\D/g, ''), 10);
+  if (!rawId) {
+    if (window.ReuniteToast) window.ReuniteToast.error('Invalid Item', 'Could not determine report ID.');
+    return;
+  }
+
+  const origBtnContent = submitBtn ? submitBtn.innerHTML : '';
   if (submitBtn) {
     submitBtn.disabled = true;
     submitBtn.innerHTML = '<span>Verifying Proof...</span>';
   }
 
-  // Submit claim verification proof
-  setTimeout(() => {
-    if (dialog) {
-      dialog.innerHTML = `
-        <div style="text-align: center; padding: 1.5rem 0.5rem;">
-          <div style="width: 58px; height: 58px; border-radius: 50%; background: #DCFCE7; border: 2px solid #86EFAC; color: #15803D; display: inline-flex; align-items: center; justify-content: center; margin-bottom: 1.25rem;">
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
-              <polyline points="20 6 9 17 4 12"></polyline>
-            </svg>
+  try {
+    const res = await fetch('../Backend/claims.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'submit',
+        report_id: rawId,
+        proof_details: secretProof,
+        contact_info: studentName ? `${studentName} (${studentEmail || 'N/A'})` : studentEmail
+      })
+    });
+
+    const data = await res.json();
+    if (data.success) {
+      if (dialog) {
+        dialog.innerHTML = `
+          <div style="text-align: center; padding: 1.5rem 0.5rem;">
+            <div style="width: 58px; height: 58px; border-radius: 50%; background: #DCFCE7; border: 2px solid #86EFAC; color: #15803D; display: inline-flex; align-items: center; justify-content: center; margin-bottom: 1.25rem;">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="20 6 9 17 4 12"></polyline>
+              </svg>
+            </div>
+            <h3 style="font-family: var(--font-serif); font-size: 1.45rem; font-weight: 700; color: var(--ink); margin-bottom: 0.5rem;">Verification Submitted</h3>
+            <p style="font-size: 0.875rem; color: var(--muted); line-height: 1.6; margin-bottom: 1.5rem;">
+              Your ownership proof for <strong>#${itemId}</strong> has been logged. The finder or campus coordinator will review the hidden details and reach out to your student email.
+            </p>
+            <button type="button" class="btn-claim-primary" style="width: 100%; justify-content: center;" onclick="closeClaimVerificationModal()">Done</button>
           </div>
-          <h3 style="font-family: var(--font-serif); font-size: 1.45rem; font-weight: 700; color: var(--ink); margin-bottom: 0.5rem;">Verification Submitted</h3>
-          <p style="font-size: 0.875rem; color: var(--muted); line-height: 1.6; margin-bottom: 1.5rem;">
-            Your ownership proof for <strong>#${itemId}</strong> has been logged. The campus coordinator or finder will review the hidden details and reach out to your student email.
-          </p>
-          <button type="button" class="btn-claim-primary" style="width: 100%; justify-content: center;" onclick="closeClaimVerificationModal()">Done</button>
-        </div>
-      `;
+        `;
+      }
+      if (window.ReuniteToast) {
+        window.ReuniteToast.success('Claim Logged', `Proof of ownership for #${itemId} submitted successfully.`, 4000);
+      }
+    } else {
+      if (data.code === 'UNAUTHORIZED') {
+        if (window.ReuniteToast) {
+          window.ReuniteToast.error('Login Required', 'You must log in to submit an ownership claim.', 4000);
+        }
+        setTimeout(() => {
+          window.location.href = 'login.php';
+        }, 1500);
+      } else {
+        if (window.ReuniteToast) {
+          window.ReuniteToast.error('Claim Error', data.error || 'Failed to submit ownership claim.', 4000);
+        }
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.innerHTML = origBtnContent;
+        }
+      }
     }
+  } catch (err) {
     if (window.ReuniteToast) {
-      window.ReuniteToast.success('Claim Logged', `Proof of ownership for #${itemId} submitted successfully.`, 4000);
+      window.ReuniteToast.error('Network Error', 'Could not reach server to submit claim.', 4000);
     }
-  }, 650);
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.innerHTML = origBtnContent;
+    }
+  }
 }
 
 /**

@@ -58,7 +58,7 @@ if ($conn && $numericId > 0) {
     if ($reportType === 'found') {
         $stmt = $conn->prepare("SELECT id, user_id, category, title, description, location, date_found as report_date, image_path, status, created_at, 'found' as report_type FROM found_reports WHERE id = ? LIMIT 1");
     } else {
-        $stmt = $conn->prepare("SELECT id, user_id, category, title, description, location, date_lost as report_date, NULL as image_path, status, created_at, 'lost' as report_type FROM lost_reports WHERE id = ? LIMIT 1");
+        $stmt = $conn->prepare("SELECT id, user_id, category, title, description, location, date_lost as report_date, image_path, status, created_at, 'lost' as report_type FROM lost_reports WHERE id = ? LIMIT 1");
     }
 
     if ($stmt) {
@@ -77,7 +77,7 @@ if ($conn && $numericId > 0) {
         $oppType = ($reportType === 'found') ? 'lost' : 'found';
         $oppTable = ($oppType === 'found') ? 'found_reports' : 'lost_reports';
         $dateCol = ($oppType === 'found') ? 'date_found' : 'date_lost';
-        $imgCol = ($oppType === 'found') ? 'image_path' : 'NULL as image_path';
+        $imgCol = 'image_path';
 
         $stmtOpp = $conn->prepare("SELECT id, user_id, category, title, description, location, $dateCol as report_date, $imgCol, status, created_at, '$oppType' as report_type FROM `$oppTable` WHERE id = ? LIMIT 1");
         if ($stmtOpp) {

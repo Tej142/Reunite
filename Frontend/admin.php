@@ -28,7 +28,8 @@ $isAdmin = !empty($_SESSION['reunite_admin_auth']) && $_SESSION['reunite_admin_a
   <!-- ───────────────────────────────────────────────────────────── -->
   <!-- 1. SECURITY CLEARANCE TERMINAL AUTH SCREEN -->
   <!-- ───────────────────────────────────────────────────────────── -->
-  <div class="admin-auth-screen" id="adminAuthScreen" style="<?php echo $isAdmin ? 'display:none;' : 'display:flex;'; ?>">
+  <?php if (!$isAdmin): ?>
+  <div class="admin-auth-screen" id="adminAuthScreen">
     <div style="position: absolute; top: 1.5rem; right: 1.5rem; z-index: 10;">
       <button type="button" class="btn-admin-theme" id="btnAdminThemeToggleAuth" title="Toggle Light/Dark Theme" aria-label="Toggle theme">
         <svg class="sun-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
@@ -55,6 +56,7 @@ $isAdmin = !empty($_SESSION['reunite_admin_auth']) && $_SESSION['reunite_admin_a
       </form>
     </div>
   </div>
+  <?php else: ?>
 
   <!-- ───────────────────────────────────────────────────────────── -->
   <!-- 2. AUTHENTICATED SITE MAINTENANCE DASHBOARD -->
@@ -63,14 +65,14 @@ $isAdmin = !empty($_SESSION['reunite_admin_auth']) && $_SESSION['reunite_admin_a
   // Admin maintenance banner — visible to admin when maintenance is ON
   $maint = getMaintenanceSettings();
   ?>
-  <?php if ($isAdmin && $maint['enabled']): ?>
+  <?php if ($maint['enabled']): ?>
   <div class="admin-maint-on-banner" role="alert">
     <span><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" stroke="none" style="vertical-align:-1px; margin-right:4px; color:var(--admin-warning);"><circle cx="12" cy="12" r="10"/></svg> Maintenance Mode is <strong>ON</strong> — non-admin users see the maintenance page.</span>
     <span style="font-size:0.8125rem; color: var(--admin-warning);">Turn it OFF in the Health &amp; HUD tab when ready.</span>
   </div>
   <?php endif; ?>
 
-  <div id="adminDashboard" style="<?php echo $isAdmin ? 'display:block;' : 'display:none;'; ?>">
+  <div id="adminDashboard">
     
     <!-- Top Header -->
     <header class="admin-header">
@@ -541,6 +543,7 @@ $isAdmin = !empty($_SESSION['reunite_admin_auth']) && $_SESSION['reunite_admin_a
       </div>
     </div>
   </div>
+  <?php endif; ?>
 
   <script src="js/admin.js?v=<?php echo time(); ?>"></script>
 </body>

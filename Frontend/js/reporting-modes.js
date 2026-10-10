@@ -34,6 +34,10 @@ document.addEventListener('DOMContentLoaded', () => {
       if (aiStatusText && modeDescriptions[selectedMode]) {
         aiStatusText.innerHTML = modeDescriptions[selectedMode];
       }
+
+      if (selectedMode === 'mode3' && typeof checkAiServerHealth === 'function') {
+        checkAiServerHealth();
+      }
     });
   });
 
@@ -272,6 +276,31 @@ document.addEventListener('DOMContentLoaded', () => {
   let isAiResponding = false;
   let isVoiceModeActive = false;
   let isAiSpeaking = false;
+  let isAiServerOffline = false;
+
+  function checkAiServerHealth() {
+    const flaskBaseUrl = window.FLASK_BACKEND_URL || (window.location.protocol + '//' + (window.location.hostname || '127.0.0.1') + ':5000');
+    const subStatus = document.getElementById('talkAiSubStatus');
+    fetch(`${flaskBaseUrl}/`, { method: 'GET', mode: 'cors' })
+      .then(res => {
+        if (res.ok) {
+          isAiServerOffline = false;
+          if (subStatus) subStatus.textContent = 'Powered by Google Gemini Live Voice';
+          updateVoiceBadgeState();
+        } else {
+          isAiServerOffline = true;
+          if (subStatus) subStatus.innerHTML = '<span style="color:#EF4444; font-weight:600;">⚠️ Local Python Flask Server Offline (127.0.0.1:5000)</span>';
+          updateVoiceBadgeState();
+        }
+      })
+      .catch(() => {
+        isAiServerOffline = true;
+        if (subStatus) subStatus.innerHTML = '<span style="color:#EF4444; font-weight:600;">⚠️ Local Python Flask Server Offline (127.0.0.1:5000)</span>';
+        updateVoiceBadgeState();
+      });
+  }
+
+  setTimeout(checkAiServerHealth, 300);
   let currentDraft = {
     title: '',
     category: '',
@@ -332,9 +361,17 @@ document.addEventListener('DOMContentLoaded', () => {
         })
       });
 
+      if (!response.ok) {
+        throw new Error(`Server returned HTTP ${response.status} (${response.statusText || 'Offline'})`);
+      }
+
       const result = await response.json();
       removeThinkingIndicator(thinkingBubble);
       isAiResponding = false;
+      isAiServerOffline = false;
+
+      const subStatus = document.getElementById('talkAiSubStatus');
+      if (subStatus) subStatus.textContent = 'Powered by Google Gemini Live Voice';
 
       if (result.success && result.reply) {
         addChatBubble(result.reply, 'ai');
@@ -371,21 +408,53 @@ document.addEventListener('DOMContentLoaded', () => {
       console.error('Error connecting to Talk to AI endpoint:', err);
       removeThinkingIndicator(thinkingBubble);
       isAiResponding = false;
-      const errReply = "I've noted that in your report draft. Please continue describing the item!";
-      addChatBubble(errReply, 'ai');
+      isAiServerOffline = true;
+
+      const subStatus = document.getElementById('talkAiSubStatus');
+      if (subStatus) {
+        subStatus.innerHTML = '<span style="color:#EF4444; font-weight:600;">⚠️ Local Python Flask Server Offline (127.0.0.1:5000)</span>';
+      }
+
+      const errReply = `
+        <div style="font-weight:700; margin-bottom:4px; display:flex; align-items:center; gap:6px; color:#B91C1C;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          Python Flask Server is Offline
+        </div>
+        <div style="font-size:0.84rem; margin-bottom:8px; line-height:1.45;">
+          Could not connect to the local AI backend at <code>${escapeHtml(flaskBaseUrl)}</code>. Please start the server in your terminal:
+        </div>
+        <div style="background:rgba(0,0,0,0.06); padding:6px 10px; border-radius:6px; font-family:monospace; font-size:0.82rem; font-weight:600; display:inline-block; margin-bottom:6px;">
+          python flask_server.py
+        </div>
+      `;
+      addChatBubble(errReply, 'ai', true, () => handleUserChat(msg));
+
       if (isVoiceModeActive) {
-        speakAiReply(errReply);
+        speakAiReply("The local Python AI server is offline. Please start flask server to continue.");
       } else {
         updateVoiceBadgeState();
       }
     }
   }
 
-  function addChatBubble(text, sender) {
+  function addChatBubble(text, sender, isError = false, retryCallback = null) {
     if (!chatMessages) return;
     const bubble = document.createElement('div');
-    bubble.className = `chat-bubble ${sender}`;
+    bubble.className = `chat-bubble ${sender}${isError ? ' error-bubble' : ''}`;
     bubble.innerHTML = text;
+
+    if (retryCallback) {
+      const retryBtn = document.createElement('button');
+      retryBtn.className = 'chat-retry-btn';
+      retryBtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-1px; margin-right:4px;"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg> Retry';
+      retryBtn.onclick = (e) => {
+        e.preventDefault();
+        retryBtn.remove();
+        retryCallback();
+      };
+      bubble.appendChild(retryBtn);
+    }
+
     chatMessages.appendChild(bubble);
     chatMessages.scrollTop = chatMessages.scrollHeight;
   }
@@ -718,6 +787,14 @@ document.addEventListener('DOMContentLoaded', () => {
   function updateVoiceBadgeState() {
     if (!voiceBadgeText || !voiceLiveBadge) return;
 
+    if (isAiServerOffline) {
+      voiceBadgeText.textContent = 'Server Offline';
+      voiceLiveBadge.classList.add('offline');
+      voiceLiveBadge.classList.remove('active');
+      return;
+    }
+
+    voiceLiveBadge.classList.remove('offline');
     if (isAiSpeaking) {
       voiceBadgeText.textContent = 'AI Speaking...';
       voiceLiveBadge.classList.add('active');

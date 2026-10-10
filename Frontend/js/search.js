@@ -1004,36 +1004,93 @@ window.toggleClaimForm = function(itemId) {
 /**
  * Handle claim submission
  */
-window.handleClaimSubmit = function(e, itemId) {
+window.handleClaimSubmit = async function(e, itemId) {
   e.preventDefault();
   const formWrap = document.getElementById('claimFormWrap');
   const submitBtn = document.getElementById('btnClaimSubmitAction');
-  
-  if (submitBtn && window.setButtonLoading) {
-    window.setButtonLoading(submitBtn, true, 'Verifying proof...');
+  const proofText = document.getElementById('claimProof')?.value.trim();
+  const studentName = document.getElementById('claimName')?.value.trim();
+  const studentEmail = document.getElementById('claimEmail')?.value.trim();
+
+  if (!proofText) {
+    if (window.ReuniteToast) window.ReuniteToast.error('Missing Details', 'Please provide ownership details.');
+    return;
   }
 
-  setTimeout(() => {
-    if (formWrap) {
-      formWrap.innerHTML = `
-        <div class="claim-success-box">
-          <div class="claim-checkmark-circle" aria-hidden="true">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
-              <polyline points="20 6 9 17 4 12"></polyline>
-            </svg>
+  const rawId = parseInt(String(itemId).replace(/\D/g, ''), 10);
+  if (!rawId) {
+    if (window.ReuniteToast) window.ReuniteToast.error('Invalid Item', 'Could not determine report ID.');
+    return;
+  }
+
+  if (submitBtn && window.setButtonLoading) {
+    window.setButtonLoading(submitBtn, true, 'Verifying proof...');
+  } else if (submitBtn) {
+    submitBtn.disabled = true;
+  }
+
+  try {
+    const res = await fetch('../Backend/claims.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'submit',
+        report_id: rawId,
+        proof_details: proofText,
+        contact_info: studentName ? `${studentName} (${studentEmail || 'N/A'})` : studentEmail
+      })
+    });
+
+    const data = await res.json();
+    if (data.success) {
+      if (formWrap) {
+        formWrap.innerHTML = `
+          <div class="claim-success-box">
+            <div class="claim-checkmark-circle" aria-hidden="true">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="20 6 9 17 4 12"></polyline>
+              </svg>
+            </div>
+            <h4 style="font-size: 1.1rem; font-weight: 700; margin-bottom: 0.35rem; color: var(--ink);">Verification Submitted</h4>
+            <p style="font-size: 0.825rem; color: var(--muted); line-height: 1.5; margin-bottom: 1rem;">
+              Your ownership proof for <strong>#${itemId}</strong> has been logged. The finder or campus coordinator will review the hidden details and reach out to your registered college email.
+            </p>
+            <button type="button" class="btn-drawer-claim-pill" style="width: auto; padding: 0.55rem 1.5rem;" onclick="closeItemDrawer()">Done</button>
           </div>
-          <h4 style="font-size: 1.1rem; font-weight: 700; margin-bottom: 0.35rem; color: var(--ink);">Verification Submitted</h4>
-          <p style="font-size: 0.825rem; color: var(--muted); line-height: 1.5; margin-bottom: 1rem;">
-            Your ownership proof for <strong>#${itemId}</strong> has been logged. The finder or campus coordinator will review the hidden details and reach out to your registered college email.
-          </p>
-          <button type="button" class="btn-drawer-claim-pill" style="width: auto; padding: 0.55rem 1.5rem;" onclick="closeItemDrawer()">Done</button>
-        </div>
-      `;
+        `;
+      }
+      if (window.ReuniteToast) {
+        window.ReuniteToast.success('Claim Logged', `Verification request for #${itemId} submitted successfully.`, 4000);
+      }
+    } else {
+      if (data.code === 'UNAUTHORIZED') {
+        if (window.ReuniteToast) {
+          window.ReuniteToast.error('Login Required', 'You must log in to submit an ownership claim.', 4000);
+        }
+        setTimeout(() => {
+          window.location.href = 'login.php';
+        }, 1500);
+      } else {
+        if (window.ReuniteToast) {
+          window.ReuniteToast.error('Claim Error', data.error || 'Failed to submit verification request.', 4000);
+        }
+        if (submitBtn && window.setButtonLoading) {
+          window.setButtonLoading(submitBtn, false, 'Submit Verification Proof &rarr;');
+        } else if (submitBtn) {
+          submitBtn.disabled = false;
+        }
+      }
     }
+  } catch (err) {
     if (window.ReuniteToast) {
-      window.ReuniteToast.success('Claim Logged', `Verification request for #${itemId} submitted successfully.`, 4000);
+      window.ReuniteToast.error('Network Error', 'Could not reach server to submit claim.', 4000);
     }
-  }, 500);
+    if (submitBtn && window.setButtonLoading) {
+      window.setButtonLoading(submitBtn, false, 'Submit Verification Proof &rarr;');
+    } else if (submitBtn) {
+      submitBtn.disabled = false;
+    }
+  }
 };
 
 // Check for deep link query parameters (?item=... or ?match_id=...) on page load

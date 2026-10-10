@@ -30,7 +30,7 @@ if ($action === 'create' || ($method === 'POST' && ($action === '' || $action ==
     // Handle Image Upload if provided
     $imageWebPath = null;
     if (isset($_FILES['image']) && $_FILES['image']['error'] === UPLOAD_ERR_OK) {
-        $subFolder = ($type === 'found') ? 'found_reports' : 'lost_reports';
+        $subFolder = ($reportType === 'found') ? 'found_reports' : 'lost_reports';
         $uploadDir = __DIR__ . '/../media_vault/' . $subFolder . '/';
         if (!is_dir($uploadDir)) {
             mkdir($uploadDir, 0777, true);
@@ -160,6 +160,7 @@ if ($action === 'create' || ($method === 'POST' && ($action === '' || $action ==
 
     sendJsonResponse(true, ucfirst($reportType) . " report saved to database and ChromaDB successfully!", [
         'id' => $insertedId,
+        'db_id' => $insertedId,
         'report_id' => $formattedReportId,
         'dna_id' => $dnaId,
         'report_type' => $reportType,

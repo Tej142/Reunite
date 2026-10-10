@@ -595,6 +595,41 @@
   border-bottom-right-radius: 0.3rem;
 }
 
+.chat-bubble.error-bubble {
+  background: #FFF1F2;
+  border: 1px solid #FECDD3;
+  color: #9F1239;
+  border-bottom-left-radius: 0.3rem;
+  align-self: flex-start;
+}
+
+[data-theme="dark"] .chat-bubble.error-bubble {
+  background: #2D151A;
+  border-color: #4C1D24;
+  color: #FDA4AF;
+}
+
+.chat-retry-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-top: 0.6rem;
+  padding: 0.35rem 0.75rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  border-radius: 999px;
+  background: #E11D48;
+  color: #ffffff;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.chat-retry-btn:hover {
+  background: #BE123C;
+  transform: translateY(-1px);
+}
+
 /* Notice Badge inside AI bubble */
 .backend-notice-badge {
   font-size: 0.72rem;
@@ -1633,6 +1668,18 @@
   background: rgba(196, 98, 45, 0.2);
   border-color: rgba(196, 98, 45, 0.5);
   color: #FDBA74;
+}
+
+.voice-header-badge.offline {
+  background: rgba(239, 68, 68, 0.15);
+  border-color: rgba(239, 68, 68, 0.45);
+  color: #F87171;
+}
+
+.voice-header-badge.offline .live-dot {
+  background: #EF4444 !important;
+  box-shadow: 0 0 6px #EF4444;
+  animation: none !important;
 }
 
 .voice-header-badge .live-dot {

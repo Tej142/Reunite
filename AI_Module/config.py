@@ -177,9 +177,9 @@ client = FailoverClient()
 
 MISTRAL_API_KEY = os.getenv("MISTRAL_API_KEY")
 MISTRAL_MODEL = "mistral-small-latest"
-mistral_client = Mistral(api_key=MISTRAL_API_KEY)
 
 if not MISTRAL_API_KEY:
-    raise ValueError(
-        "MISTRAL_API_KEY not found. Please add it to your .env file."
-    )
+    print("[Config Notice] MISTRAL_API_KEY not found. Mistral fallback will be disabled.")
+    mistral_client = None
+else:
+    mistral_client = Mistral(api_key=MISTRAL_API_KEY)

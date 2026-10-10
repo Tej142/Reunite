@@ -54,12 +54,25 @@ document.addEventListener('DOMContentLoaded', () => {
       const res = await fetch('../Backend/admin_api.php?action=check_auth');
       const data = await res.json();
       if (data.success && data.authenticated) {
+        if (!adminDashboard) {
+          window.location.reload();
+          return;
+        }
         showDashboard(data.admin_name || 'System Administrator');
       } else {
+        if (adminDashboard) {
+          // Session expired or invalid while dashboard was rendered
+          window.location.reload();
+          return;
+        }
         showAuthScreen();
       }
     } catch (e) {
-      showAuthScreen();
+      if (adminDashboard) {
+        window.location.reload();
+      } else {
+        showAuthScreen();
+      }
     }
   }
 
@@ -70,12 +83,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function showDashboard(name) {
     if (adminAuthScreen) adminAuthScreen.style.display = 'none';
-    if (adminDashboard) adminDashboard.style.display = 'block';
-    if (adminUserPillName) adminUserPillName.textContent = name;
-    
-    // Initial load of reports and diagnostics on login
-    loadSystemDiagnostics(true);
-    loadReportsTable();
+    if (adminDashboard) {
+      adminDashboard.style.display = 'block';
+      if (adminUserPillName) adminUserPillName.textContent = name;
+      
+      // Initial load of reports and diagnostics on login
+      loadSystemDiagnostics(true);
+      loadReportsTable();
+    }
   }
 
   // Login submission
@@ -104,8 +119,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const data = await res.json();
         if (data.success) {
-          showDashboard('System Administrator');
           showToast('Clearance Granted', 'Welcome to Reunite System Maintenance Console.', 'success');
+          setTimeout(() => {
+            window.location.reload();
+          }, 350);
         } else {
           showToast('Access Denied', data.error || 'Invalid Admin Clearance Key.', 'error');
           if (adminPasscodeInput) {
@@ -127,9 +144,13 @@ document.addEventListener('DOMContentLoaded', () => {
   // Logout
   if (btnAdminLogout) {
     btnAdminLogout.addEventListener('click', async () => {
-      await fetch('../Backend/admin_api.php?action=logout');
-      showAuthScreen();
+      try {
+        await fetch('../Backend/admin_api.php?action=logout');
+      } catch (e) {}
       showToast('Logged Out', 'Admin session terminated safely.', 'info');
+      setTimeout(() => {
+        window.location.reload();
+      }, 350);
     });
   }
 
