@@ -14,6 +14,21 @@ $userId = $_SESSION['user_id'] ?? 1;
 
 global $conn;
 
+// Ensure userId resolves to the real database ID for the authenticated student
+if (!empty($_SESSION['pin']) && isset($conn) && $conn) {
+    $uStmt = $conn->prepare("SELECT user_id FROM users WHERE pin = ? LIMIT 1");
+    if ($uStmt) {
+        $uStmt->bind_param("s", $_SESSION['pin']);
+        $uStmt->execute();
+        $uRes = $uStmt->get_result();
+        if ($uRow = $uRes->fetch_assoc()) {
+            $userId = (int)$uRow['user_id'];
+            $_SESSION['user_id'] = $userId;
+        }
+        $uStmt->close();
+    }
+}
+
 // ── 1. Create Report (Save to lost_reports or found_reports) ──
 if ($action === 'create' || ($method === 'POST' && ($action === '' || $action === 'new'))) {
     $reportType = strtolower(trim($data['report_type'] ?? $data['type'] ?? 'lost'));

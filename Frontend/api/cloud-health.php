@@ -61,6 +61,37 @@ if ($conn && !$conn->connect_error) {
         $missing = array_diff($expected, $found);
         $results['database']['missing_tables'] = array_values($missing);
         $results['database']['schema_healthy'] = empty($missing);
+
+        // Registered users inspection
+        $uList = [];
+        $uRes = $conn->query("SELECT user_id, full_name, pin, role, status FROM users LIMIT 10");
+        if ($uRes) {
+            while ($u = $uRes->fetch_assoc()) {
+                $uid = (int)$u['user_id'];
+                $lCnt = 0; $fCnt = 0; $mCnt = 0;
+                $lQ = $conn->query("SELECT COUNT(*) FROM lost_reports WHERE user_id = $uid");
+                if ($lQ) $lCnt = (int)$lQ->fetch_row()[0];
+                $fQ = $conn->query("SELECT COUNT(*) FROM found_reports WHERE user_id = $uid");
+                if ($fQ) $fCnt = (int)$fQ->fetch_row()[0];
+                $mQ = $conn->query("SELECT COUNT(DISTINCT m.id) FROM matches m LEFT JOIN lost_reports lr ON m.lost_report_id = lr.id LEFT JOIN found_reports fr ON m.found_report_id = fr.id WHERE lr.user_id = $uid OR fr.user_id = $uid");
+                if ($mQ) $mCnt = (int)$mQ->fetch_row()[0];
+
+                $uList[] = [
+                    'user_id' => $uid,
+                    'full_name' => $u['full_name'],
+                    'pin' => $u['pin'],
+                    'role' => $u['role'],
+                    'status' => $u['status'],
+                    'profile_numbers' => [
+                        'reports_filed' => $lCnt + $fCnt,
+                        'lost_count' => $lCnt,
+                        'found_count' => $fCnt,
+                        'ai_matches' => $mCnt
+                    ]
+                ];
+            }
+        }
+        $results['database']['users_profile_verification'] = $uList;
     }
 } else {
     $results['database']['error'] = !empty($db_connection_error) ? $db_connection_error : ($conn ? $conn->connect_error : 'Connection null');

@@ -83,6 +83,24 @@ $user_initial = !empty(trim($user_name)) ? strtoupper(substr(trim($user_name), 0
 // Fetch current user's real database reports & statistics
 $userId = $user['user_id'] ?? ($_SESSION['user_id'] ?? null);
 
+// Defensive fallback: resolve numeric userId directly from database using student PIN if not already in session
+if ((empty($userId) || !is_numeric($userId)) && !empty($user_pin) && isset($conn) && $conn) {
+    $uStmt = $conn->prepare("SELECT user_id FROM users WHERE pin = ? LIMIT 1");
+    if ($uStmt) {
+        $uStmt->bind_param("s", $user_pin);
+        $uStmt->execute();
+        $uRes = $uStmt->get_result();
+        if ($uRow = $uRes->fetch_assoc()) {
+            $userId = (int)$uRow['user_id'];
+            $_SESSION['user_id'] = $userId;
+            if (isset($_SESSION['user']) && is_array($_SESSION['user'])) {
+                $_SESSION['user']['user_id'] = $userId;
+            }
+        }
+        $uStmt->close();
+    }
+}
+
 $userReports = [];
 $userStats = [
     'reports_filed' => 0,
@@ -103,7 +121,7 @@ if ($userId && isset($conn) && $conn) {
         while ($row = $res->fetch_assoc()) {
             $userReports[] = $row;
             $userStats['lost_count']++;
-            if (in_array($row['status'], ['matched', 'claimed', 'closed'])) {
+            if (in_array(strtolower($row['status']), ['matched', 'claimed', 'closed', 'reunited'])) {
                 $userStats['reunited_items']++;
             }
         }
@@ -119,7 +137,7 @@ if ($userId && isset($conn) && $conn) {
         while ($row = $res->fetch_assoc()) {
             $userReports[] = $row;
             $userStats['found_count']++;
-            if (in_array($row['status'], ['matched', 'claimed', 'closed'])) {
+            if (in_array(strtolower($row['status']), ['matched', 'claimed', 'closed', 'reunited'])) {
                 $userStats['reunited_items']++;
             }
         }
@@ -133,10 +151,10 @@ if ($userId && isset($conn) && $conn) {
 
     $userStats['reports_filed'] = count($userReports);
 
-    // 3. Count AI matches linked to user's lost reports
-    $mStmt = $conn->prepare("SELECT COUNT(*) as match_cnt FROM matches m JOIN lost_reports lr ON m.lost_report_id = lr.id WHERE lr.user_id = ?");
+    // 3. Count AI matches linked to user's reports (lost or found)
+    $mStmt = $conn->prepare("SELECT COUNT(DISTINCT m.id) as match_cnt FROM matches m LEFT JOIN lost_reports lr ON m.lost_report_id = lr.id LEFT JOIN found_reports fr ON m.found_report_id = fr.id WHERE lr.user_id = ? OR fr.user_id = ?");
     if ($mStmt) {
-        $mStmt->bind_param("i", $userId);
+        $mStmt->bind_param("ii", $userId, $userId);
         $mStmt->execute();
         $res = $mStmt->get_result();
         if ($mRow = $res->fetch_assoc()) {
@@ -146,7 +164,7 @@ if ($userId && isset($conn) && $conn) {
     }
 
     // 4. Count claims verified / recovery cases
-    $cStmt = $conn->prepare("SELECT COUNT(*) as claim_cnt FROM recovery_cases WHERE claimant_id = ? AND status IN ('approved', 'handed_off')");
+    $cStmt = $conn->prepare("SELECT COUNT(*) as claim_cnt FROM recovery_cases WHERE claimant_id = ? AND (status IN ('approved', 'handed_off') OR owner_verified = 1)");
     if ($cStmt) {
         $cStmt->bind_param("i", $userId);
         $cStmt->execute();
