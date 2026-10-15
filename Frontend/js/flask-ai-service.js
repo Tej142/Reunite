@@ -758,7 +758,19 @@ async function submitReportToBackend(payload = {}) {
     body: formData
   });
 
+  if (!response.ok) {
+    let errText = `Server returned status ${response.status}`;
+    try {
+      const errJson = await response.json();
+      if (errJson && errJson.message) errText = errJson.message;
+    } catch (_) {}
+    throw new Error(errText);
+  }
+
   const result = await response.json();
+  if (!result || !result.success) {
+    throw new Error((result && result.message) ? result.message : 'Database failed to store report.');
+  }
   return result;
 }
 

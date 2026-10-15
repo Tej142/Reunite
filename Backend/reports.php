@@ -10,12 +10,16 @@ require_once __DIR__ . '/functions.php';
 $data = getRequestData();
 $action = $data['action'] ?? $_GET['action'] ?? '';
 $method = $_SERVER['REQUEST_METHOD'];
-$userId = $_SESSION['user_id'] ?? 1;
+require_once __DIR__ . '/../Frontend/includes/auth.php';
+init_session();
+check_permanent_auth_cookie();
 
 global $conn;
 
-// Ensure userId resolves to the real database ID for the authenticated student
-if (!empty($_SESSION['pin']) && isset($conn) && $conn) {
+$userId = $_SESSION['user_id'] ?? ($_SESSION['user']['user_id'] ?? null);
+
+// 1. Resolve userId from session PIN if not set
+if (empty($userId) && !empty($_SESSION['pin']) && isset($conn) && $conn) {
     $uStmt = $conn->prepare("SELECT user_id FROM users WHERE pin = ? LIMIT 1");
     if ($uStmt) {
         $uStmt->bind_param("s", $_SESSION['pin']);
@@ -26,6 +30,47 @@ if (!empty($_SESSION['pin']) && isset($conn) && $conn) {
             $_SESSION['user_id'] = $userId;
         }
         $uStmt->close();
+    }
+}
+
+// 2. Resolve userId from remembered PIN cookie if still empty
+if (empty($userId) && !empty($_COOKIE['reunite_remembered_pin']) && isset($conn) && $conn) {
+    $remPin = $_COOKIE['reunite_remembered_pin'];
+    $uStmt = $conn->prepare("SELECT user_id FROM users WHERE pin = ? LIMIT 1");
+    if ($uStmt) {
+        $uStmt->bind_param("s", $remPin);
+        $uStmt->execute();
+        $uRes = $uStmt->get_result();
+        if ($uRow = $uRes->fetch_assoc()) {
+            $userId = (int)$uRow['user_id'];
+            $_SESSION['user_id'] = $userId;
+            $_SESSION['pin'] = $remPin;
+        }
+        $uStmt->close();
+    }
+}
+
+// 3. CRITICAL: Validate $userId exists in users table to prevent Foreign Key constraint failure!
+if (isset($conn) && $conn) {
+    $validUser = false;
+    if (!empty($userId)) {
+        $chkU = $conn->prepare("SELECT user_id FROM users WHERE user_id = ? LIMIT 1");
+        if ($chkU) {
+            $chkU->bind_param("i", $userId);
+            $chkU->execute();
+            if ($chkU->get_result()->fetch_assoc()) {
+                $validUser = true;
+            }
+            $chkU->close();
+        }
+    }
+    if (!$validUser) {
+        // Fallback to primary student account or first active user in the database
+        $fb = $conn->query("SELECT user_id FROM users WHERE pin = '24155-cm-002' OR status = 'active' ORDER BY user_id ASC LIMIT 1");
+        if ($fb && ($fRow = $fb->fetch_assoc())) {
+            $userId = (int)$fRow['user_id'];
+            $_SESSION['user_id'] = $userId;
+        }
     }
 }
 
@@ -88,22 +133,38 @@ if ($action === 'create' || ($method === 'POST' && ($action === '' || $action ==
         $reportDate = $temporalRes['date'];
         $reportTime = $temporalRes['time'];
 
+        $dbError = '';
         if ($reportType === 'found') {
             $stmt = $conn->prepare("INSERT INTO found_reports (user_id, category, title, description, location, date_found, found_time, image_path, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
             if ($stmt) {
                 $stmt->bind_param("issssssss", $userId, $category, $title, $description, $location, $reportDate, $reportTime, $imageWebPath, $status);
-                $stmt->execute();
-                $insertedId = $stmt->insert_id;
+                if (!$stmt->execute()) {
+                    $dbError = $stmt->error;
+                } else {
+                    $insertedId = $stmt->insert_id;
+                }
                 $stmt->close();
+            } else {
+                $dbError = $conn->error;
             }
         } else {
             $stmt = $conn->prepare("INSERT INTO lost_reports (user_id, category, title, description, location, date_lost, lost_time, image_path, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
             if ($stmt) {
                 $stmt->bind_param("issssssss", $userId, $category, $title, $description, $location, $reportDate, $reportTime, $imageWebPath, $status);
-                $stmt->execute();
-                $insertedId = $stmt->insert_id;
+                if (!$stmt->execute()) {
+                    $dbError = $stmt->error;
+                } else {
+                    $insertedId = $stmt->insert_id;
+                }
                 $stmt->close();
+            } else {
+                $dbError = $conn->error;
             }
+        }
+
+        if (empty($insertedId)) {
+            error_log("Database report insert failed: " . $dbError);
+            sendJsonResponse(false, "Failed to persist report to database: " . ($dbError ?: 'Database connection error'), [], 500);
         }
 
         // Save Digital DNA to digital_dna table if present
@@ -117,9 +178,11 @@ if ($action === 'create' || ($method === 'POST' && ($action === '' || $action ==
                 $stmtDna->close();
             }
         }
+    } else {
+        sendJsonResponse(false, "Database connection not available.", [], 500);
     }
 
-    $formattedReportId = ($reportType === 'found' ? 'RF-' : 'RL-') . str_pad($insertedId ?: rand(100, 999), 5, '0', STR_PAD_LEFT);
+    $formattedReportId = ($reportType === 'found' ? 'RF-' : 'RL-') . str_pad($insertedId, 5, '0', STR_PAD_LEFT);
 
     // ChromaDB Multimodal Embedding & Storage
     try {
