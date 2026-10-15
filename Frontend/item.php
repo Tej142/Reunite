@@ -153,11 +153,40 @@ if (!function_exists('formatRelativeTime')) {
 
 // ── 2. Database Lookup ──────────────────────────────────────────
 global $conn;
+$foundCols = [];
+$lostCols = [];
+
+$foundIdCol = 'id';
+$foundUserCol = 'user_id';
+$foundDateCol = 'date_found';
+
+$lostIdCol = 'id';
+$lostUserCol = 'user_id';
+$lostDateCol = 'date_lost';
+
 if ($conn && $numericId > 0) {
+    // Dynamic column detection across local and InfinityFree cloud database
+    $fcRes = @$conn->query("SHOW COLUMNS FROM found_reports");
+    if ($fcRes) {
+        while ($c = $fcRes->fetch_assoc()) $foundCols[] = strtolower($c['Field']);
+    }
+    $lcRes = @$conn->query("SHOW COLUMNS FROM lost_reports");
+    if ($lcRes) {
+        while ($c = $lcRes->fetch_assoc()) $lostCols[] = strtolower($c['Field']);
+    }
+
+    $foundIdCol = in_array('found_id', $foundCols) ? 'found_id' : 'id';
+    $foundUserCol = in_array('finder_id', $foundCols) ? 'finder_id' : (in_array('user_id', $foundCols) ? 'user_id' : 'finder_id');
+    $foundDateCol = in_array('date_found', $foundCols) ? 'date_found' : (in_array('found_date', $foundCols) ? 'found_date' : (in_array('created_at', $foundCols) ? 'created_at' : 'NULL'));
+
+    $lostIdCol = in_array('lost_id', $lostCols) ? 'lost_id' : 'id';
+    $lostUserCol = in_array('user_id', $lostCols) ? 'user_id' : (in_array('claimant_id', $lostCols) ? 'claimant_id' : 'user_id');
+    $lostDateCol = in_array('date_lost', $lostCols) ? 'date_lost' : (in_array('lost_date', $lostCols) ? 'lost_date' : (in_array('created_at', $lostCols) ? 'created_at' : 'NULL'));
+
     if ($reportType === 'found') {
-        $stmt = $conn->prepare("SELECT id, user_id, category, title, description, location, date_found as report_date, image_path, status, created_at, 'found' as report_type FROM found_reports WHERE id = ? LIMIT 1");
+        $stmt = $conn->prepare("SELECT `$foundIdCol` as id, `$foundUserCol` as user_id, category, title, description, location, $foundDateCol as report_date, image_path, status, created_at, 'found' as report_type FROM found_reports WHERE `$foundIdCol` = ? LIMIT 1");
     } else {
-        $stmt = $conn->prepare("SELECT id, user_id, category, title, description, location, date_lost as report_date, image_path, status, created_at, 'lost' as report_type FROM lost_reports WHERE id = ? LIMIT 1");
+        $stmt = $conn->prepare("SELECT `$lostIdCol` as id, `$lostUserCol` as user_id, category, title, description, location, $lostDateCol as report_date, image_path, status, created_at, 'lost' as report_type FROM lost_reports WHERE `$lostIdCol` = ? LIMIT 1");
     }
 
     if ($stmt) {
@@ -174,11 +203,12 @@ if ($conn && $numericId > 0) {
     // Fallback: If not found in primary table, try the opposite table
     if (!$item) {
         $oppType = ($reportType === 'found') ? 'lost' : 'found';
-        $oppTable = ($oppType === 'found') ? 'found_reports' : 'lost_reports';
-        $dateCol = ($oppType === 'found') ? 'date_found' : 'date_lost';
-        $imgCol = 'image_path';
+        if ($oppType === 'found') {
+            $stmtOpp = $conn->prepare("SELECT `$foundIdCol` as id, `$foundUserCol` as user_id, category, title, description, location, $foundDateCol as report_date, image_path, status, created_at, 'found' as report_type FROM found_reports WHERE `$foundIdCol` = ? LIMIT 1");
+        } else {
+            $stmtOpp = $conn->prepare("SELECT `$lostIdCol` as id, `$lostUserCol` as user_id, category, title, description, location, $lostDateCol as report_date, image_path, status, created_at, 'lost' as report_type FROM lost_reports WHERE `$lostIdCol` = ? LIMIT 1");
+        }
 
-        $stmtOpp = $conn->prepare("SELECT id, user_id, category, title, description, location, $dateCol as report_date, $imgCol, status, created_at, '$oppType' as report_type FROM `$oppTable` WHERE id = ? LIMIT 1");
         if ($stmtOpp) {
             $stmtOpp->bind_param("i", $numericId);
             $stmtOpp->execute();
@@ -194,9 +224,9 @@ if ($conn && $numericId > 0) {
     }
 }
 
-// ── 3. Fallback Demo Catalog (if DB is empty or sample ID requested) ──
+// ── 3. Demo Preview (Only used if explicitly requested with 'DEMO-' prefix) ──
 $demoCatalog = [
-    'RF-00002' => [
+    'DEMO-RF-00002' => [
         'id' => 2,
         'report_type' => 'found',
         'category' => 'Wearables & Watches',
@@ -215,47 +245,11 @@ $demoCatalog = [
             'dial' => 'Black with Roman Numerals',
             'markings' => 'Micro-scratches on clasp'
         ]
-    ],
-    'RF-00001' => [
-        'id' => 1,
-        'report_type' => 'found',
-        'category' => 'Electronics',
-        'title' => 'Apple AirPods Pro Wireless Earbuds',
-        'description' => 'White wireless charging case with black carabiner clip attached. Found under the second-row seating in Central Library study hall.',
-        'location' => 'Central Library 1st Floor',
-        'report_date' => date('Y-m-d', strtotime('-1 day')),
-        'image_path' => 'https://images.unsplash.com/photo-1600294037681-c80b4cb5b434?w=900&h=700&fit=contain&auto=format',
-        'status' => 'active',
-        'dna' => [
-            'brand' => 'Apple',
-            'color' => 'White',
-            'model' => 'AirPods Pro 2nd Gen',
-            'markings' => 'Small scratch near hinge'
-        ]
-    ],
-    'RL-00001' => [
-        'id' => 1,
-        'report_type' => 'lost',
-        'category' => 'Wallets & Bags',
-        'title' => 'Tommy Hilfiger Leather Bifold Wallet',
-        'description' => 'Navy blue / brown leather wallet containing college student ID card and bus pass. Lost during lunch break near main cafeteria entrance.',
-        'location' => 'Student Cafeteria',
-        'report_date' => date('Y-m-d', strtotime('-2 days')),
-        'image_path' => 'https://images.unsplash.com/photo-1627123424574-724758594e93?w=900&h=700&fit=contain&auto=format',
-        'status' => 'active',
-        'dna' => [
-            'brand' => 'Tommy Hilfiger',
-            'color' => 'Navy & Brown',
-            'model' => 'Leather Bifold'
-        ]
     ]
 ];
 
-if (!$item && isset($demoCatalog[$formattedId])) {
+if (!$item && str_starts_with($formattedId, 'DEMO-') && isset($demoCatalog[$formattedId])) {
     $item = $demoCatalog[$formattedId];
-} elseif (!$item && $numericId === 2) {
-    $item = $demoCatalog['RF-00002'];
-    $formattedId = 'RF-00002';
 }
 
 // ── 4. Retrieve Digital DNA Traits from DB ───────────────────────
@@ -368,9 +362,11 @@ if ($conn && $numericId > 0) {
             : (int)($activeMatchRow[$foundCol] ?? 0);
 
         if ($oppId > 0) {
-            $oppTable = ($reportType === 'found') ? 'lost_reports' : 'found_reports';
-            $dateField = ($reportType === 'found') ? 'date_lost' : 'date_found';
-            $oppQ = @$conn->query("SELECT id, user_id, category, title, description, location, $dateField as report_date, image_path, status, created_at FROM `$oppTable` WHERE id = $oppId LIMIT 1");
+            if ($reportType === 'found') {
+                $oppQ = @$conn->query("SELECT `$lostIdCol` as id, `$lostUserCol` as user_id, category, title, description, location, $lostDateCol as report_date, image_path, status, created_at FROM lost_reports WHERE `$lostIdCol` = $oppId LIMIT 1");
+            } else {
+                $oppQ = @$conn->query("SELECT `$foundIdCol` as id, `$foundUserCol` as user_id, category, title, description, location, $foundDateCol as report_date, image_path, status, created_at FROM found_reports WHERE `$foundIdCol` = $oppId LIMIT 1");
+            }
             if ($oppQ && ($matchedOppositeItem = $oppQ->fetch_assoc())) {
                 $oppTitle = getSmartTitle($matchedOppositeItem);
                 $oppLoc = $matchedOppositeItem['location'] ?? 'Campus';
@@ -405,7 +401,15 @@ $isOwnItem = ($logged_in && !empty($currentUserId) && !empty($itemUserId) && (in
 // Check for existing claims in recovery_cases
 $existingClaim = null;
 if ($conn && $numericId > 0 && $isFound) {
-    $cQ = @$conn->query("SELECT * FROM recovery_cases WHERE report_id = $numericId ORDER BY id DESC LIMIT 1");
+    $rcCols = [];
+    $rcRes = @$conn->query("SHOW COLUMNS FROM recovery_cases");
+    if ($rcRes) {
+        while ($rc = $rcRes->fetch_assoc()) $rcCols[] = strtolower($rc['Field']);
+    }
+    $rcPk = in_array('id', $rcCols) ? 'id' : (in_array('case_id', $rcCols) ? 'case_id' : 'id');
+    $rcRepCol = in_array('report_id', $rcCols) ? 'report_id' : (in_array('found_id', $rcCols) ? 'found_id' : 'report_id');
+
+    $cQ = @$conn->query("SELECT * FROM recovery_cases WHERE `$rcRepCol` = $numericId ORDER BY `$rcPk` DESC LIMIT 1");
     if ($cQ && ($cRow = $cQ->fetch_assoc())) {
         $existingClaim = $cRow;
     }
@@ -447,33 +451,51 @@ $hostStr = $_SERVER['HTTP_HOST'] ?? 'reunite-app.rf.gd';
 $uriStr = $_SERVER['REQUEST_URI'] ?? '';
 $canonicalUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" : "http") . "://{$hostStr}{$uriStr}";
 
-// Similar Items
-$similarItems = [
-    [
-        'id' => 'RF-00001',
-        'title' => 'Apple AirPods Pro Charging Case',
-        'category' => 'Electronics',
-        'location' => 'Central Library 1st Floor',
-        'img' => 'https://images.unsplash.com/photo-1600294037681-c80b4cb5b434?w=500&h=350&fit=crop&auto=format',
-        'match' => '88%'
-    ],
-    [
-        'id' => 'RL-00001',
-        'title' => 'Tommy Hilfiger Leather Wallet',
-        'category' => 'Wallets & Bags',
-        'location' => 'Student Cafeteria',
-        'img' => 'https://images.unsplash.com/photo-1627123424574-724758594e93?w=500&h=350&fit=crop&auto=format',
-        'match' => '84%'
-    ],
-    [
-        'id' => 'RF-00003',
-        'title' => 'Titan Edge Black Analog Watch',
-        'category' => 'Wearables & Watches',
-        'location' => 'Sports Complex Bleachers',
-        'img' => 'https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?w=500&h=350&fit=crop&auto=format',
-        'match' => '91%'
-    ]
-];
+// ── 5. Similar Items (Fetched dynamically from database) ─────────
+$similarItems = [];
+if ($conn && $numericId > 0) {
+    $catSafe = $conn->real_escape_string($item['category'] ?? 'General');
+    $simQ = @$conn->query("SELECT `$foundIdCol` as id, title, category, location, image_path FROM found_reports WHERE `$foundIdCol` != $numericId AND status = 'active' ORDER BY (category = '$catSafe') DESC, `$foundIdCol` DESC LIMIT 3");
+    if ($simQ && $simQ->num_rows > 0) {
+        while ($simRow = $simQ->fetch_assoc()) {
+            $simId = 'RF-' . str_pad($simRow['id'], 5, '0', STR_PAD_LEFT);
+            $simImg = !empty($simRow['image_path']) ? $simRow['image_path'] : 'https://images.unsplash.com/photo-1584438784894-089d6a62b8fa?w=500&h=350&fit=crop&auto=format';
+            if (!empty($simRow['image_path']) && !str_starts_with($simImg, 'http') && !str_starts_with($simImg, '/') && !str_starts_with($simImg, '../')) {
+                $simImg = '../' . $simImg;
+            }
+            $similarItems[] = [
+                'id' => $simId,
+                'title' => getSmartTitle($simRow),
+                'category' => $simRow['category'] ?: 'General',
+                'location' => $simRow['location'] ?: 'Campus',
+                'img' => $simImg,
+                'match' => '88%'
+            ];
+        }
+    }
+}
+
+// Fallback suggestions only if database has no other items
+if (empty($similarItems)) {
+    $similarItems = [
+        [
+            'id' => 'RF-00002',
+            'title' => 'Peter England Classic Wristwatch',
+            'category' => 'Wearables & Watches',
+            'location' => 'Computer Lab 2, Tech Block',
+            'img' => 'https://images.unsplash.com/photo-1524805444758-089113d48a6d?w=500&h=350&fit=crop&auto=format',
+            'match' => '91%'
+        ],
+        [
+            'id' => 'RL-00001',
+            'title' => 'Tommy Hilfiger Leather Wallet',
+            'category' => 'Wallets & Bags',
+            'location' => 'Student Cafeteria',
+            'img' => 'https://images.unsplash.com/photo-1627123424574-724758594e93?w=500&h=350&fit=crop&auto=format',
+            'match' => '84%'
+        ]
+    ];
+}
 ?>
 <!doctype html>
 <html lang="en">

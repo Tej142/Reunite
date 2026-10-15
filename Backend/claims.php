@@ -63,8 +63,17 @@ if ($action === 'submit') {
         $proofDetails .= "\n\n[Claimant Contact Info: " . $contactInfo . "]";
     }
 
+    // Detect column names on found_reports dynamically
+    $fCols = [];
+    $fcRes = @$conn->query("SHOW COLUMNS FROM found_reports");
+    if ($fcRes) {
+        while ($c = $fcRes->fetch_assoc()) $fCols[] = strtolower($c['Field']);
+    }
+    $fIdCol = in_array('found_id', $fCols) ? 'found_id' : 'id';
+    $fUserCol = in_array('finder_id', $fCols) ? 'finder_id' : (in_array('user_id', $fCols) ? 'user_id' : 'finder_id');
+
     // Fetch found report to verify existence, status, and finder
-    $stmt = $conn->prepare("SELECT id, user_id, title, status FROM found_reports WHERE id = ?");
+    $stmt = $conn->prepare("SELECT `$fIdCol` as id, `$fUserCol` as user_id, title, status FROM found_reports WHERE `$fIdCol` = ?");
     if (!$stmt) {
         http_response_code(500);
         echo json_encode(['success' => false, 'error' => 'Query preparation error']);
@@ -102,8 +111,17 @@ if ($action === 'submit') {
         exit;
     }
 
+    // Detect recovery_cases column names dynamically
+    $rcCols = [];
+    $rcRes = @$conn->query("SHOW COLUMNS FROM recovery_cases");
+    if ($rcRes) {
+        while ($rc = $rcRes->fetch_assoc()) $rcCols[] = strtolower($rc['Field']);
+    }
+    $rcPk = in_array('id', $rcCols) ? 'id' : (in_array('case_id', $rcCols) ? 'case_id' : 'id');
+    $rcRepCol = in_array('report_id', $rcCols) ? 'report_id' : (in_array('found_id', $rcCols) ? 'found_id' : 'report_id');
+
     // Check if user already submitted a pending claim on this report
-    $chkStmt = $conn->prepare("SELECT id FROM recovery_cases WHERE claimant_id = ? AND report_id = ? AND status = 'pending_verification'");
+    $chkStmt = $conn->prepare("SELECT `$rcPk` as id FROM recovery_cases WHERE claimant_id = ? AND `$rcRepCol` = ? AND status = 'pending_verification'");
     if ($chkStmt) {
         $chkStmt->bind_param("ii", $userId, $reportId);
         $chkStmt->execute();
@@ -121,7 +139,7 @@ if ($action === 'submit') {
     }
 
     // Insert claim into recovery_cases
-    $insStmt = $conn->prepare("INSERT INTO recovery_cases (claimant_id, proof_details, report_id, status, created_at) VALUES (?, ?, ?, 'pending_verification', NOW())");
+    $insStmt = $conn->prepare("INSERT INTO recovery_cases (claimant_id, proof_details, `$rcRepCol`, status, created_at) VALUES (?, ?, ?, 'pending_verification', NOW())");
     if (!$insStmt) {
         http_response_code(500);
         echo json_encode(['success' => false, 'error' => 'Database error preparing claim record']);
