@@ -296,14 +296,16 @@ svg {
 /* ================= INTRO / SPLASH HERO ================= */
 .intro {
   min-height: calc(100vh - 71px);
+  min-height: calc(100dvh - 71px);
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   text-align: center;
   position: relative;
-  overflow: hidden;
-  padding: 60px 24px 40px;
+  overflow: clip;
+  contain: paint;
+  padding: clamp(30px, 6vh, 60px) clamp(12px, 3vw, 24px) 40px;
 }
 
 .intro-bg-blob {
@@ -317,16 +319,16 @@ svg {
 }
 
 .blob-1 {
-  width: 420px;
-  height: 420px;
+  width: min(420px, 80vw);
+  height: min(420px, 80vw);
   background: var(--terracotta-tint);
   top: -120px;
   left: -140px;
 }
 
 .blob-2 {
-  width: 380px;
-  height: 380px;
+  width: min(380px, 75vw);
+  height: min(380px, 75vw);
   background: var(--green-tint, #DCEEE0);
   bottom: -140px;
   right: -120px;
@@ -360,6 +362,19 @@ svg {
   justify-content: center;
   margin: 0 auto 24px;
   z-index: 1;
+}
+
+@media (max-width: 380px) {
+  .converge-stage {
+    transform: scale(0.78);
+    margin-bottom: 0;
+  }
+}
+
+@media (max-width: 300px) {
+  .converge-stage {
+    transform: scale(0.65);
+  }
 }
 
 .orbit-icon {
@@ -479,9 +494,12 @@ svg {
 }
 
 .intro h1 {
-  font-size: clamp(36px,5.4vw,58px);
-  line-height: 1.08;
-  max-width: 820px;
+  font-size: clamp(24px, 1.35rem + 2.5vw, 56px);
+  line-height: 1.12;
+  max-width: min(100%, 820px);
+  overflow-wrap: anywhere;
+  word-break: normal;
+  padding-inline: 4px;
 }
 
 .intro h1 .line {
@@ -503,11 +521,12 @@ svg {
 }
 
 .intro p.lede {
-  margin-top: 22px;
-  font-size: 17px;
+  margin-top: clamp(14px, 2vh, 22px);
+  font-size: clamp(15px, 0.92rem + 0.25vw, 17px);
   line-height: 1.6;
   color: var(--ink-soft);
-  max-width: 460px;
+  max-width: min(100%, 460px);
+  padding-inline: 8px;
   opacity: 0;
   animation: fade-up .7s ease forwards;
   animation-delay: 2.2s;
@@ -515,13 +534,26 @@ svg {
 
 .intro-ctas {
   display: flex;
-  gap: 14px;
-  margin-top: 32px;
+  gap: 12px;
+  margin-top: clamp(20px, 3vh, 32px);
   flex-wrap: wrap;
   justify-content: center;
+  width: 100%;
+  max-width: 420px;
   opacity: 0;
   animation: fade-up .7s ease forwards;
   animation-delay: 2.35s;
+}
+
+@media (max-width: 360px) {
+  .intro-ctas {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .intro-ctas .btn {
+    width: 100%;
+    justify-content: center;
+  }
 }
 
 .intro-trust {
