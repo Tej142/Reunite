@@ -170,6 +170,11 @@
   text-align: center;
   transition: all 0.2s ease;
   white-space: nowrap;
+  min-height: var(--touch-target-min, 44px);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
 }
 
 .btn-profile-action.action-lost {
@@ -467,6 +472,11 @@
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s ease;
+  min-height: var(--touch-target-min, 44px);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
 }
 
 .btn-save-profile:hover {
@@ -668,6 +678,11 @@
   text-decoration: none;
   transition: all 0.15s ease;
   white-space: nowrap;
+  min-height: var(--touch-target-min, 44px);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
 }
 
 .btn-report-view:hover {

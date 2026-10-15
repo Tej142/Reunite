@@ -290,6 +290,11 @@ textarea {
   cursor: pointer;
   transition: opacity .15s, transform .10s;
   flex-shrink: 0;
+  min-height: var(--touch-target-min, 44px);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
 }
 
 .btn-submit:hover {
@@ -303,6 +308,21 @@ textarea {
 .btn-submit:disabled {
   opacity: .5;
   cursor: not-allowed;
+}
+
+@media (max-width: 600px) {
+  .form-footer {
+    flex-direction: column-reverse;
+    align-items: stretch;
+    gap: 1.25rem;
+  }
+  .btn-submit {
+    width: 100%;
+  }
+  .footer-note {
+    max-width: 100%;
+    text-align: center;
+  }
 }
 
 /* ── Success State ─────────────────────────────────── */

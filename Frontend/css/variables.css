@@ -2030,6 +2030,33 @@ mark {
   }
 }
 
+/* ── Short Landscape Viewports (e.g. 844x390, 640x360) ──────── */
+@media (max-height: 500px) and (orientation: landscape) {
+  nav.reunite-main-nav,
+  nav:not(.admin-nav-bar):not(.maint-topnav) {
+    position: relative !important;
+  }
+
+  .nav-inner {
+    height: 3rem !important;
+  }
+
+  .admin-auth-screen {
+    padding: 1rem !important;
+    align-items: flex-start !important;
+  }
+
+  .admin-auth-card {
+    margin: 1rem auto !important;
+  }
+
+  .chat-card,
+  .live-draft-card {
+    height: calc(100dvh - 70px) !important;
+    max-height: calc(100dvh - 70px) !important;
+  }
+}
+
 /* ── Print reset ──────────────────────────────────────────── */
 @media print {
   nav, .btn, .mobile-nav-drawer { display: none !important; }

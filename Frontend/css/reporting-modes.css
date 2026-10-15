@@ -427,6 +427,11 @@
   font-size: 0.875rem;
   cursor: pointer;
   transition: all 0.15s ease;
+  min-height: var(--touch-target-min, 44px);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
 }
 
 .choice-pill:hover {
@@ -459,6 +464,11 @@
   font-size: 0.875rem;
   cursor: pointer;
   transition: background 0.15s;
+  min-height: var(--touch-target-min, 44px);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
 }
 
 .btn-secondary:hover {
@@ -485,8 +495,8 @@
   border-radius: 1.5rem;
   display: flex;
   flex-direction: column;
-  height: 580px;
-  max-height: 580px;
+  height: clamp(420px, 68vh, 580px);
+  max-height: min(85dvh, 580px);
   overflow: hidden;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
 }
@@ -664,15 +674,18 @@
   background: var(--accent);
   color: white;
   border: none;
-  width: 2.5rem;
-  height: 2.5rem;
+  width: var(--touch-target-min, 44px);
+  height: var(--touch-target-min, 44px);
+  min-width: var(--touch-target-min, 44px);
+  min-height: var(--touch-target-min, 44px);
   border-radius: 50%;
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   transition: transform 0.15s, opacity 0.15s;
   flex-shrink: 0;
+  box-sizing: border-box;
 }
 
 .btn-send:hover {
@@ -688,8 +701,8 @@
   padding: 1.25rem 1.5rem 1rem 1.5rem;
   display: flex;
   flex-direction: column;
-  height: 580px;
-  max-height: 580px;
+  height: clamp(420px, 68vh, 580px);
+  max-height: min(85dvh, 580px);
   overflow: hidden;
   box-shadow: 0 4px 20px rgba(196, 98, 45, 0.05);
 }
@@ -1673,8 +1686,8 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 1rem;
-  padding: 0.75rem 1.25rem;
+  gap: 0.75rem;
+  padding: 0.75rem clamp(0.5rem, 2vw, 1.25rem);
   background: rgba(255, 255, 255, 0.03);
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   backdrop-filter: blur(8px);
@@ -1699,6 +1712,7 @@
   align-items: center;
   gap: 0.5rem;
   padding: 0.5rem 1.15rem;
+  min-height: var(--touch-target-min, 44px);
   border-radius: 999px;
   border: 1.5px solid #C4622D;
   background: linear-gradient(135deg, #C4622D, #A84E20);
@@ -1708,6 +1722,7 @@
   cursor: pointer;
   transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
   box-shadow: 0 2px 10px rgba(196, 98, 45, 0.28);
+  box-sizing: border-box;
 }
 
 .btn-voice-toggle:hover {
@@ -1737,19 +1752,22 @@
 }
 
 .btn-mic-inline {
-  width: 2.25rem;
-  height: 2.25rem;
+  width: var(--touch-target-min, 44px);
+  height: var(--touch-target-min, 44px);
+  min-width: var(--touch-target-min, 44px);
+  min-height: var(--touch-target-min, 44px);
   border-radius: 50%;
   border: 1.5px solid rgba(255, 255, 255, 0.12);
   background: rgba(255, 255, 255, 0.05);
   color: rgba(255, 255, 255, 0.75);
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   transition: all 0.2s;
   flex-shrink: 0;
   margin-right: 0.5rem;
+  box-sizing: border-box;
 }
 
 .btn-mic-inline:hover {
@@ -1826,16 +1844,19 @@
   background: transparent;
   border: 1px solid var(--border);
   color: var(--ink-soft);
-  width: 2.5rem;
-  height: 2.5rem;
+  width: var(--touch-target-min, 44px);
+  height: var(--touch-target-min, 44px);
+  min-width: var(--touch-target-min, 44px);
+  min-height: var(--touch-target-min, 44px);
   border-radius: 50%;
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
   flex-shrink: 0;
   position: relative;
+  box-sizing: border-box;
 }
 
 .btn-attach-photo:hover {
