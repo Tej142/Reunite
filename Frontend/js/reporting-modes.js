@@ -272,6 +272,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const dynamicDraftContainer = document.getElementById('dynamicDraftContainer');
   const btnDraftSubmit = document.getElementById('btnDraftSubmit');
   const btnVoiceToggle = document.getElementById('btnVoiceToggle');
+  const voiceLiveBar = document.getElementById('voiceLiveBar');
   const btnMicInline = document.getElementById('btnMicInline');
   const voiceLiveBadge = document.getElementById('voiceLiveBadge');
   const voiceBadgeText = document.getElementById('voiceBadgeText');
@@ -564,31 +565,163 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   let isAiServerOffline = false;
+  let activeFlaskUrl = null;
+
+  function getFlaskEndpoints() {
+    if (typeof window !== 'undefined' && window.FLASK_BACKEND_URL) {
+      return { primary: window.FLASK_BACKEND_URL, alternate: null };
+    }
+    const isLocal = typeof window !== 'undefined' && (
+      window.location.hostname === 'localhost' ||
+      window.location.hostname === '127.0.0.1' ||
+      window.location.hostname === ''
+    );
+    if (isLocal) {
+      return {
+        primary: 'http://127.0.0.1:5000',
+        alternate: 'https://reunite-ai-backend.onrender.com'
+      };
+    }
+    return {
+      primary: 'https://reunite-ai-backend.onrender.com',
+      alternate: 'http://127.0.0.1:5000'
+    };
+  }
 
   function getFlaskBaseUrl() {
-    return (typeof window !== 'undefined' && window.FLASK_BACKEND_URL) ? window.FLASK_BACKEND_URL : 'https://reunite-ai-backend.onrender.com';
+    if (activeFlaskUrl) return activeFlaskUrl;
+    return getFlaskEndpoints().primary;
   }
 
   function checkAiServerHealth() {
-    const flaskBaseUrl = getFlaskBaseUrl();
+    const { primary, alternate } = getFlaskEndpoints();
     const subStatus = document.getElementById('talkAiSubStatus');
-    fetch(`${flaskBaseUrl}/`, { method: 'GET', mode: 'cors' })
+
+    fetch(`${primary}/`, { method: 'GET', mode: 'cors' })
       .then(res => {
         if (res.ok) {
+          activeFlaskUrl = primary;
           isAiServerOffline = false;
-          if (subStatus) subStatus.textContent = 'Powered by Google Gemini Live Voice';
+          if (subStatus) subStatus.innerHTML = '<span class="copilot-live-dot"></span> Powered by Google Gemini Live Voice';
           updateVoiceBadgeState();
         } else {
-          isAiServerOffline = true;
-          if (subStatus) subStatus.innerHTML = '<span style="color:#F59E0B; font-weight:600;">⚠️ AI Server Waking Up (Wait ~30s)</span>';
-          updateVoiceBadgeState();
+          tryAlternate();
         }
       })
-      .catch(() => {
-        isAiServerOffline = true;
-        if (subStatus) subStatus.innerHTML = '<span style="color:#EF4444; font-weight:600;">⚠️ AI Server Offline / Waking Up</span>';
-        updateVoiceBadgeState();
-      });
+      .catch(() => tryAlternate());
+
+    function tryAlternate() {
+      if (!alternate) {
+        markOffline();
+        return;
+      }
+      fetch(`${alternate}/`, { method: 'GET', mode: 'cors' })
+        .then(res => {
+          if (res.ok) {
+            activeFlaskUrl = alternate;
+            isAiServerOffline = false;
+            if (subStatus) subStatus.innerHTML = '<span class="copilot-live-dot"></span> Powered by Google Gemini Live Voice';
+            updateVoiceBadgeState();
+          } else {
+            markOffline();
+          }
+        })
+        .catch(() => markOffline());
+    }
+
+    function markOffline() {
+      isAiServerOffline = true;
+      if (subStatus) subStatus.innerHTML = '<span style="color:#F59E0B; font-weight:600;">⚠️ Connecting AI Engine...</span>';
+      updateVoiceBadgeState();
+    }
+  }
+
+  // Client-side fallback turn processor if both Python endpoints are sleeping/unreachable
+  function generateClientSideChatTurn(userMsg, photoObj) {
+    const text = (userMsg || '').trim();
+    const lower = text.toLowerCase();
+
+    let reply = "";
+
+    // 1. Check greeting
+    const isGreeting = /^(hi|hello|hey|good morning|good afternoon|good evening)\b/i.test(lower);
+    if (isGreeting && !currentDraft.title) {
+      reply = isFoundPage
+        ? "Hello! I'm your AI Found Item Copilot. What item did you find, and where did you find it?"
+        : "Hello! I'm your AI Lost Item Copilot. What item did you lose, and where did you last see it?";
+      return {
+        success: true,
+        reply: reply,
+        draft: currentDraft,
+        is_ready_to_submit: false
+      };
+    }
+
+    // 2. Extract item
+    let detectedItem = "";
+    let detectedCategory = "";
+    if (lower.includes('wallet') || lower.includes('purse')) {
+      detectedItem = "Leather Wallet";
+      detectedCategory = "Wallets & Bags";
+    } else if (lower.includes('iphone') || lower.includes('phone') || lower.includes('mobile') || lower.includes('samsung') || lower.includes('pixel')) {
+      detectedItem = lower.includes('iphone') ? "iPhone" : "Smartphone";
+      detectedCategory = "Electronics";
+    } else if (lower.includes('key')) {
+      detectedItem = "Keys / Keychain";
+      detectedCategory = "Keys & Identification";
+    } else if (lower.includes('watch')) {
+      detectedItem = "Watch";
+      detectedCategory = "Accessories";
+    } else if (lower.includes('laptop') || lower.includes('macbook')) {
+      detectedItem = "Laptop";
+      detectedCategory = "Electronics";
+    } else if (lower.includes('bag') || lower.includes('backpack')) {
+      detectedItem = "Backpack";
+      detectedCategory = "Wallets & Bags";
+    } else if (lower.includes('bottle')) {
+      detectedItem = "Water Bottle";
+      detectedCategory = "Personal Items";
+    }
+
+    if (detectedItem && !currentDraft.title) {
+      currentDraft.title = detectedItem;
+      currentDraft.category = detectedCategory;
+    }
+
+    // 3. Location extraction
+    const locationMatch = lower.match(/(?:at|in|near|around|on|outside|inside)\s+([a-zA-Z0-9\s]{3,35})(?:yesterday|today|morning|afternoon|evening|\.|\,|$)/i);
+    if (locationMatch && locationMatch[1] && !currentDraft.location) {
+      currentDraft.location = locationMatch[1].trim();
+    }
+
+    // 4. Time extraction
+    if (!currentDraft.time) {
+      if (lower.includes('yesterday')) currentDraft.time = "Yesterday";
+      else if (lower.includes('today')) currentDraft.time = "Today";
+      else if (lower.includes('morning')) currentDraft.time = "Morning";
+    }
+
+    // 5. Generate conversational reply
+    if (photoObj) {
+      reply = "Thank you for sharing the photo! I've attached it to your report dossier. Could you share where you found/lost it and any unique marks?";
+    } else if (!currentDraft.title) {
+      reply = isFoundPage
+        ? "Could you tell me what specific item you found (e.g. phone, keys, wallet)?"
+        : "Could you describe the exact item you lost so I can match it?";
+    } else if (!currentDraft.location) {
+      reply = `Got it, I noted your ${currentDraft.title}. Where was it ${isFoundPage ? 'found' : 'last seen'}?`;
+    } else {
+      reply = `Understood! I've recorded the ${currentDraft.title} at ${currentDraft.location}. Are there any unique colors, brand names, or distinctive marks?`;
+    }
+
+    const isReady = Boolean(currentDraft.title && (currentDraft.location || currentDraft.category));
+
+    return {
+      success: true,
+      reply: reply,
+      draft: currentDraft,
+      is_ready_to_submit: isReady
+    };
   }
 
   async function handleUserChat(directMessage) {
@@ -612,6 +745,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (chatInput) chatInput.value = '';
     clearStagedPhoto();
+    if (chatSuggestions) chatSuggestions.style.display = 'none';
 
     // Show AI thinking bubble
     const thinkingBubble = showThinkingIndicator(photoToSend ? 'Looking at your photo...' : null);
@@ -619,56 +753,80 @@ document.addEventListener('DOMContentLoaded', () => {
     updateVoiceBadgeState();
     updateDraftSyncStatus(true);
 
-    const flaskBaseUrl = getFlaskBaseUrl();
+    const { primary, alternate } = getFlaskEndpoints();
+    const candidateEndpoints = [activeFlaskUrl || primary];
+    if (alternate && !candidateEndpoints.includes(alternate)) {
+      candidateEndpoints.push(alternate);
+    }
 
     try {
-      let response;
-      if (photoToSend) {
-        const formData = new FormData();
-        formData.append('image', photoToSend.file);
-        formData.append('message', msg || 'Here is a photo of the item.');
-        formData.append('history', JSON.stringify(chatHistory));
-        formData.append('report_type', isFoundPage ? 'found' : 'lost');
-        formData.append('current_draft', JSON.stringify(currentDraft));
-        const existingUrls = attachedPhotos.map(p => p.serverUrl).filter(Boolean);
-        if (existingUrls.length > 0) {
-          formData.append('image_urls', JSON.stringify(existingUrls));
+      let response = null;
+
+      async function postToEndpoint(endpointUrl) {
+        if (photoToSend) {
+          const formData = new FormData();
+          formData.append('image', photoToSend.file);
+          formData.append('message', msg || 'Here is a photo of the item.');
+          formData.append('history', JSON.stringify(chatHistory));
+          formData.append('report_type', isFoundPage ? 'found' : 'lost');
+          formData.append('current_draft', JSON.stringify(currentDraft));
+          const existingUrls = attachedPhotos.map(p => p.serverUrl).filter(Boolean);
+          if (existingUrls.length > 0) {
+            formData.append('image_urls', JSON.stringify(existingUrls));
+          }
+          return await fetch(`${endpointUrl}/report/talk_to_ai/chat`, {
+            method: 'POST',
+            body: formData
+          });
+        } else {
+          return await fetch(`${endpointUrl}/report/talk_to_ai/chat`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              message: msg,
+              history: chatHistory,
+              report_type: isFoundPage ? 'found' : 'lost',
+              current_draft: currentDraft,
+              image_urls: attachedPhotos.map(p => p.serverUrl).filter(Boolean)
+            })
+          });
         }
+      }
 
-        response = await fetch(`${flaskBaseUrl}/report/talk_to_ai/chat`, {
-          method: 'POST',
-          body: formData
-        });
+      for (const ep of candidateEndpoints) {
+        try {
+          const res = await postToEndpoint(ep);
+          if (res.ok) {
+            response = res;
+            activeFlaskUrl = ep;
+            break;
+          } else {
+            console.warn(`Talk to AI endpoint ${ep} returned HTTP ${res.status}. Trying next candidate...`);
+          }
+        } catch (netErr) {
+          console.warn(`Talk to AI endpoint ${ep} network error. Trying next candidate...`, netErr);
+        }
+      }
+
+      let result = null;
+      if (response && response.ok) {
+        result = await response.json();
       } else {
-        response = await fetch(`${flaskBaseUrl}/report/talk_to_ai/chat`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            message: msg,
-            history: chatHistory,
-            report_type: isFoundPage ? 'found' : 'lost',
-            current_draft: currentDraft,
-            image_urls: attachedPhotos.map(p => p.serverUrl).filter(Boolean)
-          })
-        });
+        console.warn('All remote AI endpoints failed or offline. Falling back to in-browser AI intake engine.');
+        result = generateClientSideChatTurn(msg, photoToSend);
       }
 
-      if (!response.ok) {
-        throw new Error(`Server returned HTTP ${response.status} (${response.statusText || 'Offline or waking up'})`);
-      }
-
-      const result = await response.json();
       removeThinkingIndicator(thinkingBubble);
       isAiResponding = false;
       isAiServerOffline = false;
       updateDraftSyncStatus(false);
 
       const subStatus = document.getElementById('talkAiSubStatus');
-      if (subStatus) subStatus.textContent = 'Powered by Google Gemini Live Voice';
+      if (subStatus) subStatus.innerHTML = '<span class="copilot-live-dot"></span> Powered by Google Gemini Live Voice';
 
-      if (result.success && result.reply) {
+      if (result && result.success && result.reply) {
         if (photoToSend) {
           const returnedUrls = result.image_urls || [];
           const serverUrl = returnedUrls.length > 0 ? returnedUrls[returnedUrls.length - 1] : null;
@@ -715,7 +873,7 @@ document.addEventListener('DOMContentLoaded', () => {
           updateVoiceBadgeState();
         }
       } else {
-        const fallbackReply = result.error || "I've noted that! Could you tell me more about the item or where you last saw it?";
+        const fallbackReply = (result && result.error) || "I've noted that! Could you tell me more about the item or where you last saw it?";
         addChatBubble(fallbackReply, 'ai');
         if (isVoiceModeActive) {
           speakAiReply(fallbackReply);
@@ -962,9 +1120,51 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!hasCore) {
       dynamicDraftContainer.innerHTML = `
         <div class="draft-empty-state" id="draftEmptyState">
-          <div class="draft-empty-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"/></svg></div>
-          <div class="draft-empty-text"><strong>Live Attributes Extractor</strong></div>
-          <div class="draft-empty-sub">Speak, type, or attach photos. The AI will dynamically analyze item features, colors, brands, and marks here in real time.</div>
+          <div class="draft-empty-header">
+            <span class="draft-empty-badge">AI Intake Dossier</span>
+            <div class="draft-empty-sub">Speak, type, or attach photos. The AI extracts features into this dossier in real time.</div>
+          </div>
+          <div class="draft-blueprint-grid">
+            <div class="draft-blueprint-card">
+              <div class="draft-blueprint-icon">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2H2v10l9.29 9.29c.94.94 2.48.94 3.42 0l6.58-6.58c.94-.94.94-2.48 0-3.42L12 2Z"/><path d="M7 7h.01"/></svg>
+              </div>
+              <div class="draft-blueprint-text">
+                <div class="draft-blueprint-label">Item Identification</div>
+                <div class="draft-blueprint-sub"><em>Waiting for item title or brand...</em></div>
+              </div>
+            </div>
+
+            <div class="draft-blueprint-card">
+              <div class="draft-blueprint-icon">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg>
+              </div>
+              <div class="draft-blueprint-text">
+                <div class="draft-blueprint-label">Category &amp; Type</div>
+                <div class="draft-blueprint-sub"><em>Auto-categorizes belongings...</em></div>
+              </div>
+            </div>
+
+            <div class="draft-blueprint-card">
+              <div class="draft-blueprint-icon">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"/><circle cx="12" cy="10" r="3"/></svg>
+              </div>
+              <div class="draft-blueprint-text">
+                <div class="draft-blueprint-label">Location &amp; Date</div>
+                <div class="draft-blueprint-sub"><em>Detects campus locations &amp; time...</em></div>
+              </div>
+            </div>
+
+            <div class="draft-blueprint-card">
+              <div class="draft-blueprint-icon">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+              </div>
+              <div class="draft-blueprint-text">
+                <div class="draft-blueprint-label">Distinctive Marks</div>
+                <div class="draft-blueprint-sub"><em>Private serials, stickers, colors...</em></div>
+              </div>
+            </div>
+          </div>
         </div>
       `;
       if (btnDraftSubmit) btnDraftSubmit.disabled = true;
@@ -1220,6 +1420,7 @@ document.addEventListener('DOMContentLoaded', () => {
     isVoiceModeActive = true;
     if (voiceToggleLabel) voiceToggleLabel.textContent = 'Stop Voice Mode';
     if (btnVoiceToggle) btnVoiceToggle.classList.add('active');
+    if (voiceLiveBar) voiceLiveBar.classList.add('active');
     startRecognitionSafe();
   }
 
@@ -1233,6 +1434,7 @@ document.addEventListener('DOMContentLoaded', () => {
     pauseRecognition();
     if (voiceToggleLabel) voiceToggleLabel.textContent = 'Start Voice Mode';
     if (btnVoiceToggle) btnVoiceToggle.classList.remove('active');
+    if (voiceLiveBar) voiceLiveBar.classList.remove('active');
     updateVoiceBadgeState();
     stopVisualizerAnimation();
   }

@@ -8,7 +8,12 @@ function getFlaskServerUrl() {
   if (typeof window !== 'undefined' && window.FLASK_BACKEND_URL) {
     return window.FLASK_BACKEND_URL;
   }
-  return 'https://reunite-ai-backend.onrender.com';
+  const isLocal = typeof window !== 'undefined' && (
+    window.location.hostname === 'localhost' ||
+    window.location.hostname === '127.0.0.1' ||
+    window.location.hostname === ''
+  );
+  return isLocal ? 'http://127.0.0.1:5000' : 'https://reunite-ai-backend.onrender.com';
 }
 
 const FLASK_SERVER_URL = getFlaskServerUrl();
@@ -753,24 +758,55 @@ async function submitReportToBackend(payload = {}) {
     formData.append('digital_dna', JSON.stringify(payload.dna));
   }
 
+  // Attempt POST with credentials to ensure anti-bot cookies are sent
   const response = await fetch('../Backend/reports.php', {
     method: 'POST',
-    body: formData
+    body: formData,
+    credentials: 'same-origin'
   });
+
+  // Read raw text first so we can diagnose anti-bot or HTML responses
+  const rawText = await response.text();
+  console.log('[submitReportToBackend] HTTP status:', response.status, 'Raw response length:', rawText.length);
+
+  // Detect InfinityFree anti-bot challenge page (returns HTML with AES decryption script)
+  if (rawText.includes('aes.js') || rawText.includes('slowAES') || rawText.includes('__test=')) {
+    console.error('[submitReportToBackend] ⚠️ InfinityFree anti-bot challenge detected! Response is HTML, not JSON.');
+    console.error('[submitReportToBackend] Raw HTML:', rawText.substring(0, 500));
+    throw new Error('Server security challenge intercepted the request. Please refresh the page and try again.');
+  }
+
+  // Detect any HTML response (not JSON)
+  const trimmed = rawText.trim();
+  if (trimmed.startsWith('<') || trimmed.startsWith('<!')) {
+    console.error('[submitReportToBackend] Received HTML instead of JSON:', trimmed.substring(0, 300));
+    throw new Error('Server returned an HTML page instead of JSON. The report was not saved. Please refresh and try again.');
+  }
 
   if (!response.ok) {
     let errText = `Server returned status ${response.status}`;
     try {
-      const errJson = await response.json();
+      const errJson = JSON.parse(rawText);
       if (errJson && errJson.message) errText = errJson.message;
-    } catch (_) {}
+    } catch (_) {
+      errText += ` — Raw: ${rawText.substring(0, 200)}`;
+    }
     throw new Error(errText);
   }
 
-  const result = await response.json();
+  let result;
+  try {
+    result = JSON.parse(rawText);
+  } catch (parseErr) {
+    console.error('[submitReportToBackend] JSON parse error. Raw response:', rawText.substring(0, 500));
+    throw new Error('Server response is not valid JSON. Raw: ' + rawText.substring(0, 200));
+  }
+
   if (!result || !result.success) {
+    console.error('[submitReportToBackend] Server returned failure:', result);
     throw new Error((result && result.message) ? result.message : 'Database failed to store report.');
   }
+  console.log('[submitReportToBackend] ✅ Report saved successfully:', result);
   return result;
 }
 

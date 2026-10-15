@@ -263,31 +263,37 @@
       <div class="chat-card">
         <div class="chat-header">
           <div class="chat-avatar-title">
-            <div class="chat-avatar"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="18" height="12" x="3" y="8" rx="2"/><path d="M12 2v6"/><circle cx="8" cy="14" r="1" fill="currentColor"/><circle cx="16" cy="14" r="1" fill="currentColor"/></svg></div>
+            <div class="chat-avatar"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg></div>
             <div>
               <div class="chat-name">Reunite AI Voice &amp; Chat Copilot</div>
-              <div class="chat-sub" id="talkAiSubStatus">Powered by Google Gemini Live Voice</div>
+              <div class="chat-sub" id="talkAiSubStatus"><span class="copilot-live-dot"></span> Powered by Google Gemini Live Voice</div>
             </div>
           </div>
-          <div class="voice-header-badge" id="voiceLiveBadge">
-            <span class="live-dot"></span>
-            <span id="voiceBadgeText">Ready to Talk</span>
+          <div class="chat-header-actions">
+            <button type="button" class="btn-voice-header" id="btnVoiceToggle" title="Click to start/stop live voice conversation">
+              <svg class="mic-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/>
+                <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                <line x1="12" y1="19" x2="12" y2="22"/>
+              </svg>
+              <span id="voiceToggleLabel">Start Voice Mode</span>
+            </button>
+            <div class="voice-header-badge" id="voiceLiveBadge" style="display:none;">
+              <span class="live-dot"></span>
+              <span id="voiceBadgeText">Ready to Talk</span>
+            </div>
           </div>
         </div>
 
-        <!-- Voice Live Visualizer Bar -->
+        <!-- Voice Live Visualizer Bar (Only shows when voice mode is active) -->
         <div class="voice-live-bar" id="voiceLiveBar">
-          <div class="voice-visualizer-wrap">
-            <canvas id="voiceVisualizer" width="180" height="28"></canvas>
+          <div class="voice-live-indicator">
+            <span class="live-pulse-dot"></span>
+            <span class="voice-live-text">Voice Active &bull; Speak Naturally</span>
           </div>
-          <button type="button" class="btn-voice-toggle" id="btnVoiceToggle" title="Click to start/stop live voice conversation">
-            <svg class="mic-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/>
-              <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
-              <line x1="12" y1="19" x2="12" y2="22"/>
-            </svg>
-            <span id="voiceToggleLabel">Start Voice Mode</span>
-          </button>
+          <div class="voice-visualizer-wrap">
+            <canvas id="voiceVisualizer" width="180" height="24"></canvas>
+          </div>
         </div>
 
         <!-- Chat Drag-and-Drop Overlay -->
@@ -305,14 +311,14 @@
 
         <div class="chat-messages" id="chatMessages" aria-live="polite">
           <div class="chat-bubble ai">
-            Hello! I'm your AI Lost Item Copilot. Click <strong>Start Voice Mode</strong> to speak naturally via live audio, or type in the box below. Tell me what you're missing, where you lost it, and any private details!
+            Hello! I'm your AI Lost Item Copilot. Tell me what you're missing, where you last saw it, or click <strong>Voice Mode</strong> to speak naturally via live audio!
           </div>
         </div>
 
         <div class="chat-suggestions" id="chatSuggestions">
-          <div class="prompt-chip">"I lost my brown wallet at Washington Square Park"</div>
-          <div class="prompt-chip">"Lost my blue iPhone on the train yesterday"</div>
-          <div class="prompt-chip">"Lost house keys with a yellow keychain on subway"</div>
+          <div class="prompt-chip">"I lost my brown wallet at Central Library"</div>
+          <div class="prompt-chip">"Lost blue iPhone 13 on the campus shuttle"</div>
+          <div class="prompt-chip">"Lost house keys with a yellow keychain"</div>
         </div>
 
         <!-- Attachment Staging Preview Chip -->
@@ -335,7 +341,7 @@
 
         <div class="chat-input-bar">
           <!-- Camera / Photo Attach Button -->
-          <button type="button" class="btn-attach-photo" id="btnAttachPhoto" title="Attach or take photo of item (up to 3)" aria-label="Attach photo">
+          <button type="button" class="btn-attach-photo" id="btnAttachPhoto" title="Attach photo of item (up to 3)" aria-label="Attach photo">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
               <circle cx="12" cy="13" r="4"/>
@@ -343,14 +349,14 @@
           </button>
           <input type="file" id="chatPhotoInput" accept="image/jpeg,image/png,image/webp" capture="environment" style="display:none;" />
 
-          <button type="button" class="btn-mic-inline" id="btnMicInline" title="Toggle microphone" aria-label="Toggle voice microphone">
+          <button type="button" class="btn-mic-inline" id="btnMicInline" title="Toggle voice microphone" aria-label="Toggle voice microphone">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/>
               <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
               <line x1="12" y1="19" x2="12" y2="22"/>
             </svg>
           </button>
-          <input type="text" id="chatInput" placeholder="Speak, type, or attach a photo..." aria-label="Chat message input" />
+          <input type="text" id="chatInput" placeholder="Describe item, location, or attach photo..." aria-label="Chat message input" />
           <button type="button" class="btn-send" id="btnSendChat" aria-label="Send message">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
           </button>
@@ -361,10 +367,10 @@
       <div class="live-draft-card">
         <div class="draft-header">
           <div class="draft-title">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
             Live Report Draft
           </div>
-          <span class="mode-badge" id="draftLiveStatusBadge">AI Syncing</span>
+          <span class="draft-live-badge" id="draftLiveStatusBadge"><span class="copilot-live-dot"></span> AI Syncing</span>
         </div>
 
         <!-- Uploaded Evidence Photos Drawer in Draft -->
@@ -380,14 +386,56 @@
 
         <div class="draft-fields-list" id="dynamicDraftContainer">
           <div class="draft-empty-state" id="draftEmptyState">
-            <div class="draft-empty-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"/></svg></div>
-            <div class="draft-empty-text"><strong>Live Attributes Extractor</strong></div>
-            <div class="draft-empty-sub">Speak or type your conversation. The AI will dynamically extract and display all item attributes, location, and marks here in real time.</div>
+            <div class="draft-empty-header">
+              <span class="draft-empty-badge">AI Intake Dossier</span>
+              <div class="draft-empty-sub">Speak or type details. The AI extracts features into this dossier in real time.</div>
+            </div>
+            <div class="draft-blueprint-grid">
+              <div class="draft-blueprint-card">
+                <div class="draft-blueprint-icon">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2H2v10l9.29 9.29c.94.94 2.48.94 3.42 0l6.58-6.58c.94-.94.94-2.48 0-3.42L12 2Z"/><path d="M7 7h.01"/></svg>
+                </div>
+                <div class="draft-blueprint-text">
+                  <div class="draft-blueprint-label">Item Identification</div>
+                  <div class="draft-blueprint-sub"><em>Waiting for item title or brand...</em></div>
+                </div>
+              </div>
+
+              <div class="draft-blueprint-card">
+                <div class="draft-blueprint-icon">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg>
+                </div>
+                <div class="draft-blueprint-text">
+                  <div class="draft-blueprint-label">Category &amp; Type</div>
+                  <div class="draft-blueprint-sub"><em>Auto-categorizes belongings...</em></div>
+                </div>
+              </div>
+
+              <div class="draft-blueprint-card">
+                <div class="draft-blueprint-icon">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"/><circle cx="12" cy="10" r="3"/></svg>
+                </div>
+                <div class="draft-blueprint-text">
+                  <div class="draft-blueprint-label">Location &amp; Date</div>
+                  <div class="draft-blueprint-sub"><em>Detects campus locations &amp; time...</em></div>
+                </div>
+              </div>
+
+              <div class="draft-blueprint-card">
+                <div class="draft-blueprint-icon">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                </div>
+                <div class="draft-blueprint-text">
+                  <div class="draft-blueprint-label">Distinctive Marks</div>
+                  <div class="draft-blueprint-sub"><em>Private serials, stickers, colors...</em></div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
         <div class="draft-footer">
-          <button type="button" class="btn-draft-submit btn-ai-analyze" id="btnDraftSubmit" disabled>Process &amp; Extract Features</button>
+          <button type="button" class="btn-draft-submit btn-ai-analyze" id="btnDraftSubmit" disabled>Complete Details to Submit</button>
         </div>
       </div>
 
