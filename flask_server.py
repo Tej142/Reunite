@@ -50,10 +50,10 @@ def db_log_event(action: str, details: str = "", user_id: int = None, ip: str = 
     Directly writes AI Engine activity & system events into MySQL `access_logs` table.
     """
     try:
-        db_host = os.getenv("DB_HOST", "localhost")
-        db_user = os.getenv("DB_USER", "root")
-        db_pass = os.getenv("DB_PASS", "")
-        db_name = os.getenv("DB_NAME", "lost_connect_db")
+        db_host = os.getenv("DB_HOST", "sql306.infinityfree.com")
+        db_user = os.getenv("DB_USER", "if0_42705202")
+        db_pass = os.getenv("DB_PASS", "reunitePVBVC123")
+        db_name = os.getenv("DB_NAME", "if0_42705202_lost_connect_db")
         db_port = int(os.getenv("DB_PORT", 3306))
 
         conn = pymysql.connect(
@@ -720,11 +720,17 @@ def search_matches_vector():
 
         matches = []
         if CHROMA_AVAILABLE and (dinov2_vector or clip_vector):
+            query_metadata = data.get("query_metadata") or data.get("metadata") or {
+                "object_type": data.get("category"),
+                "location": data.get("location"),
+                "attributes": data.get("attributes", {})
+            }
             matches = search_vectors(
                 dinov2_vector=dinov2_vector,
                 clip_vector=clip_vector,
                 photo_date_str=photo_date,
                 found_date_str=found_date,
+                query_metadata=query_metadata,
                 top_k=top_k
             )
 
@@ -739,6 +745,7 @@ def search_matches_vector():
             formatted_matches.append({
                 "report_id": m.get("report_id"),
                 "match_percentage": m.get("match_score"),
+                "ai_reasons": m.get("ai_reasons", {}),
                 "metadata": m.get("metadata"),
                 "breakdown": {
                     "visual_score": m.get("breakdown", {}).get("dino_score_raw", 0),

@@ -19,10 +19,10 @@ if ROOT_ENV_PATH.exists():
 # ==========================================
 # Database Configuration
 # ==========================================
-DB_HOST = os.getenv("DB_HOST", "localhost")
-DB_USER = os.getenv("DB_USER", "root")
-DB_PASSWORD = os.getenv("DB_PASS", "")  # alias: DB_PASS in .env.example
-DB_NAME = os.getenv("DB_NAME", "lost_connect_db")
+DB_HOST = os.getenv("DB_HOST", "sql306.infinityfree.com")
+DB_USER = os.getenv("DB_USER", "if0_42705202")
+DB_PASSWORD = os.getenv("DB_PASS", "reunitePVBVC123")  # alias: DB_PASS in .env.example
+DB_NAME = os.getenv("DB_NAME", "if0_42705202_lost_connect_db")
 DB_PORT = int(os.getenv("DB_PORT", 3306))
 
 # ==========================================
