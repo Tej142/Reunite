@@ -47,11 +47,11 @@ function get_config_val($key, $default = '') {
     return $default;
 }
 
-// Database Credentials
-define('DB_HOST', get_config_val('DB_HOST', 'localhost'));
-define('DB_USER', get_config_val('DB_USER', 'root'));
-define('DB_PASS', get_config_val('DB_PASS', ''));
-define('DB_NAME', get_config_val('DB_NAME', 'lost_connect_db'));
+// Database Credentials (Production InfinityFree Cloud DB)
+define('DB_HOST', get_config_val('DB_HOST', 'sql306.infinityfree.com'));
+define('DB_USER', get_config_val('DB_USER', 'if0_42705202'));
+define('DB_PASS', get_config_val('DB_PASS', 'reunitePVBVC123'));
+define('DB_NAME', get_config_val('DB_NAME', 'if0_42705202_lost_connect_db'));
 define('DB_PORT', (int)get_config_val('DB_PORT', 3306));
 
 // Encryption & Security Keys
@@ -78,8 +78,8 @@ define('SMTP_PASS', get_config_val('SMTP_PASS', ''));
 define('SMTP_FROM_EMAIL', get_config_val('SMTP_FROM_EMAIL', get_config_val('SMTP_USER', 'charante153624@gmail.com')));
 define('SMTP_FROM_NAME', get_config_val('SMTP_FROM_NAME', 'REUNITE TEAM'));
 
-// Python Flask AI Backend Endpoint (Local server)
-define('FLASK_AI_URL', get_config_val('FLASK_AI_URL', get_config_val('FLASK_BACKEND_URL', 'http://127.0.0.1:5000')));
+// Python Flask AI Backend Endpoint (Cloud deployment)
+define('FLASK_AI_URL', get_config_val('FLASK_AI_URL', get_config_val('FLASK_BACKEND_URL', 'https://reunite-ai-backend.onrender.com')));
 
 // App URLs & Paths
 define('BASE_PATH', dirname(__DIR__));
@@ -87,19 +87,34 @@ define('FRONTEND_URL', '../Frontend');
 
 // Establish MySQLi Database Connection
 $conn = null;
+$db_connection_error = '';
 try {
     mysqli_report(MYSQLI_REPORT_OFF);
-    $conn = new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME, (int)DB_PORT);
+    $conn = @new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME, (int)DB_PORT);
 
-    if ($conn->connect_error) {
-        // Log connection error without crashing immediately for non-DB endpoints
+    if ($conn && $conn->connect_error) {
+        $db_connection_error = $conn->connect_error;
         error_log("Database Connection Failed: " . $conn->connect_error);
-    } else {
+        $conn = null;
+    } elseif ($conn) {
         $conn->set_charset("utf8mb4");
     }
-} catch (Exception $e) {
+} catch (Throwable $e) {
+    $db_connection_error = $e->getMessage();
     error_log("Database Exception: " . $e->getMessage());
     $conn = null;
+}
+
+// Fallback to local XAMPP MySQL if production host is unreachable (e.g. local dev / testing)
+if (!$conn && defined('DB_HOST') && DB_HOST !== 'localhost' && DB_HOST !== '127.0.0.1') {
+    try {
+        $localConn = @new mysqli('localhost', 'root', '', 'lost_connect_db', 3306);
+        if ($localConn && !$localConn->connect_error) {
+            $conn = $localConn;
+            $conn->set_charset("utf8mb4");
+            $db_connection_error = '';
+        }
+    } catch (Throwable $ignore) {}
 }
 
 /**

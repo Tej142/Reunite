@@ -85,25 +85,41 @@ if ($action === 'create') {
     $targetUserId = (int)($data['user_id'] ?? $userId);
     $title = trim($data['title'] ?? 'New Notification');
     $message = trim($data['message'] ?? '');
-    $link = trim($data['link'] ?? 'search.php');
+    $link = trim($data['link'] ?? '');
     $type = trim($data['type'] ?? 'match');
     $reportType = strtoupper(trim($data['report_type'] ?? 'LOST'));
-    $reportId = !empty($data['report_id']) ? (int)$data['report_id'] : null;
+    $reportId = !empty($data['report_id']) ? (int)$data['report_id'] : 0;
+
+    if (empty($link) && $reportId > 0) {
+        $link = 'item.php?type=' . strtolower($reportType) . '&id=' . $reportId;
+    }
 
     if ($conn && !empty($message)) {
-        $stmt = $conn->prepare("INSERT INTO notifications (user_id, title, report_type, report_id, type, message, link, is_read, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, 0, NOW())");
-        if ($stmt) {
-            $stmt->bind_param("ississs", $targetUserId, $title, $reportType, $reportId, $type, $message, $link);
-            $stmt->execute();
-            $newId = $stmt->insert_id;
-            $stmt->close();
+        if (function_exists('insertSystemNotification')) {
+            $newId = insertSystemNotification($targetUserId, $title, $message, $link, $reportType, $reportId, $type);
+            if ($newId) {
+                echo json_encode([
+                    'success' => true,
+                    'notification_id' => $newId,
+                    'message' => 'Notification created successfully'
+                ]);
+                exit;
+            }
+        } else {
+            $stmt = $conn->prepare("INSERT INTO notifications (user_id, report_type, report_id, type, message, is_read, created_at) VALUES (?, ?, ?, ?, ?, 0, NOW())");
+            if ($stmt) {
+                $stmt->bind_param("isiss", $targetUserId, $reportType, $reportId, $type, $message);
+                $stmt->execute();
+                $newId = $stmt->insert_id;
+                $stmt->close();
 
-            echo json_encode([
-                'success' => true,
-                'notification_id' => $newId,
-                'message' => 'Notification created successfully'
-            ]);
-            exit;
+                echo json_encode([
+                    'success' => true,
+                    'notification_id' => $newId,
+                    'message' => 'Notification created successfully'
+                ]);
+                exit;
+            }
         }
     }
 
@@ -129,7 +145,7 @@ if ($conn) {
     }
 
     // List latest 25 notifications
-    $stmtList = $conn->prepare("SELECT notification_id, user_id, title, report_type, report_id, type, message, link, is_read, created_at FROM notifications WHERE (user_id = ? OR user_id = 0) ORDER BY notification_id DESC LIMIT 25");
+    $stmtList = $conn->prepare("SELECT * FROM notifications WHERE (user_id = ? OR user_id = 0) ORDER BY notification_id DESC LIMIT 25");
     if ($stmtList) {
         $stmtList->bind_param("i", $userId);
         $stmtList->execute();
@@ -143,18 +159,29 @@ if ($conn) {
             $cleanTitle = trim(preg_replace('/\s+/', ' ', preg_replace($emojiRegex, '', $row['title'] ?? '')));
             $cleanMessage = trim(preg_replace('/\s+/', ' ', preg_replace($emojiRegex, '', $row['message'] ?? '')));
 
+            // Resolve smart link directly to item.php if report_id is present
+            $resolvedLink = !empty($row['link']) ? $row['link'] : '';
+            $repId = (int)($row['report_id'] ?? 0);
+            $rType = strtolower($row['report_type'] ?? 'found');
+            if (empty($resolvedLink) && $repId > 0) {
+                $resolvedLink = "item.php?type={$rType}&id={$repId}";
+            }
+            if (empty($resolvedLink)) {
+                $resolvedLink = 'search.php';
+            }
+
             $notifications[] = [
-                'id' => (int)$row['notification_id'],
-                'title' => $cleanTitle ?: ($nType === 'match' ? 'New AI Match Detected!' : 'Notification'),
+                'id' => (int)($row['notification_id'] ?? $row['id'] ?? 0),
+                'title' => $cleanTitle ?: ($nType === 'match' ? 'Potential Match Detected!' : 'Notification'),
                 'message' => $cleanMessage,
-                'link' => !empty($row['link']) ? $row['link'] : 'search.php',
+                'link' => $resolvedLink,
                 'type' => $nType,
                 'icon' => $icon,
-                'report_type' => $row['report_type'],
-                'report_id' => $row['report_id'],
-                'is_read' => (int)$row['is_read'],
-                'time_ago' => format_time_ago($row['created_at']),
-                'created_at' => $row['created_at']
+                'report_type' => $row['report_type'] ?? 'LOST',
+                'report_id' => $repId,
+                'is_read' => (int)($row['is_read'] ?? 0),
+                'time_ago' => format_time_ago($row['created_at'] ?? ''),
+                'created_at' => $row['created_at'] ?? date('Y-m-d H:i:s')
             ];
         }
         $stmtList->close();
