@@ -514,6 +514,7 @@ if ($action === 'delete_report') {
 
 // ── 9. Sync & Re-index All Reports into ChromaDB ───────────
 if ($action === 'sync_chroma') {
+    @set_time_limit(180);
     if (!$conn) {
         echo json_encode(['success' => false, 'error' => 'Database connection unavailable']);
         exit;
@@ -545,7 +546,8 @@ if ($action === 'sync_chroma') {
             curl_setopt($ch, CURLOPT_POST, true);
             curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload));
             curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
-            curl_setopt($ch, CURLOPT_TIMEOUT, 3);
+            curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 8);
+            curl_setopt($ch, CURLOPT_TIMEOUT, 20);
             $out = curl_exec($ch);
             $http = curl_getinfo($ch, CURLINFO_HTTP_CODE);
             curl_close($ch);
@@ -577,7 +579,8 @@ if ($action === 'sync_chroma') {
             curl_setopt($ch, CURLOPT_POST, true);
             curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload));
             curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
-            curl_setopt($ch, CURLOPT_TIMEOUT, 3);
+            curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 8);
+            curl_setopt($ch, CURLOPT_TIMEOUT, 20);
             $out = curl_exec($ch);
             $http = curl_getinfo($ch, CURLINFO_HTTP_CODE);
             curl_close($ch);
