@@ -183,10 +183,35 @@ if ($conn && $numericId > 0) {
     $lostUserCol = in_array('user_id', $lostCols) ? 'user_id' : (in_array('claimant_id', $lostCols) ? 'claimant_id' : 'user_id');
     $lostDateCol = in_array('date_lost', $lostCols) ? 'date_lost' : (in_array('lost_date', $lostCols) ? 'lost_date' : (in_array('created_at', $lostCols) ? 'created_at' : 'NULL'));
 
+    // Resilient column selectors that prevent MySQL 1054 errors across local and InfinityFree schemas
+    $foundDateSelect = ($foundDateCol !== 'NULL') ? "`$foundDateCol` as report_date" : "NOW() as report_date";
+    $lostDateSelect = ($lostDateCol !== 'NULL') ? "`$lostDateCol` as report_date" : "NOW() as report_date";
+
+    $foundCreatedSelect = in_array('created_at', $foundCols) ? '`created_at`' : (($foundDateCol !== 'NULL') ? "`$foundDateCol` as created_at" : "NOW() as created_at");
+    $lostCreatedSelect = in_array('created_at', $lostCols) ? '`created_at`' : (($lostDateCol !== 'NULL') ? "`$lostDateCol` as created_at" : "NOW() as created_at");
+
+    $foundStatusSelect = in_array('status', $foundCols) ? '`status`' : "'active' as status";
+    $lostStatusSelect = in_array('status', $lostCols) ? '`status`' : "'active' as status";
+
+    $foundCatSelect = in_array('category', $foundCols) ? '`category`' : "'General' as category";
+    $lostCatSelect = in_array('category', $lostCols) ? '`category`' : "'General' as category";
+
+    $foundTitleSelect = in_array('title', $foundCols) ? '`title`' : "'Found Item' as title";
+    $lostTitleSelect = in_array('title', $lostCols) ? '`title`' : "'Lost Item' as title";
+
+    $foundDescSelect = in_array('description', $foundCols) ? '`description`' : "'' as description";
+    $lostDescSelect = in_array('description', $lostCols) ? '`description`' : "'' as description";
+
+    $foundLocSelect = in_array('location', $foundCols) ? '`location`' : "'Campus' as location";
+    $lostLocSelect = in_array('location', $lostCols) ? '`location`' : "'Campus' as location";
+
+    $foundImgSelect = in_array('image_path', $foundCols) ? '`image_path`' : "'' as image_path";
+    $lostImgSelect = in_array('image_path', $lostCols) ? '`image_path`' : "'' as image_path";
+
     if ($reportType === 'found') {
-        $stmt = $conn->prepare("SELECT `$foundIdCol` as id, `$foundUserCol` as user_id, category, title, description, location, $foundDateCol as report_date, image_path, status, created_at, 'found' as report_type FROM found_reports WHERE `$foundIdCol` = ? LIMIT 1");
+        $stmt = $conn->prepare("SELECT `$foundIdCol` as id, `$foundUserCol` as user_id, $foundCatSelect, $foundTitleSelect, $foundDescSelect, $foundLocSelect, $foundDateSelect, $foundImgSelect, $foundStatusSelect, $foundCreatedSelect, 'found' as report_type FROM found_reports WHERE `$foundIdCol` = ? LIMIT 1");
     } else {
-        $stmt = $conn->prepare("SELECT `$lostIdCol` as id, `$lostUserCol` as user_id, category, title, description, location, $lostDateCol as report_date, image_path, status, created_at, 'lost' as report_type FROM lost_reports WHERE `$lostIdCol` = ? LIMIT 1");
+        $stmt = $conn->prepare("SELECT `$lostIdCol` as id, `$lostUserCol` as user_id, $lostCatSelect, $lostTitleSelect, $lostDescSelect, $lostLocSelect, $lostDateSelect, $lostImgSelect, $lostStatusSelect, $lostCreatedSelect, 'lost' as report_type FROM lost_reports WHERE `$lostIdCol` = ? LIMIT 1");
     }
 
     if ($stmt) {
@@ -198,15 +223,25 @@ if ($conn && $numericId > 0) {
             $isFoundInDb = true;
         }
         $stmt->close();
+    } else {
+        // Direct query fallback if prepare is rejected
+        $directSql = ($reportType === 'found')
+            ? "SELECT `$foundIdCol` as id, `$foundUserCol` as user_id, $foundCatSelect, $foundTitleSelect, $foundDescSelect, $foundLocSelect, $foundDateSelect, $foundImgSelect, $foundStatusSelect, $foundCreatedSelect, 'found' as report_type FROM found_reports WHERE `$foundIdCol` = " . (int)$numericId . " LIMIT 1"
+            : "SELECT `$lostIdCol` as id, `$lostUserCol` as user_id, $lostCatSelect, $lostTitleSelect, $lostDescSelect, $lostLocSelect, $lostDateSelect, $lostImgSelect, $lostStatusSelect, $lostCreatedSelect, 'lost' as report_type FROM lost_reports WHERE `$lostIdCol` = " . (int)$numericId . " LIMIT 1";
+        $directRes = @$conn->query($directSql);
+        if ($directRes && ($row = $directRes->fetch_assoc())) {
+            $item = $row;
+            $isFoundInDb = true;
+        }
     }
 
     // Fallback: If not found in primary table, try the opposite table
     if (!$item) {
         $oppType = ($reportType === 'found') ? 'lost' : 'found';
         if ($oppType === 'found') {
-            $stmtOpp = $conn->prepare("SELECT `$foundIdCol` as id, `$foundUserCol` as user_id, category, title, description, location, $foundDateCol as report_date, image_path, status, created_at, 'found' as report_type FROM found_reports WHERE `$foundIdCol` = ? LIMIT 1");
+            $stmtOpp = $conn->prepare("SELECT `$foundIdCol` as id, `$foundUserCol` as user_id, $foundCatSelect, $foundTitleSelect, $foundDescSelect, $foundLocSelect, $foundDateSelect, $foundImgSelect, $foundStatusSelect, $foundCreatedSelect, 'found' as report_type FROM found_reports WHERE `$foundIdCol` = ? LIMIT 1");
         } else {
-            $stmtOpp = $conn->prepare("SELECT `$lostIdCol` as id, `$lostUserCol` as user_id, category, title, description, location, $lostDateCol as report_date, image_path, status, created_at, 'lost' as report_type FROM lost_reports WHERE `$lostIdCol` = ? LIMIT 1");
+            $stmtOpp = $conn->prepare("SELECT `$lostIdCol` as id, `$lostUserCol` as user_id, $lostCatSelect, $lostTitleSelect, $lostDescSelect, $lostLocSelect, $lostDateSelect, $lostImgSelect, $lostStatusSelect, $lostCreatedSelect, 'lost' as report_type FROM lost_reports WHERE `$lostIdCol` = ? LIMIT 1");
         }
 
         if ($stmtOpp) {
@@ -220,6 +255,17 @@ if ($conn && $numericId > 0) {
                 $isFoundInDb = true;
             }
             $stmtOpp->close();
+        } else {
+            $directOppSql = ($oppType === 'found')
+                ? "SELECT `$foundIdCol` as id, `$foundUserCol` as user_id, $foundCatSelect, $foundTitleSelect, $foundDescSelect, $foundLocSelect, $foundDateSelect, $foundImgSelect, $foundStatusSelect, $foundCreatedSelect, 'found' as report_type FROM found_reports WHERE `$foundIdCol` = " . (int)$numericId . " LIMIT 1"
+                : "SELECT `$lostIdCol` as id, `$lostUserCol` as user_id, $lostCatSelect, $lostTitleSelect, $lostDescSelect, $lostLocSelect, $lostDateSelect, $lostImgSelect, $lostStatusSelect, $lostCreatedSelect, 'lost' as report_type FROM lost_reports WHERE `$lostIdCol` = " . (int)$numericId . " LIMIT 1";
+            $directOppRes = @$conn->query($directOppSql);
+            if ($directOppRes && ($rowOpp = $directOppRes->fetch_assoc())) {
+                $item = $rowOpp;
+                $reportType = $oppType;
+                $formattedId = strtoupper("R" . ($oppType === 'found' ? 'F' : 'L') . "-" . str_pad($numericId, 5, '0', STR_PAD_LEFT));
+                $isFoundInDb = true;
+            }
         }
     }
 }
@@ -363,9 +409,9 @@ if ($conn && $numericId > 0) {
 
         if ($oppId > 0) {
             if ($reportType === 'found') {
-                $oppQ = @$conn->query("SELECT `$lostIdCol` as id, `$lostUserCol` as user_id, category, title, description, location, $lostDateCol as report_date, image_path, status, created_at FROM lost_reports WHERE `$lostIdCol` = $oppId LIMIT 1");
+                $oppQ = @$conn->query("SELECT `$lostIdCol` as id, `$lostUserCol` as user_id, $lostCatSelect, $lostTitleSelect, $lostDescSelect, $lostLocSelect, $lostDateSelect, $lostImgSelect, $lostStatusSelect, $lostCreatedSelect, 'lost' as report_type FROM lost_reports WHERE `$lostIdCol` = $oppId LIMIT 1");
             } else {
-                $oppQ = @$conn->query("SELECT `$foundIdCol` as id, `$foundUserCol` as user_id, category, title, description, location, $foundDateCol as report_date, image_path, status, created_at FROM found_reports WHERE `$foundIdCol` = $oppId LIMIT 1");
+                $oppQ = @$conn->query("SELECT `$foundIdCol` as id, `$foundUserCol` as user_id, $foundCatSelect, $foundTitleSelect, $foundDescSelect, $foundLocSelect, $foundDateSelect, $foundImgSelect, $foundStatusSelect, $foundCreatedSelect, 'found' as report_type FROM found_reports WHERE `$foundIdCol` = $oppId LIMIT 1");
             }
             if ($oppQ && ($matchedOppositeItem = $oppQ->fetch_assoc())) {
                 $oppTitle = getSmartTitle($matchedOppositeItem);
@@ -385,6 +431,9 @@ if ($conn && $numericId > 0) {
 
 // Prepare item presentation variables
 $smartTitle = getSmartTitle($item);
+if ($item && empty($item['status'])) {
+    $item['status'] = 'active';
+}
 $imgSrc = !empty($item['image_path']) ? $item['image_path'] : 'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=900&h=700&fit=contain&auto=format';
 if (!empty($item['image_path']) && !str_starts_with($item['image_path'], 'http') && !str_starts_with($item['image_path'], '/') && !str_starts_with($item['image_path'], '../')) {
     $imgSrc = '../' . $item['image_path'];
@@ -455,7 +504,7 @@ $canonicalUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https
 $similarItems = [];
 if ($conn && $numericId > 0) {
     $catSafe = $conn->real_escape_string($item['category'] ?? 'General');
-    $simQ = @$conn->query("SELECT `$foundIdCol` as id, title, category, location, image_path FROM found_reports WHERE `$foundIdCol` != $numericId AND status = 'active' ORDER BY (category = '$catSafe') DESC, `$foundIdCol` DESC LIMIT 3");
+    $simQ = @$conn->query("SELECT `$foundIdCol` as id, $foundTitleSelect, $foundCatSelect, $foundLocSelect, $foundImgSelect FROM found_reports WHERE `$foundIdCol` != $numericId AND (status = 'active' OR status = '' OR status IS NULL) ORDER BY (category = '$catSafe') DESC, `$foundIdCol` DESC LIMIT 3");
     if ($simQ && $simQ->num_rows > 0) {
         while ($simRow = $simQ->fetch_assoc()) {
             $simId = 'RF-' . str_pad($simRow['id'], 5, '0', STR_PAD_LEFT);
@@ -556,7 +605,7 @@ if (empty($similarItems)) {
   <?php else: ?>
 
     <!-- ── Top Navigation & Breadcrumbs ── -->
-    <div class="item-topbar" role="navigation" aria-label="Breadcrumb">
+    <nav class="item-topbar" aria-label="Breadcrumb">
       <div class="item-breadcrumb">
         <a href="home.php">Home</a>
         <span class="breadcrumb-sep">/</span>
