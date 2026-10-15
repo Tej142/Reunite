@@ -129,7 +129,7 @@ if ($conn) {
     }
 
     // List latest 25 notifications
-    $stmtList = $conn->prepare("SELECT notification_id, user_id, title, report_type, report_id, type, message, link, is_read, created_at FROM notifications WHERE (user_id = ? OR user_id = 0) ORDER BY notification_id DESC LIMIT 25");
+    $stmtList = $conn->prepare("SELECT * FROM notifications WHERE (user_id = ? OR user_id = 0) ORDER BY notification_id DESC LIMIT 25");
     if ($stmtList) {
         $stmtList->bind_param("i", $userId);
         $stmtList->execute();
@@ -144,17 +144,17 @@ if ($conn) {
             $cleanMessage = trim(preg_replace('/\s+/', ' ', preg_replace($emojiRegex, '', $row['message'] ?? '')));
 
             $notifications[] = [
-                'id' => (int)$row['notification_id'],
-                'title' => $cleanTitle ?: ($nType === 'match' ? 'New AI Match Detected!' : 'Notification'),
+                'id' => (int)($row['notification_id'] ?? $row['id'] ?? 0),
+                'title' => $cleanTitle ?: ($nType === 'match' ? 'Potential Match Detected!' : 'Notification'),
                 'message' => $cleanMessage,
                 'link' => !empty($row['link']) ? $row['link'] : 'search.php',
                 'type' => $nType,
                 'icon' => $icon,
-                'report_type' => $row['report_type'],
-                'report_id' => $row['report_id'],
-                'is_read' => (int)$row['is_read'],
-                'time_ago' => format_time_ago($row['created_at']),
-                'created_at' => $row['created_at']
+                'report_type' => $row['report_type'] ?? 'LOST',
+                'report_id' => $row['report_id'] ?? 0,
+                'is_read' => (int)($row['is_read'] ?? 0),
+                'time_ago' => format_time_ago($row['created_at'] ?? ''),
+                'created_at' => $row['created_at'] ?? date('Y-m-d H:i:s')
             ];
         }
         $stmtList->close();

@@ -796,10 +796,10 @@ function insertMatchRecord($lostId, $foundId, $score) {
         while ($mc = $matchColsRes->fetch_assoc()) $mCols[] = strtolower($mc['Field']);
     }
 
-    $mLostCol = in_array('lost_report_id', $mCols) ? 'lost_report_id' : (in_array('lost_id', $mCols) ? 'lost_id' : 'lost_report_id');
-    $mFoundCol = in_array('found_report_id', $mCols) ? 'found_report_id' : (in_array('found_id', $mCols) ? 'found_id' : 'found_report_id');
-    $mScoreCol = in_array('similarity_score', $mCols) ? 'similarity_score' : (in_array('score', $mCols) ? 'score' : 'similarity_score');
-    $mIdCol = in_array('id', $mCols) ? 'id' : (in_array('match_id', $mCols) ? 'match_id' : 'id');
+    $mLostCol = in_array('lost_id', $mCols) ? 'lost_id' : (in_array('lost_report_id', $mCols) ? 'lost_report_id' : 'lost_id');
+    $mFoundCol = in_array('found_id', $mCols) ? 'found_id' : (in_array('found_report_id', $mCols) ? 'found_report_id' : 'found_id');
+    $mScoreCol = in_array('match_percentage', $mCols) ? 'match_percentage' : (in_array('similarity_score', $mCols) ? 'similarity_score' : (in_array('score', $mCols) ? 'score' : 'match_percentage'));
+    $mIdCol = in_array('match_id', $mCols) ? 'match_id' : (in_array('id', $mCols) ? 'id' : 'match_id');
 
     // Check if match already exists
     $checkStmt = $conn->prepare("SELECT $mIdCol FROM matches WHERE $mLostCol = ? AND $mFoundCol = ?");
@@ -852,10 +852,18 @@ function insertSystemNotification($targetUserId, $title, $message, $link = '', $
     }
 
     $uCol = in_array('user_id', $nCols) ? 'user_id' : 'userId';
-    $fields = [$uCol, 'title', 'message'];
-    $vals = [(int)$targetUserId, $title, $message];
-    $types = "iss";
+    $hasTitle = in_array('title', $nCols);
+    $finalMessage = $hasTitle ? $message : (!empty($title) ? "$title: $message" : $message);
 
+    $fields = [$uCol, 'message'];
+    $vals = [(int)$targetUserId, $finalMessage];
+    $types = "is";
+
+    if ($hasTitle) {
+        $fields[] = 'title';
+        $vals[] = $title;
+        $types .= 's';
+    }
     if (in_array('report_type', $nCols)) {
         $fields[] = 'report_type';
         $vals[] = strtoupper($reportType);
