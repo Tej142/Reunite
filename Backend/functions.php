@@ -797,7 +797,7 @@ function runRealtimeMatchmaking($insertedId, $reportType, $category, $title, $de
     // 1. Query Vector Matches from Flask AI Engine
     $vectorMatches = [];
     try {
-        $flaskUrl = (defined('FLASK_AI_URL') ? FLASK_AI_URL : 'http://127.0.0.1:5000') . '/report/search-matches';
+        $flaskUrl = (defined('FLASK_AI_URL') ? FLASK_AI_URL : 'https://reunite-ai-backend.onrender.com') . '/report/search-matches';
         $searchPayload = [
             'text' => "$category. $title. $description. $location.",
             'report_id' => ($reportType === 'found' ? 'RF-' : 'RL-') . str_pad($insertedId, 5, '0', STR_PAD_LEFT),
@@ -870,7 +870,25 @@ function runRealtimeMatchmaking($insertedId, $reportType, $category, $title, $de
             
             $score = 0;
 
-            // 1. Category Similarity (Exact, Substring, or Stem)
+            // 1. Direct Title & Object Similarity
+            $titleA = strtolower(trim($title));
+            $titleB = strtolower(trim($opp['title'] ?? ''));
+            if (!empty($titleA) && !empty($titleB)) {
+                if ($titleA === $titleB) {
+                    $score += 50;
+                } elseif (stripos($titleA, $titleB) !== false || stripos($titleB, $titleA) !== false) {
+                    $score += 40;
+                } else {
+                    similar_text($titleA, $titleB, $simPct);
+                    if ($simPct >= 70) {
+                        $score += 40;
+                    } elseif ($simPct >= 50) {
+                        $score += 25;
+                    }
+                }
+            }
+
+            // 2. Category Similarity (Exact, Substring, or Stem)
             $catA = strtolower(trim($category));
             $catB = strtolower(trim($opp['category'] ?? ''));
             if (!empty($catA) && !empty($catB) && $catA !== 'general' && $catB !== 'general') {
@@ -879,7 +897,7 @@ function runRealtimeMatchmaking($insertedId, $reportType, $category, $title, $de
                 } elseif (stripos($catA, $catB) !== false || stripos($catB, $catA) !== false) {
                     $score += 35;
                 } else {
-                    $keyStems = ['watch', 'wallet', 'phone', 'bag', 'key', 'card', 'airpod', 'earbud', 'headphone', 'laptop', 'bottle', 'id', 'license', 'book', 'umbrella'];
+                    $keyStems = ['mouse', 'watch', 'wallet', 'phone', 'bag', 'key', 'card', 'airpod', 'earbud', 'headphone', 'laptop', 'bottle', 'id', 'license', 'book', 'umbrella', 'charger', 'glasses', 'calculator'];
                     foreach ($keyStems as $stem) {
                         if (stripos($catA, $stem) !== false && stripos($catB, $stem) !== false) {
                             $score += 35;
