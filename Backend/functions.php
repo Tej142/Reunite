@@ -30,6 +30,126 @@ function decryptData($data) {
 }
 
 /**
+ * Production Image Optimizer: Auto-Rotates EXIF, Resizes to Max Bounding Box (1200px),
+ * Strips GPS Metadata, and Compresses to WebP / High-Efficiency JPEG (82%)
+ */
+function optimizeAndStoreReportImage($sourcePath, $targetDir, $baseName = '', $maxDim = 1200, $quality = 82) {
+    if (!file_exists($sourcePath)) return false;
+    if (!is_dir($targetDir)) mkdir($targetDir, 0777, true);
+
+    $baseName = !empty($baseName) ? $baseName : ('upload_' . time() . '_' . rand(1000, 9999));
+
+    // Fallback if GD is not available
+    if (!extension_loaded('gd') || !function_exists('imagecreatetruecolor')) {
+        $ext = pathinfo($sourcePath, PATHINFO_EXTENSION) ?: 'jpg';
+        $dest = rtrim($targetDir, '/\\') . '/' . $baseName . '.' . $ext;
+        if (is_uploaded_file($sourcePath)) {
+            move_uploaded_file($sourcePath, $dest);
+        } else {
+            copy($sourcePath, $dest);
+        }
+        return $baseName . '.' . $ext;
+    }
+
+    $imgInfo = @getimagesize($sourcePath);
+    if (!$imgInfo) {
+        $dest = rtrim($targetDir, '/\\') . '/' . $baseName . '.jpg';
+        if (is_uploaded_file($sourcePath)) {
+            move_uploaded_file($sourcePath, $dest);
+        } else {
+            copy($sourcePath, $dest);
+        }
+        return $baseName . '.jpg';
+    }
+
+    $origWidth = $imgInfo[0];
+    $origHeight = $imgInfo[1];
+    $mime = $imgInfo['mime'] ?? 'image/jpeg';
+
+    switch ($mime) {
+        case 'image/jpeg':
+            $src = @imagecreatefromjpeg($sourcePath);
+            break;
+        case 'image/png':
+            $src = @imagecreatefrompng($sourcePath);
+            break;
+        case 'image/webp':
+            $src = @imagecreatefromwebp($sourcePath);
+            break;
+        default:
+            $dest = rtrim($targetDir, '/\\') . '/' . $baseName . '.jpg';
+            if (is_uploaded_file($sourcePath)) {
+                move_uploaded_file($sourcePath, $dest);
+            } else {
+                copy($sourcePath, $dest);
+            }
+            return $baseName . '.jpg';
+    }
+
+    if (!$src) {
+        $dest = rtrim($targetDir, '/\\') . '/' . $baseName . '.jpg';
+        if (is_uploaded_file($sourcePath)) {
+            move_uploaded_file($sourcePath, $dest);
+        } else {
+            copy($sourcePath, $dest);
+        }
+        return $baseName . '.jpg';
+    }
+
+    // Auto-rotate based on EXIF orientation (fixes sideways phone photos)
+    if (function_exists('exif_read_data') && ($mime === 'image/jpeg' || $mime === 'image/tiff')) {
+        $exif = @exif_read_data($sourcePath);
+        if (!empty($exif['Orientation'])) {
+            switch ($exif['Orientation']) {
+                case 3: $src = imagerotate($src, 180, 0); break;
+                case 6: 
+                    $src = imagerotate($src, -90, 0); 
+                    $t = $origWidth; $origWidth = $origHeight; $origHeight = $t;
+                    break;
+                case 8: 
+                    $src = imagerotate($src, 90, 0); 
+                    $t = $origWidth; $origWidth = $origHeight; $origHeight = $t;
+                    break;
+            }
+        }
+    }
+
+    // Calculate aspect ratio dimensions (never upscale smaller images)
+    $ratio = min($maxDim / $origWidth, $maxDim / $origHeight, 1.0);
+    $targetWidth = max(1, (int)round($origWidth * $ratio));
+    $targetHeight = max(1, (int)round($origHeight * $ratio));
+
+    $dst = imagecreatetruecolor($targetWidth, $targetHeight);
+
+    // Alpha channel handling for PNG & WebP
+    if ($mime === 'image/png' || $mime === 'image/webp') {
+        imagealphablending($dst, false);
+        imagesavealpha($dst, true);
+        $transparent = imagecolorallocatealpha($dst, 255, 255, 255, 127);
+        imagefilledrectangle($dst, 0, 0, $targetWidth, $targetHeight, $transparent);
+    }
+
+    // High quality bicubic resample (strips all EXIF GPS metadata automatically)
+    imagecopyresampled($dst, $src, 0, 0, 0, 0, $targetWidth, $targetHeight, $origWidth, $origHeight);
+
+    // Prefer modern WebP (30% smaller than JPEG), fallback to optimized JPEG
+    $savedExt = function_exists('imagewebp') ? 'webp' : 'jpg';
+    $finalFilename = $baseName . '.' . $savedExt;
+    $finalFullPath = rtrim($targetDir, '/\\') . '/' . $finalFilename;
+
+    if ($savedExt === 'webp') {
+        imagewebp($dst, $finalFullPath, $quality);
+    } else {
+        imagejpeg($dst, $finalFullPath, $quality);
+    }
+
+    imagedestroy($src);
+    imagedestroy($dst);
+
+    return $finalFilename;
+}
+
+/**
  * Read maintenance settings from DB (with json file fallback).
  * Returns array: [enabled, message, eta, support_email]
  */

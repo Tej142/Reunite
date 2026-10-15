@@ -228,7 +228,7 @@ if ($action === 'create' || ($method === 'POST' && ($action === '' || $action ==
         sendJsonResponse(false, "Title or description is required.", [], 400);
     }
 
-    // Handle Image Upload if provided
+    // Handle Image Upload with High-Efficiency Resizing & Compression (Max 1200px, WebP / JPEG 82%)
     $imageWebPath = null;
     if (isset($_FILES['image']) && $_FILES['image']['error'] === UPLOAD_ERR_OK) {
         $subFolder = ($reportType === 'found') ? 'found_reports' : 'lost_reports';
@@ -236,14 +236,24 @@ if ($action === 'create' || ($method === 'POST' && ($action === '' || $action ==
         if (!is_dir($uploadDir)) {
             mkdir($uploadDir, 0777, true);
         }
-        $ext = pathinfo($_FILES['image']['name'], PATHINFO_EXTENSION) ?: 'jpg';
-        $filename = 'upload_' . time() . '_' . rand(1000, 9999) . '.' . $ext;
-        $targetFile = $uploadDir . $filename;
-        if (move_uploaded_file($_FILES['image']['tmp_name'], $targetFile)) {
-            $imageWebPath = 'media_vault/' . $subFolder . '/' . $filename;
+        $baseName = 'upload_' . time() . '_' . rand(1000, 9999);
+        $savedFile = optimizeAndStoreReportImage($_FILES['image']['tmp_name'], $uploadDir, $baseName, 1200, 82);
+        if ($savedFile) {
+            $imageWebPath = 'media_vault/' . $subFolder . '/' . $savedFile;
         }
     } elseif (!empty($data['image_path'])) {
         $imageWebPath = trim($data['image_path']);
+        // If image exists locally in raw/unoptimized format, compress it in-place
+        $fullCandPath = __DIR__ . '/../' . ltrim($imageWebPath, '/\\');
+        if (file_exists($fullCandPath) && strpos($imageWebPath, 'media_vault') !== false && !str_ends_with(strtolower($fullCandPath), '.webp')) {
+            $pathDir = dirname($fullCandPath);
+            $pBase = pathinfo($fullCandPath, PATHINFO_FILENAME);
+            $optimizedFile = optimizeAndStoreReportImage($fullCandPath, $pathDir, $pBase . '_opt', 1200, 82);
+            if ($optimizedFile) {
+                @unlink($fullCandPath);
+                $imageWebPath = dirname($imageWebPath) . '/' . $optimizedFile;
+            }
+        }
     }
 
     $insertedId = null;
