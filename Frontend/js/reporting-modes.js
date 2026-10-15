@@ -1420,6 +1420,7 @@ document.addEventListener('DOMContentLoaded', () => {
     isVoiceModeActive = true;
     if (voiceToggleLabel) voiceToggleLabel.textContent = 'Stop Voice Mode';
     if (btnVoiceToggle) btnVoiceToggle.classList.add('active');
+    if (btnMicInline) btnMicInline.classList.add('active');
     if (voiceLiveBar) voiceLiveBar.classList.add('active');
     startRecognitionSafe();
   }
@@ -1434,6 +1435,7 @@ document.addEventListener('DOMContentLoaded', () => {
     pauseRecognition();
     if (voiceToggleLabel) voiceToggleLabel.textContent = 'Start Voice Mode';
     if (btnVoiceToggle) btnVoiceToggle.classList.remove('active');
+    if (btnMicInline) btnMicInline.classList.remove('active');
     if (voiceLiveBar) voiceLiveBar.classList.remove('active');
     updateVoiceBadgeState();
     stopVisualizerAnimation();
