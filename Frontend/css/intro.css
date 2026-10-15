@@ -39,6 +39,8 @@
 
 html {
   scroll-behavior: smooth;
+  overflow-x: hidden;
+  max-width: 100%;
 }
 
 body {
@@ -47,6 +49,9 @@ body {
   font-family: 'Inter', sans-serif;
   -webkit-font-smoothing: antialiased;
   overflow-x: hidden;
+  max-width: 100vw;
+  width: 100%;
+  position: relative;
   transition: background-color 0.35s cubic-bezier(0.4, 0, 0.2, 1), 
               color 0.35s cubic-bezier(0.4, 0, 0.2, 1);
 }
@@ -319,8 +324,9 @@ svg {
   justify-content: center;
   text-align: center;
   position: relative;
-  overflow: clip;
+  overflow: hidden;
   contain: paint;
+  max-width: 100vw;
   padding: clamp(30px, 6vh, 60px) clamp(12px, 3vw, 24px) 40px;
 }
 
@@ -335,20 +341,37 @@ svg {
 }
 
 .blob-1 {
-  width: min(420px, 80vw);
-  height: min(420px, 80vw);
+  width: min(380px, 70vw);
+  height: min(380px, 70vw);
   background: var(--terracotta-tint);
-  top: -120px;
-  left: -140px;
+  top: -60px;
+  left: -60px;
+  max-width: 100vw;
 }
 
 .blob-2 {
-  width: min(380px, 75vw);
-  height: min(380px, 75vw);
+  width: min(340px, 65vw);
+  height: min(340px, 65vw);
   background: var(--green-tint, #DCEEE0);
-  bottom: -140px;
-  right: -120px;
+  bottom: -60px;
+  right: -20px;
   animation-delay: 3s;
+  max-width: 100vw;
+}
+
+@media (max-width: 640px) {
+  .blob-1 {
+    top: -30px;
+    left: -20px;
+    width: min(240px, 50vw);
+    height: min(240px, 50vw);
+  }
+  .blob-2 {
+    bottom: -30px;
+    right: 0px;
+    width: min(220px, 45vw);
+    height: min(220px, 45vw);
+  }
 }
 
 [data-theme="dark"] .intro-bg-blob {
@@ -365,7 +388,7 @@ svg {
 
 @keyframes blob-drift {
   0%, 100% { transform: translate(0,0) scale(1); }
-  50% { transform: translate(30px,-24px) scale(1.08); }
+  50% { transform: translate(-15px,-15px) scale(1.05); }
 }
 
 /* --- convergence stage --- */
