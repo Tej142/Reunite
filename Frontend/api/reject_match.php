@@ -45,13 +45,26 @@ if (!$match_id || $match_id <= 0) {
 }
 
 try {
+    // Detect column names on matches table
+    $mCols = [];
+    $cRes = mysqli_query($conn, "SHOW COLUMNS FROM matches");
+    if ($cRes) {
+        while ($cRow = mysqli_fetch_assoc($cRes)) {
+            $mCols[] = strtolower($cRow['Field']);
+        }
+    }
+    $pkCol = in_array('match_id', $mCols) ? 'match_id' : 'id';
+    $lostCol = in_array('lost_id', $mCols) ? 'lost_id' : 'lost_report_id';
+    $foundCol = in_array('found_id', $mCols) ? 'found_id' : 'found_report_id';
+
     // 4. Verification: Look up match with joined lost/found report owners
     $select_query = "
-        SELECT m.id, m.status, lr.user_id as lost_user_id, fr.user_id as found_user_id
+        SELECT m.`$pkCol` as id, m.status, lr.user_id as lost_user_id, fr.user_id as found_user_id,
+               m.`$lostCol` as lost_report_id, m.`$foundCol` as found_report_id
         FROM matches m
-        LEFT JOIN lost_reports lr ON m.lost_report_id = lr.id
-        LEFT JOIN found_reports fr ON m.found_report_id = fr.id
-        WHERE m.id = ?
+        LEFT JOIN lost_reports lr ON m.`$lostCol` = lr.id
+        LEFT JOIN found_reports fr ON m.`$foundCol` = fr.id
+        WHERE m.`$pkCol` = ?
     ";
     $stmt = mysqli_prepare($conn, $select_query);
     if (!$stmt) {
@@ -82,14 +95,14 @@ try {
     }
 
     // c. Status condition (409)
-    if ($match['status'] !== 'pending') {
+    if (!in_array($match['status'], ['pending', 'new', 'pending_founder_approval'])) {
         http_response_code(409);
-        echo json_encode(['success' => false, 'message' => 'Only pending matches can be rejected.']);
+        echo json_encode(['success' => false, 'message' => 'This match cannot be rejected in its current status.']);
         exit;
     }
 
     // 5. Database Update
-    $update_query = "UPDATE matches SET status = 'rejected' WHERE id = ? AND status = 'pending'";
+    $update_query = "UPDATE matches SET status = 'rejected' WHERE `$pkCol` = ?";
     $update_stmt = mysqli_prepare($conn, $update_query);
     if (!$update_stmt) {
         throw new Exception("Update prepare failed: " . mysqli_error($conn));

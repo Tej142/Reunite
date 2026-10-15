@@ -140,20 +140,43 @@ if ($action === 'submit') {
     $claimId = $insStmt->insert_id;
     $insStmt->close();
 
-    // Create notification for the finder
+    // Create notification for the finder using resilient schema helper
     $finderId = (int)$report['user_id'];
     if ($finderId > 0) {
         $notifTitle = "New Claim on Found Item";
         $notifMsg = "A user submitted ownership proof for your found item: \"" . $report['title'] . "\".";
         $notifLink = "item.php?type=found&id=" . $reportId;
         
-        $nStmt = $conn->prepare("INSERT INTO notifications (user_id, title, report_type, report_id, type, message, link, is_read, created_at) VALUES (?, ?, 'FOUND', ?, 'claim', ?, ?, 0, NOW())");
-        if ($nStmt) {
-            $nStmt->bind_param("isiss", $finderId, $notifTitle, $reportId, $notifMsg, $notifLink);
-            $nStmt->execute();
-            $nStmt->close();
+        if (function_exists('insertSystemNotification')) {
+            insertSystemNotification($finderId, $notifTitle, $notifMsg, $notifLink, 'FOUND', $reportId, 'claim');
+        } else {
+            @$conn->query("INSERT INTO notifications (user_id, report_type, report_id, type, message, is_read, created_at) VALUES ($finderId, 'FOUND', $reportId, 'claim', '" . $conn->real_escape_string($notifMsg) . "', 0, NOW())");
         }
+
+        // Email finder if Brevo is configured
+        try {
+            $fRes = $conn->query("SELECT email, full_name FROM users WHERE user_id = $finderId LIMIT 1");
+            if ($fRes && ($fRow = $fRes->fetch_assoc())) {
+                $fEmail = function_exists('decryptData') ? decryptData($fRow['email']) : $fRow['email'];
+                if (!empty($fEmail) && filter_var($fEmail, FILTER_VALIDATE_EMAIL) && function_exists('sendBrevoEmail')) {
+                    $emailSubj = "Reunite: Ownership Claim Submitted for Item You Found!";
+                    $emailHtml = "<div style='font-family:sans-serif;max-width:550px;margin:0 auto;padding:24px;background:#ffffff;border:1px solid #e2e8f0;border-radius:12px;'>"
+                        . "<h2 style='color:#ea580c;margin-top:0;'>Claim Submitted!</h2>"
+                        . "<p>Hi <strong>" . htmlspecialchars($fRow['full_name'] ?? 'Student') . "</strong>,</p>"
+                        . "<p>A student has submitted ownership proof for the item you found: <strong>" . htmlspecialchars($report['title']) . "</strong>.</p>"
+                        . "<p style='margin-top:20px;'><a href='https://reunite.site.je/" . $notifLink . "' style='display:inline-block;padding:10px 20px;background:#ea580c;color:#ffffff;text-decoration:none;border-radius:6px;font-weight:bold;'>Review Ownership Proof</a></p>"
+                        . "<hr style='margin:25px 0 15px 0;border:none;border-top:1px solid #e2e8f0;'>"
+                        . "<p style='font-size:12px;color:#94a3b8;margin:0;'>Reunite - Campus Lost and Found Platform</p></div>";
+                    @sendBrevoEmail($fEmail, $fRow['full_name'], $emailSubj, $emailHtml);
+                }
+            }
+        } catch (Throwable $e) {}
     }
+
+    // Update matches table if there is an active match for this found report
+    try {
+        @$conn->query("UPDATE matches SET status = 'pending_founder_approval' WHERE found_report_id = $reportId OR found_id = $reportId");
+    } catch (Throwable $ignore) {}
 
     // Log access event if function exists
     if (function_exists('logAccess')) {

@@ -84,25 +84,37 @@ try {
     mysqli_begin_transaction($conn);
     $transaction_started = true;
 
+    // Detect column names on matches table
+    $mCols = [];
+    $cRes = mysqli_query($conn, "SHOW COLUMNS FROM matches");
+    if ($cRes) {
+        while ($cRow = mysqli_fetch_assoc($cRes)) {
+            $mCols[] = strtolower($cRow['Field']);
+        }
+    }
+    $pkCol = in_array('match_id', $mCols) ? 'match_id' : 'id';
+    $lostCol = in_array('lost_id', $mCols) ? 'lost_id' : 'lost_report_id';
+    $foundCol = in_array('found_id', $mCols) ? 'found_id' : 'found_report_id';
+
     // 4. Verify Authorization
     $verify_query = "
         SELECT 
-            m.id,
+            m.`$pkCol` AS id,
             m.status, 
-            m.lost_report_id,
-            m.found_report_id,
+            m.`$lostCol` AS lost_report_id,
+            m.`$foundCol` AS found_report_id,
             r_lost.user_id AS claimant_user_id, 
             r_found.user_id AS founder_user_id 
         FROM matches m
-        LEFT JOIN lost_reports r_lost ON m.lost_report_id = r_lost.id
-        LEFT JOIN found_reports r_found ON m.found_report_id = r_found.id
-        WHERE m.id = ? 
-        FOR UPDATE
+        LEFT JOIN lost_reports r_lost ON m.`$lostCol` = r_lost.id
+        LEFT JOIN found_reports r_found ON m.`$foundCol` = r_found.id
+        WHERE m.`$pkCol` = ? 
+        LIMIT 1
     ";
     
     $v_stmt = mysqli_prepare($conn, $verify_query);
     if (!$v_stmt) {
-        throw new Exception("Database prepare failed for SELECT.");
+        throw new Exception("Database prepare failed for SELECT: " . mysqli_error($conn));
     }
     
     mysqli_stmt_bind_param($v_stmt, "i", $match_id);
@@ -121,7 +133,7 @@ try {
         exit;
     }
 
-    if ((int)$match_data['claimant_user_id'] !== $user_id) {
+    if (!empty($match_data['claimant_user_id']) && (int)$match_data['claimant_user_id'] !== $user_id) {
         http_response_code(403);
         echo json_encode(['success' => false, 'message' => 'You are not authorized to claim this item.']);
         if ($transaction_started) mysqli_rollback($conn);
@@ -154,19 +166,20 @@ try {
         mysqli_stmt_close($rec_stmt);
     }
 
-    // 6. Update matches table if extra columns exist, or update status safely
-    $check_col = mysqli_query($conn, "SHOW COLUMNS FROM matches LIKE 'owner_proof'");
-    if ($check_col && mysqli_num_rows($check_col) > 0) {
+    // 6. Update matches table status safely
+    if (in_array('owner_proof', $mCols)) {
         $u_stmt = mysqli_prepare($conn, "
             UPDATE matches 
             SET status = 'pending_founder_approval', owner_proof = ?, proof_image = ? 
-            WHERE id = ?
+            WHERE `$pkCol` = ?
         ");
         if ($u_stmt) {
             mysqli_stmt_bind_param($u_stmt, "ssi", $proof_text, $proof_image_web_path, $match_id);
             mysqli_stmt_execute($u_stmt);
             mysqli_stmt_close($u_stmt);
         }
+    } else {
+        mysqli_query($conn, "UPDATE matches SET status = 'pending_founder_approval' WHERE `$pkCol` = " . (int)$match_id);
     }
 
     // 7. Send Real-Time Notification to Founder
@@ -174,14 +187,10 @@ try {
     $notif_msg = "A student has submitted proof for the item you found. Please verify and approve.";
     $notif_link = "item.php?id=" . $found_report_id . "&match_id=" . $match_id;
 
-    $n_stmt = mysqli_prepare($conn, "
-        INSERT INTO notifications (user_id, type, title, message, report_type, report_id, link)
-        VALUES (?, 'claim', ?, ?, 'FOUND', ?, ?)
-    ");
-    if ($n_stmt) {
-        mysqli_stmt_bind_param($n_stmt, "issis", $founder_user_id, $notif_title, $notif_msg, $found_report_id, $notif_link);
-        mysqli_stmt_execute($n_stmt);
-        mysqli_stmt_close($n_stmt);
+    if (function_exists('insertSystemNotification')) {
+        insertSystemNotification($founder_user_id, $notif_title, $notif_msg, $notif_link, 'FOUND', $found_report_id, 'claim');
+    } else {
+        @mysqli_query($conn, "INSERT INTO notifications (user_id, report_type, report_id, type, message, is_read, created_at) VALUES ($founder_user_id, 'FOUND', $found_report_id, 'claim', '" . mysqli_real_escape_string($conn, $notif_msg) . "', 0, NOW())");
     }
 
     mysqli_commit($conn);

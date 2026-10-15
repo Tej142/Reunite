@@ -58,20 +58,32 @@ if ($action !== 'approve' && $action !== 'reject') {
 mysqli_begin_transaction($conn);
 
 try {
+    // Detect column names on matches table
+    $mCols = [];
+    $cRes = mysqli_query($conn, "SHOW COLUMNS FROM matches");
+    if ($cRes) {
+        while ($cRow = mysqli_fetch_assoc($cRes)) {
+            $mCols[] = strtolower($cRow['Field']);
+        }
+    }
+    $pkCol = in_array('match_id', $mCols) ? 'match_id' : 'id';
+    $lostCol = in_array('lost_id', $mCols) ? 'lost_id' : 'lost_report_id';
+    $foundCol = in_array('found_id', $mCols) ? 'found_id' : 'found_report_id';
+
     // 4. Fetch Match & Verify Founder Authorization
     $select_sql = "
         SELECT 
-            m.id,
+            m.`$pkCol` AS id,
             m.status,
-            m.lost_report_id,
-            m.found_report_id,
+            m.`$lostCol` AS lost_report_id,
+            m.`$foundCol` AS found_report_id,
             r_found.user_id AS founder_id,
             r_lost.user_id AS claimant_id
         FROM matches m
-        LEFT JOIN found_reports r_found ON m.found_report_id = r_found.id
-        LEFT JOIN lost_reports r_lost ON m.lost_report_id = r_lost.id
-        WHERE m.id = ? 
-        FOR UPDATE
+        LEFT JOIN found_reports r_found ON m.`$foundCol` = r_found.id
+        LEFT JOIN lost_reports r_lost ON m.`$lostCol` = r_lost.id
+        WHERE m.`$pkCol` = ? 
+        LIMIT 1
     ";
 
     $select_stmt = mysqli_prepare($conn, $select_sql);
@@ -89,7 +101,7 @@ try {
         throw new Exception('Match record not found.');
     }
 
-    if ((int)$match['founder_id'] !== $user_id) {
+    if (!empty($match['founder_id']) && (int)$match['founder_id'] !== $user_id) {
         throw new Exception('Unauthorized. Only the finder can approve or reject this claim.');
     }
 
@@ -98,7 +110,7 @@ try {
 
     // 5. REJECT LOGIC
     if ($action === 'reject') {
-        $reject_sql = "UPDATE matches SET status = 'rejected' WHERE id = ?";
+        $reject_sql = "UPDATE matches SET status = 'rejected' WHERE `$pkCol` = ?";
         $reject_stmt = mysqli_prepare($conn, $reject_sql);
         mysqli_stmt_bind_param($reject_stmt, 'i', $match_id);
         mysqli_stmt_execute($reject_stmt);
@@ -116,14 +128,11 @@ try {
         $notif_title = "Claim Update: Verification Unsuccessful";
         $notif_msg = "Your ownership proof was reviewed by the founder but could not be verified.";
         $notif_link = "item.php?id=" . $found_id;
-        $n_stmt = mysqli_prepare($conn, "
-            INSERT INTO notifications (user_id, type, title, message, report_type, report_id, link)
-            VALUES (?, 'claim', ?, ?, 'FOUND', ?, ?)
-        ");
-        if ($n_stmt) {
-            mysqli_stmt_bind_param($n_stmt, "issis", $claimant_id, $notif_title, $notif_msg, $found_id, $notif_link);
-            mysqli_stmt_execute($n_stmt);
-            mysqli_stmt_close($n_stmt);
+
+        if (function_exists('insertSystemNotification')) {
+            insertSystemNotification($claimant_id, $notif_title, $notif_msg, $notif_link, 'FOUND', $found_id, 'claim');
+        } else {
+            @mysqli_query($conn, "INSERT INTO notifications (user_id, report_type, report_id, type, message, is_read, created_at) VALUES ($claimant_id, 'FOUND', $found_id, 'claim', '" . mysqli_real_escape_string($conn, $notif_msg) . "', 0, NOW())");
         }
 
         mysqli_commit($conn);
@@ -156,12 +165,11 @@ try {
     ];
 
     // Update matches table if extra columns exist
-    $check_otp_col = mysqli_query($conn, "SHOW COLUMNS FROM matches LIKE 'otp'");
-    if ($check_otp_col && mysqli_num_rows($check_otp_col) > 0) {
+    if (in_array('otp', $mCols)) {
         $u_m = mysqli_prepare($conn, "
             UPDATE matches 
             SET status = 'verified', return_type = ?, meet_location = ?, meet_time = ?, otp = ?, otp_expires_at = ?
-            WHERE id = ?
+            WHERE `$pkCol` = ?
         ");
         if ($u_m) {
             mysqli_stmt_bind_param($u_m, 'sssssi', $return_type, $meet_location, $meet_time, $otp, $otp_expires_at, $match_id);
@@ -169,7 +177,7 @@ try {
             mysqli_stmt_close($u_m);
         }
     } else {
-        mysqli_query($conn, "UPDATE matches SET status = 'verified' WHERE id = " . $match_id);
+        mysqli_query($conn, "UPDATE matches SET status = 'verified' WHERE `$pkCol` = " . (int)$match_id);
     }
 
     // Update recovery_cases status and store meeting note
@@ -193,14 +201,10 @@ try {
     $notif_msg = "Your claim was APPROVED! Handover type: {$return_type}. Location: {$meet_location} at {$meet_time}. Your Verification Code: {$otp}";
     $notif_link = "item.php?id=" . $found_id;
 
-    $n_stmt = mysqli_prepare($conn, "
-        INSERT INTO notifications (user_id, type, title, message, report_type, report_id, link)
-        VALUES (?, 'claim', ?, ?, 'FOUND', ?, ?)
-    ");
-    if ($n_stmt) {
-        mysqli_stmt_bind_param($n_stmt, "issis", $claimant_id, $notif_title, $notif_msg, $found_id, $notif_link);
-        mysqli_stmt_execute($n_stmt);
-        mysqli_stmt_close($n_stmt);
+    if (function_exists('insertSystemNotification')) {
+        insertSystemNotification($claimant_id, $notif_title, $notif_msg, $notif_link, 'FOUND', $found_id, 'claim');
+    } else {
+        @mysqli_query($conn, "INSERT INTO notifications (user_id, report_type, report_id, type, message, is_read, created_at) VALUES ($claimant_id, 'FOUND', $found_id, 'claim', '" . mysqli_real_escape_string($conn, $notif_msg) . "', 0, NOW())");
     }
 
     mysqli_commit($conn);

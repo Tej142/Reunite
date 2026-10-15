@@ -51,14 +51,27 @@ if (!preg_match('/^[0-9]{6}$/', $otp)) {
 }
 
 try {
+    // Detect column names on matches table
+    $mCols = [];
+    $cRes = mysqli_query($conn, "SHOW COLUMNS FROM matches");
+    if ($cRes) {
+        while ($cRow = mysqli_fetch_assoc($cRes)) {
+            $mCols[] = strtolower($cRow['Field']);
+        }
+    }
+    $pkCol = in_array('match_id', $mCols) ? 'match_id' : 'id';
+    $lostCol = in_array('lost_id', $mCols) ? 'lost_id' : 'lost_report_id';
+    $foundCol = in_array('found_id', $mCols) ? 'found_id' : 'found_report_id';
+
     // 1. Look up match and confirm user is the founder
     $stmt = mysqli_prepare($conn, "
-        SELECT m.id, m.status, m.lost_report_id, m.found_report_id,
+        SELECT m.`$pkCol` AS id, m.status, m.`$lostCol` AS lost_report_id, m.`$foundCol` AS found_report_id,
                lr.user_id as claimant_id, fr.user_id as founder_id
         FROM matches m
-        LEFT JOIN lost_reports lr ON m.lost_report_id = lr.id
-        LEFT JOIN found_reports fr ON m.found_report_id = fr.id
-        WHERE m.id = ?
+        LEFT JOIN lost_reports lr ON m.`$lostCol` = lr.id
+        LEFT JOIN found_reports fr ON m.`$foundCol` = fr.id
+        WHERE m.`$pkCol` = ?
+        LIMIT 1
     ");
     if (!$stmt) {
         throw new Exception('Database error: ' . mysqli_error($conn));
@@ -150,11 +163,13 @@ try {
     mysqli_begin_transaction($conn);
 
     // Update matches status
-    mysqli_query($conn, "UPDATE matches SET status = 'verified' WHERE id = " . $match_id);
+    mysqli_query($conn, "UPDATE matches SET status = 'verified' WHERE `$pkCol` = " . (int)$match_id);
 
     // Update reports to claimed / closed
     mysqli_query($conn, "UPDATE found_reports SET status = 'claimed' WHERE id = " . $found_id);
-    mysqli_query($conn, "UPDATE lost_reports SET status = 'claimed' WHERE id = " . $lost_id);
+    if ($lost_id > 0) {
+        mysqli_query($conn, "UPDATE lost_reports SET status = 'claimed' WHERE id = " . $lost_id);
+    }
 
     // Update recovery_cases status
     mysqli_query($conn, "UPDATE recovery_cases SET status = 'handed_off', owner_verified = 1, finder_confirmed = 1 WHERE report_id = " . $found_id);
@@ -163,22 +178,16 @@ try {
     unset($_SESSION['handover_otp_' . $match_id]);
 
     // Send Completion Notifications to Both Parties
-    $notif_title = "Item Handover Completed! 🎉";
+    $notif_title = "Item Handover Completed!";
     $notif_msg = "The physical handover has been verified and confirmed. The recovery case is now officially completed. Thank you!";
     $notif_link = "item.php?id=" . $found_id;
 
-    $n1 = mysqli_prepare($conn, "INSERT INTO notifications (user_id, type, title, message, report_type, report_id, link) VALUES (?, 'system', ?, ?, 'FOUND', ?, ?)");
-    if ($n1) {
-        mysqli_stmt_bind_param($n1, "issis", $claimant_id, $notif_title, $notif_msg, $found_id, $notif_link);
-        mysqli_stmt_execute($n1);
-        mysqli_stmt_close($n1);
-    }
-
-    $n2 = mysqli_prepare($conn, "INSERT INTO notifications (user_id, type, title, message, report_type, report_id, link) VALUES (?, 'system', ?, ?, 'FOUND', ?, ?)");
-    if ($n2) {
-        mysqli_stmt_bind_param($n2, "issis", $user_id, $notif_title, $notif_msg, $found_id, $notif_link);
-        mysqli_stmt_execute($n2);
-        mysqli_stmt_close($n2);
+    if (function_exists('insertSystemNotification')) {
+        if ($claimant_id > 0) insertSystemNotification($claimant_id, $notif_title, $notif_msg, $notif_link, 'FOUND', $found_id, 'system');
+        if ($user_id > 0) insertSystemNotification($user_id, $notif_title, $notif_msg, $notif_link, 'FOUND', $found_id, 'system');
+    } else {
+        if ($claimant_id > 0) @mysqli_query($conn, "INSERT INTO notifications (user_id, report_type, report_id, type, message, is_read, created_at) VALUES ($claimant_id, 'FOUND', $found_id, 'system', '" . mysqli_real_escape_string($conn, $notif_msg) . "', 0, NOW())");
+        if ($user_id > 0) @mysqli_query($conn, "INSERT INTO notifications (user_id, report_type, report_id, type, message, is_read, created_at) VALUES ($user_id, 'FOUND', $found_id, 'system', '" . mysqli_real_escape_string($conn, $notif_msg) . "', 0, NOW())");
     }
 
     mysqli_commit($conn);

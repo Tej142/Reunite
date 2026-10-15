@@ -440,7 +440,7 @@ function renderResults() {
     const isActive = (currentlyOpenItemId === item.id);
 
     return `
-      <article class="search-item-card ${isActive ? 'active-drawer-card' : ''}" data-id="${item.id}" onclick="window.location.href='item.php?id=${item.id}'" tabindex="0" aria-label="View details for ${item.title}">
+      <article class="search-item-card ${isActive ? 'active-drawer-card' : ''}" data-id="${item.id}" onclick="window.location.href='item.php?id=${item.id}'" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();window.location.href='item.php?id=${item.id}';}" tabindex="0" aria-label="View details for ${item.title}">
         <div class="card-img-wrap">
           <img src="${item.img}" alt="${item.title}" class="card-img" loading="lazy" decoding="async" onload="this.classList.add('loaded')" />
           <span class="card-badge-status ${badgeClass}">${badgeLabel}</span>

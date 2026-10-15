@@ -24,17 +24,32 @@ $isFoundInDb = false;
 if (empty($rawParamId) && !empty($paramMatchId)) {
     global $conn;
     if ($conn) {
-        $mStmt = $conn->prepare("SELECT found_report_id, lost_report_id, similarity_score FROM matches WHERE id = ? LIMIT 1");
+        $pkCol = 'id';
+        $colCheck = @$conn->query("SHOW COLUMNS FROM matches LIKE 'match_id'");
+        if ($colCheck && $colCheck->num_rows > 0) $pkCol = 'match_id';
+        
+        $mStmt = $conn->prepare("SELECT * FROM matches WHERE `$pkCol` = ? LIMIT 1");
         if ($mStmt) {
             $mStmt->bind_param("i", $paramMatchId);
             $mStmt->execute();
             $mRes = $mStmt->get_result();
             if ($mRow = $mRes->fetch_assoc()) {
-                $rawParamId = $mRow['found_report_id'] ?: $mRow['lost_report_id'];
+                $fId = $mRow['found_report_id'] ?? $mRow['found_id'] ?? null;
+                $lId = $mRow['lost_report_id'] ?? $mRow['lost_id'] ?? null;
+                if ($fId) {
+                    $rawParamId = "RF-" . str_pad($fId, 5, '0', STR_PAD_LEFT);
+                } elseif ($lId) {
+                    $rawParamId = "RL-" . str_pad($lId, 5, '0', STR_PAD_LEFT);
+                }
             }
             $mStmt->close();
         }
     }
+}
+
+// If explicit type parameter provided, honor it
+if (!empty($_GET['type']) && in_array(strtolower($_GET['type']), ['found', 'lost'])) {
+    $reportType = strtolower($_GET['type']);
 }
 
 // Parse ID format (e.g. RF-00002, RL-00001, 2)
@@ -46,9 +61,93 @@ if (!empty($rawParamId)) {
         $formattedId = strtoupper("R{$matches[1]}-" . str_pad($numericId, 5, '0', STR_PAD_LEFT));
     } elseif (is_numeric($cleanId)) {
         $numericId = (int)$cleanId;
-        $formattedId = "RF-" . str_pad($numericId, 5, '0', STR_PAD_LEFT);
+        $formattedId = strtoupper("R" . ($reportType === 'found' ? 'F' : 'L') . "-" . str_pad($numericId, 5, '0', STR_PAD_LEFT));
     } else {
         $formattedId = $cleanId;
+    }
+}
+
+// ── Global Helper Functions (Defined early for title/match evaluation) ──
+if (!function_exists('getSmartTitle')) {
+    function getSmartTitle($item) {
+        if (!$item) return 'Report Details';
+        $title = trim($item['title'] ?? '');
+        $cat = trim($item['category'] ?? '');
+
+        if (!empty($title) && strcasecmp($title, $cat) !== 0 && !str_starts_with(strtolower($title), 'found item') && !str_starts_with(strtolower($title), 'lost item')) {
+            return $title;
+        }
+
+        $desc = $item['description'] ?? '';
+        $brand = '';
+        $color = '';
+
+        if (preg_match('/\b(zebronics|peter england|apple|samsung|casio|fastrack|titan|fossil|boat|noise|dell|hp|lenovo|sony|nike|adidas|wildcraft|tommy hilfiger)\b/i', $desc, $mB)) {
+            $brand = ucwords($mB[0]);
+        }
+        if (preg_match('/\b(black|silver|white|gold|rose gold|blue|navy|red|green|grey|gray|brown|matte black)\b/i', $desc, $mC)) {
+            $color = ucfirst($mC[0]);
+        }
+
+        $strap = '';
+        if (preg_match('/\b(metal|leather|silicone|mesh|chain)\s*strap\b/i', $desc, $mS)) {
+            $strap = ucwords($mS[0]);
+        }
+
+        $baseNoun = 'Item';
+        $catLow = strtolower($cat);
+        if (str_contains($catLow, 'watch')) $baseNoun = 'Wristwatch';
+        elseif (str_contains($catLow, 'mouse')) $baseNoun = 'Computer Mouse';
+        elseif (str_contains($catLow, 'laptop')) $baseNoun = 'Laptop';
+        elseif (str_contains($catLow, 'phone')) $baseNoun = 'Smartphone';
+        elseif (str_contains($catLow, 'earbud')) $baseNoun = 'Earbuds';
+        elseif (str_contains($catLow, 'wallet')) $baseNoun = 'Wallet';
+        elseif (str_contains($catLow, 'bag')) $baseNoun = 'Bag';
+        elseif (str_contains($catLow, 'key')) $baseNoun = 'Keys';
+        elseif (str_contains($catLow, 'card')) $baseNoun = 'ID Card';
+        elseif (!empty($cat)) $baseNoun = preg_replace('/&.*/', '', $cat);
+
+        $parts = array_filter([$brand, $color, $strap, $baseNoun]);
+        return !empty($parts) ? implode(' ', $parts) : ($cat ?: 'Campus Item');
+    }
+}
+
+if (!function_exists('getCategoryIcon')) {
+    function getCategoryIcon($cat) {
+        $c = strtolower($cat ?? '');
+        if (str_contains($c, 'watch') || str_contains($c, 'wearable')) {
+            return '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="7"/><polyline points="12 9 12 12 13.5 13.5"/><path d="M16.51 17.35l-.85 3.86a2 2 0 0 1-1.96 1.57H10.3a2 2 0 0 1-1.96-1.57l-.85-3.86"/><path d="M7.49 6.65l.85-3.86A2 2 0 0 1 10.3 1.22h3.4a2 2 0 0 1 1.96 1.57l.85 3.86"/></svg>';
+        }
+        if (str_contains($c, 'electr') || str_contains($c, 'mouse') || str_contains($c, 'laptop') || str_contains($c, 'phone') || str_contains($c, 'earbud')) {
+            return '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="12" x="3" y="4" rx="2"/><line x1="2" x2="22" y1="20" y2="20"/></svg>';
+        }
+        if (str_contains($c, 'wallet') || str_contains($c, 'bag') || str_contains($c, 'purse')) {
+            return '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>';
+        }
+        if (str_contains($c, 'key')) {
+            return '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6"/><path d="m15.5 7.5 3 3L22 7l-3-3"/></svg>';
+        }
+        if (str_contains($c, 'doc') || str_contains($c, 'id') || str_contains($c, 'card')) {
+            return '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="14" x="3" y="5" rx="2"/><path d="M7 15h4M7 11h2"/><circle cx="16" cy="11" r="2"/></svg>';
+        }
+        if (str_contains($c, 'cloth') || str_contains($c, 'jacket') || str_contains($c, 'apparel')) {
+            return '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.38 3.46 16 2a4 4 0 0 1-8 0L3.62 3.46a2 2 0 0 0-1.34 2.23l.58 3.47a1 1 0 0 0 .99.84H6v10c0 1.1.9 2 2 2h8a2 2 0 0 0 2-2V10h2.15a1 1 0 0 0 .99-.84l.58-3.47a2 2 0 0 0-1.34-2.23z"/></svg>';
+        }
+        return '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></svg>';
+    }
+}
+
+if (!function_exists('formatRelativeTime')) {
+    function formatRelativeTime($dateStr) {
+        if (empty($dateStr)) return 'Recently';
+        $time = strtotime($dateStr);
+        if (!$time) return 'Recently';
+        $diff = time() - $time;
+        if ($diff < 60) return 'Just now';
+        if ($diff < 3600) return floor($diff / 60) . 'm ago';
+        if ($diff < 86400) return floor($diff / 3600) . 'h ago';
+        if ($diff < 604800) return floor($diff / 86400) . 'd ago';
+        return date('M d, Y', $time);
     }
 }
 
@@ -161,128 +260,132 @@ if (!$item && isset($demoCatalog[$formattedId])) {
 
 // ── 4. Retrieve Digital DNA Traits from DB ───────────────────────
 $dnaDetails = $item['dna'] ?? [];
-if ($isFoundInDb && $conn) {
-    $dnaStmt = $conn->prepare("SELECT dna_json FROM digital_dna WHERE report_id = ? OR report_id = ? LIMIT 1");
-    if ($dnaStmt) {
-        $repCode = $formattedId;
-        $dnaStmt->bind_param("ss", $repCode, $numericId);
-        $dnaStmt->execute();
-        $dnaRes = $dnaStmt->get_result();
-        if ($dnaRow = $dnaRes->fetch_assoc()) {
-            $decodedDna = json_decode($dnaRow['dna_json'], true);
-            if (is_array($decodedDna)) {
-                $dnaDetails = array_merge($dnaDetails, $decodedDna);
+if ($isFoundInDb && $conn && $numericId > 0) {
+    $repTypeUpper = strtoupper($reportType);
+    $dnaQ = "SELECT * FROM digital_dna WHERE (report_type = '$repTypeUpper' AND report_id = $numericId) OR report_id = $numericId LIMIT 1";
+    $dnaRes = @$conn->query($dnaQ);
+    if ($dnaRes && ($dnaRow = $dnaRes->fetch_assoc())) {
+        $rawDna = $dnaRow['encrypted_dna'] ?? $dnaRow['dna_json'] ?? '';
+        $decoded = json_decode($rawDna, true);
+        if (is_array($decoded)) {
+            if (isset($decoded['attributes']) && is_array($decoded['attributes'])) {
+                foreach ($decoded['attributes'] as $ak => $av) {
+                    if (is_string($av) && !empty($av)) {
+                        $dnaDetails[$ak] = $av;
+                    }
+                }
+            }
+            if (isset($decoded['visible_features']) && is_array($decoded['visible_features'])) {
+                $dnaDetails['Visible Features'] = implode(' • ', array_slice($decoded['visible_features'], 0, 3));
+            }
+            foreach ($decoded as $dk => $dv) {
+                if (is_string($dv) && !in_array($dk, ['attributes', 'visible_features', 'private_features', 'raw_response', 'category', 'location'])) {
+                    $cleanKey = ucwords(str_replace('_', ' ', $dk));
+                    if (!isset($dnaDetails[$cleanKey])) {
+                        $dnaDetails[$cleanKey] = $dv;
+                    }
+                }
             }
         }
-        $dnaStmt->close();
     }
 }
 
-// ── 5. AI Match Scores (if matched or deep linked) ──────────────
-$hasAiMatch = !empty($paramMatchId) || (isset($_GET['match']) && $_GET['match'] === '1');
-$matchScore = 94;
-$visualScore = 96;
-$textScore = 92;
-$matchReason = "Matched based on visual similarity with black dial wristwatch traits, stainless metal strap, and matching Computer Lab location.";
-
-if (!empty($paramMatchId) && $conn) {
-    $mQuery = $conn->prepare("SELECT similarity_score FROM matches WHERE id = ? LIMIT 1");
-    if ($mQuery) {
-        $mQuery->bind_param("i", $paramMatchId);
-        $mQuery->execute();
-        $mRes = $mQuery->get_result();
-        if ($mRow = $mRes->fetch_assoc()) {
-            $hasAiMatch = true;
-            $matchScore = round((float)$mRow['similarity_score']);
-            $visualScore = min(99, round($matchScore * 1.02));
-            $textScore = min(99, round($matchScore * 0.97));
-        }
-        $mQuery->close();
+// If no DNA traits recorded yet, extract smart traits from item description
+if (empty($dnaDetails) && !empty($item['description'])) {
+    $desc = $item['description'];
+    if (preg_match('/\b(zebronics|apple|samsung|casio|fastrack|titan|fossil|boat|noise|dell|hp|lenovo|sony|nike|adidas|wildcraft|tommy hilfiger)\b/i', $desc, $m)) {
+        $dnaDetails['Brand'] = ucwords($m[0]);
+    }
+    if (preg_match('/\b(black|matte black|dark grey|silver|white|gold|blue|navy|red|green|grey|brown)\b/i', $desc, $m)) {
+        $dnaDetails['Color'] = ucwords($m[0]);
+    }
+    if (preg_match('/\b(wireless|bluetooth|usb|ergonomic|analog|digital)\b/i', $desc, $m)) {
+        $dnaDetails['Type'] = ucfirst($m[0]);
+    }
+    if (preg_match('/\b(plastic|metal|leather|mesh|stainless steel)\b/i', $desc, $m)) {
+        $dnaDetails['Material'] = ucwords($m[0]);
+    }
+    if (preg_match('/\b(gently used|new|scratched|dusty|working)\b/i', $desc, $m)) {
+        $dnaDetails['Condition'] = ucwords($m[0]);
     }
 }
 
-// ── Helper Functions ────────────────────────────────────────────
-if (!function_exists('getSmartTitle')) {
-    function getSmartTitle($item) {
-        if (!$item) return 'Report Details';
-        $title = trim($item['title'] ?? '');
-        $cat = trim($item['category'] ?? '');
+// ── 5. AI Match Scores (Automatic DB Detection & Deep-linked) ──────────────
+$hasAiMatch = false;
+$activeMatchRow = null;
+$matchScore = 0;
+$visualScore = 0;
+$textScore = 0;
+$matchedOppositeItem = null;
+$matchReason = '';
+$currentMatchId = 0;
 
-        if (!empty($title) && strcasecmp($title, $cat) !== 0 && !str_starts_with(strtolower($title), 'found item') && !str_starts_with(strtolower($title), 'lost item')) {
-            return $title;
+if ($conn && $numericId > 0) {
+    // Detect column names on matches table
+    $pkCol = 'id';
+    $lostCol = 'lost_report_id';
+    $foundCol = 'found_report_id';
+    $scoreCol = 'similarity_score';
+
+    $colCheck = @$conn->query("SHOW COLUMNS FROM matches");
+    if ($colCheck) {
+        $colNames = [];
+        while ($cr = $colCheck->fetch_assoc()) $colNames[] = strtolower($cr['Field']);
+        if (in_array('match_id', $colNames)) $pkCol = 'match_id';
+        if (in_array('lost_id', $colNames)) $lostCol = 'lost_id';
+        if (in_array('found_id', $colNames)) $foundCol = 'found_id';
+        if (in_array('match_percentage', $colNames)) $scoreCol = 'match_percentage';
+    }
+
+    // Direct match_id from query string
+    if (!empty($paramMatchId)) {
+        $mQ = @$conn->query("SELECT * FROM matches WHERE `$pkCol` = " . (int)$paramMatchId . " LIMIT 1");
+        if ($mQ && ($mRow = $mQ->fetch_assoc())) {
+            $activeMatchRow = $mRow;
+        }
+    }
+
+    // Automatic match lookup by report ID if not provided in URL
+    if (!$activeMatchRow) {
+        $targetCol = ($reportType === 'found') ? $foundCol : $lostCol;
+        $mQ = @$conn->query("SELECT * FROM matches WHERE `$targetCol` = $numericId ORDER BY `$scoreCol` DESC LIMIT 1");
+        if ($mQ && ($mRow = $mQ->fetch_assoc())) {
+            $activeMatchRow = $mRow;
+        }
+    }
+
+    if ($activeMatchRow) {
+        $hasAiMatch = true;
+        $currentMatchId = (int)($activeMatchRow[$pkCol] ?? 0);
+        $rawScore = $activeMatchRow[$scoreCol] ?? 95;
+        $matchScore = min(99, max(50, round((float)$rawScore)));
+        $visualScore = min(99, round($matchScore * 1.01));
+        $textScore = min(99, round($matchScore * 0.98));
+
+        // Fetch opposite matched report details
+        $oppId = ($reportType === 'found')
+            ? (int)($activeMatchRow[$lostCol] ?? 0)
+            : (int)($activeMatchRow[$foundCol] ?? 0);
+
+        if ($oppId > 0) {
+            $oppTable = ($reportType === 'found') ? 'lost_reports' : 'found_reports';
+            $dateField = ($reportType === 'found') ? 'date_lost' : 'date_found';
+            $oppQ = @$conn->query("SELECT id, user_id, category, title, description, location, $dateField as report_date, image_path, status, created_at FROM `$oppTable` WHERE id = $oppId LIMIT 1");
+            if ($oppQ && ($matchedOppositeItem = $oppQ->fetch_assoc())) {
+                $oppTitle = getSmartTitle($matchedOppositeItem);
+                $oppLoc = $matchedOppositeItem['location'] ?? 'Campus';
+                $oppCode = ($reportType === 'found' ? 'RL-' : 'RF-') . str_pad($oppId, 5, '0', STR_PAD_LEFT);
+                $matchReason = "Multimodal AI (DINOv2 + CLIP) detected high neural confidence ({$matchScore}%) between this item and " . ($reportType === 'found' ? 'Lost Report' : 'Found Report') . " #{$oppCode} ('{$oppTitle}' at {$oppLoc}).";
+            }
         }
 
-        $desc = $item['description'] ?? '';
-        $brand = '';
-        $color = '';
-
-        if (preg_match('/\b(peter england|apple|samsung|casio|fastrack|titan|fossil|boat|noise|dell|hp|lenovo|sony|nike|adidas|wildcraft|tommy hilfiger)\b/i', $desc, $mB)) {
-            $brand = ucwords($mB[0]);
+        if (empty($matchReason)) {
+            $matchReason = "Matched based on neural feature extraction (DINOv2) and semantic similarity ({$matchScore}%) across campus reports.";
         }
-        if (preg_match('/\b(black|silver|white|gold|rose gold|blue|navy|red|green|grey|gray|brown|matte black)\b/i', $desc, $mC)) {
-            $color = ucfirst($mC[0]);
-        }
-
-        $strap = '';
-        if (preg_match('/\b(metal|leather|silicone|mesh|chain)\s*strap\b/i', $desc, $mS)) {
-            $strap = ucwords($mS[0]);
-        }
-
-        $baseNoun = 'Item';
-        $catLow = strtolower($cat);
-        if (str_contains($catLow, 'watch')) $baseNoun = 'Wristwatch';
-        elseif (str_contains($catLow, 'laptop')) $baseNoun = 'Laptop';
-        elseif (str_contains($catLow, 'phone')) $baseNoun = 'Smartphone';
-        elseif (str_contains($catLow, 'earbud')) $baseNoun = 'Earbuds';
-        elseif (str_contains($catLow, 'wallet')) $baseNoun = 'Wallet';
-        elseif (str_contains($catLow, 'bag')) $baseNoun = 'Bag';
-        elseif (str_contains($catLow, 'key')) $baseNoun = 'Keys';
-        elseif (str_contains($catLow, 'card')) $baseNoun = 'ID Card';
-        elseif (!empty($cat)) $baseNoun = preg_replace('/&.*/', '', $cat);
-
-        $parts = array_filter([$brand, $color, $strap, $baseNoun]);
-        return !empty($parts) ? implode(' ', $parts) : ($cat ?: 'Campus Item');
     }
 }
 
-if (!function_exists('getCategoryIcon')) {
-    function getCategoryIcon($cat) {
-        $c = strtolower($cat ?? '');
-        if (str_contains($c, 'watch') || str_contains($c, 'wearable')) {
-            return '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="7"/><polyline points="12 9 12 12 13.5 13.5"/><path d="M16.51 17.35l-.85 3.86a2 2 0 0 1-1.96 1.57H10.3a2 2 0 0 1-1.96-1.57l-.85-3.86"/><path d="M7.49 6.65l.85-3.86A2 2 0 0 1 10.3 1.22h3.4a2 2 0 0 1 1.96 1.57l.85 3.86"/></svg>';
-        }
-        if (str_contains($c, 'electr') || str_contains($c, 'laptop') || str_contains($c, 'phone') || str_contains($c, 'earbud')) {
-            return '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="12" x="3" y="4" rx="2"/><line x1="2" x2="22" y1="20" y2="20"/></svg>';
-        }
-        if (str_contains($c, 'wallet') || str_contains($c, 'bag') || str_contains($c, 'purse')) {
-            return '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>';
-        }
-        if (str_contains($c, 'key')) {
-            return '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6"/><path d="m15.5 7.5 3 3L22 7l-3-3"/></svg>';
-        }
-        if (str_contains($c, 'doc') || str_contains($c, 'id') || str_contains($c, 'card')) {
-            return '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="14" x="3" y="5" rx="2"/><path d="M7 15h4M7 11h2"/><circle cx="16" cy="11" r="2"/></svg>';
-        }
-        if (str_contains($c, 'cloth') || str_contains($c, 'jacket') || str_contains($c, 'apparel')) {
-            return '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.38 3.46 16 2a4 4 0 0 1-8 0L3.62 3.46a2 2 0 0 0-1.34 2.23l.58 3.47a1 1 0 0 0 .99.84H6v10c0 1.1.9 2 2 2h8a2 2 0 0 0 2-2V10h2.15a1 1 0 0 0 .99-.84l.58-3.47a2 2 0 0 0-1.34-2.23z"/></svg>';
-        }
-        return '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></svg>';
-    }
-}
-
-if (!function_exists('formatRelativeTime')) {
-    function formatRelativeTime($dateStr) {
-        if (empty($dateStr)) return 'Recently';
-        $time = strtotime($dateStr);
-        if (!$time) return 'Recently';
-        $diff = time() - $time;
-        if ($diff < 60) return 'Just now';
-        if ($diff < 3600) return floor($diff / 60) . 'm ago';
-        if ($diff < 86400) return floor($diff / 3600) . 'h ago';
-        if ($diff < 604800) return floor($diff / 86400) . 'd ago';
-        return date('M d, Y', $time);
-    }
-}
+// ── 6. Prepare Item Presentation Variables ────────────────────────
 
 // Prepare item presentation variables
 $smartTitle = getSmartTitle($item);
@@ -298,6 +401,36 @@ $isReunited = ($item && in_array(strtolower($item['status'] ?? ''), ['claimed', 
 $currentUserId = $_SESSION['user_id'] ?? ($current_user['user_id'] ?? null);
 $itemUserId = isset($item['user_id']) && $item['user_id'] !== null ? (int)$item['user_id'] : null;
 $isOwnItem = ($logged_in && !empty($currentUserId) && !empty($itemUserId) && (int)$currentUserId === (int)$itemUserId);
+
+// Check for existing claims in recovery_cases
+$existingClaim = null;
+if ($conn && $numericId > 0 && $isFound) {
+    $cQ = @$conn->query("SELECT * FROM recovery_cases WHERE report_id = $numericId ORDER BY id DESC LIMIT 1");
+    if ($cQ && ($cRow = $cQ->fetch_assoc())) {
+        $existingClaim = $cRow;
+    }
+}
+
+// Ownership and Match roles:
+// 1. Is the current user the person whose lost report matched this found item?
+$isMatchedLostOwner = false;
+if ($logged_in && !empty($currentUserId) && $matchedOppositeItem && $isFound) {
+    $matchedLostUserId = (int)($matchedOppositeItem['user_id'] ?? 0);
+    if ($matchedLostUserId > 0 && $matchedLostUserId === (int)$currentUserId) {
+        $isMatchedLostOwner = true;
+    }
+}
+
+// 2. Did the current user already file a claim on this item?
+$userHasPendingClaim = false;
+if ($logged_in && !empty($currentUserId) && $existingClaim) {
+    if ((int)($existingClaim['claimant_id'] ?? 0) === (int)$currentUserId && in_array($existingClaim['status'], ['pending_verification', 'approved'])) {
+        $userHasPendingClaim = true;
+    }
+}
+
+// 3. If finder is viewing and there's a pending claim to review:
+$hasClaimToReview = ($isOwnItem && $existingClaim && $existingClaim['status'] === 'pending_verification');
 
 $badgeClass = 'badge-found';
 $badgeLabel = 'Found Item';
@@ -484,8 +617,39 @@ $similarItems = [
 
         <!-- Primary Actions Card -->
         <div class="item-action-card">
+          <?php if ($hasAiMatch && $isMatchedLostOwner && !$isReunited): ?>
+            <div class="match-alert-pill-banner" style="background: rgba(16, 185, 129, 0.12); border: 1.5px solid rgba(16, 185, 129, 0.4); border-radius: 12px; padding: 0.85rem 1rem; margin-bottom: 0.9rem; display: flex; align-items: flex-start; gap: 0.65rem;">
+              <span style="font-size: 1.25rem; line-height: 1;">✨</span>
+              <div style="font-size: 0.825rem; color: var(--ink);">
+                <strong style="color: #059669; font-size: 0.875rem; display: block; margin-bottom: 0.2rem;">AI Match Detected (<?php echo $matchScore; ?>% Match)</strong>
+                This item matches your reported Lost Report <strong>#<?php echo htmlspecialchars($oppCode ?? 'RL-' . str_pad($oppId ?? 0, 5, '0', STR_PAD_LEFT)); ?></strong>. Submit your proof below to reclaim it.
+              </div>
+            </div>
+          <?php elseif ($hasAiMatch && $isOwnItem && !$isReunited): ?>
+            <div class="match-alert-pill-banner" style="background: rgba(196, 98, 45, 0.09); border: 1.5px solid rgba(196, 98, 45, 0.35); border-radius: 12px; padding: 0.85rem 1rem; margin-bottom: 0.9rem; display: flex; align-items: flex-start; gap: 0.65rem;">
+              <span style="font-size: 1.25rem; line-height: 1;">✨</span>
+              <div style="font-size: 0.825rem; color: var(--ink);">
+                <strong style="color: var(--accent); font-size: 0.875rem; display: block; margin-bottom: 0.2rem;">Potential Owner Found (<?php echo $matchScore; ?>% Match)</strong>
+                A student has reported losing an item matching this description.
+                <?php if ($hasClaimToReview): ?>
+                  <span style="display: block; margin-top: 0.25rem; font-weight: 600; color: #b45309;">Ownership proof has been submitted and is ready for your verification!</span>
+                <?php endif; ?>
+              </div>
+            </div>
+          <?php endif; ?>
+
           <div class="action-card-row">
-            <?php if ($isOwnItem): ?>
+            <?php if ($userHasPendingClaim): ?>
+              <button type="button" class="btn-claim-primary secondary" disabled aria-disabled="true" style="opacity: 0.9;">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                <span>Proof Submitted (Under Review)</span>
+              </button>
+            <?php elseif ($hasClaimToReview): ?>
+              <button type="button" class="btn-claim-primary" onclick="openFounderApprovalModal(<?php echo $currentMatchId ?: 1; ?>, '<?php echo addslashes($existingClaim['proof_details'] ?? ''); ?>')">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                <span>Review Ownership Proof &rarr;</span>
+              </button>
+            <?php elseif ($isOwnItem): ?>
               <button type="button" class="btn-claim-primary disabled-own-item" disabled aria-disabled="true" title="You uploaded this report">
                 <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
                 <span>Uploaded by you</span>
@@ -493,7 +657,7 @@ $similarItems = [
             <?php elseif ($isFound && !$isReunited): ?>
               <button type="button" class="btn-claim-primary" onclick="openClaimVerificationModal()">
                 <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-                <span>This is mine, claim it</span>
+                <span><?php echo $isMatchedLostOwner ? 'Claim & Verify Your Item' : 'This is mine, claim it'; ?></span>
               </button>
             <?php elseif (!$isFound && !$isReunited): ?>
               <button type="button" class="btn-claim-primary" onclick="flagItemReport('<?php echo htmlspecialchars($formattedId); ?>')">
@@ -515,7 +679,12 @@ $similarItems = [
             </button>
           </div>
 
-          <?php if ($isOwnItem): ?>
+          <?php if ($userHasPendingClaim): ?>
+            <div class="privacy-notice-box" style="border-color: rgba(16, 185, 129, 0.4); background: rgba(16, 185, 129, 0.08); color: #065f46;">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+              <span>Your ownership proof was submitted. The founder has been notified and will coordinate handover.</span>
+            </div>
+          <?php elseif ($isOwnItem): ?>
             <div class="privacy-notice-box is-owner">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
               <span>This report was uploaded by you. You can manage or track claim requests from <a href="profile.php#tabPanelReports">My Reports</a>.</span>
@@ -632,7 +801,7 @@ $similarItems = [
           $statusVal = strtolower($item['status'] ?? 'active');
           $step1 = true; // Reported
           $step2 = ($hasAiMatch || in_array($statusVal, ['matched', 'claimed', 'reunited', 'closed']));
-          $step3 = in_array($statusVal, ['claimed', 'reunited', 'closed']);
+          $step3 = (!empty($existingClaim) || in_array($statusVal, ['claimed', 'reunited', 'closed']));
           $step4 = in_array($statusVal, ['reunited', 'closed']);
 
           $progressPct = 0;
@@ -744,7 +913,15 @@ $similarItems = [
 <!-- ── Mobile Sticky Bottom Bar ── -->
 <?php if ($item): ?>
   <div class="mobile-sticky-action-bar" aria-label="Mobile actions">
-    <?php if ($isOwnItem): ?>
+    <?php if ($userHasPendingClaim): ?>
+      <button type="button" class="btn-claim-primary secondary" disabled aria-disabled="true" style="flex: 1; opacity: 0.9;">
+        <span>Claim Under Review</span>
+      </button>
+    <?php elseif ($hasClaimToReview): ?>
+      <button type="button" class="btn-claim-primary" onclick="openFounderApprovalModal(<?php echo $currentMatchId ?: 1; ?>, '<?php echo addslashes($existingClaim['proof_details'] ?? ''); ?>')" style="flex: 1;">
+        <span>Review Ownership Proof &rarr;</span>
+      </button>
+    <?php elseif ($isOwnItem): ?>
       <button type="button" class="btn-claim-primary disabled-own-item" disabled aria-disabled="true" style="flex: 1;">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
         <span>Uploaded by you</span>
@@ -752,7 +929,7 @@ $similarItems = [
     <?php elseif ($isFound && !$isReunited): ?>
       <button type="button" class="btn-claim-primary" onclick="openClaimVerificationModal()" style="flex: 1;">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-        <span>This is mine, claim it</span>
+        <span><?php echo $isMatchedLostOwner ? 'Claim & Verify Your Item' : 'This is mine, claim it'; ?></span>
       </button>
     <?php else: ?>
       <a href="search.php" class="btn-claim-primary secondary" style="flex: 1; text-decoration: none;">

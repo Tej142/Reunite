@@ -105,6 +105,18 @@ try {
     $conn = null;
 }
 
+// Fallback to local XAMPP MySQL if production host is unreachable (e.g. local dev / testing)
+if (!$conn && defined('DB_HOST') && DB_HOST !== 'localhost' && DB_HOST !== '127.0.0.1') {
+    try {
+        $localConn = @new mysqli('localhost', 'root', '', 'lost_connect_db', 3306);
+        if ($localConn && !$localConn->connect_error) {
+            $conn = $localConn;
+            $conn->set_charset("utf8mb4");
+            $db_connection_error = '';
+        }
+    } catch (Throwable $ignore) {}
+}
+
 /**
  * Returns active database connection or null
  */
