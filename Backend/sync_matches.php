@@ -21,69 +21,100 @@ if (!$conn) {
     exit;
 }
 
-// 1. Normalize report statuses in database ('Pending' or empty -> 'active')
-$conn->query("UPDATE lost_reports SET status = 'active' WHERE status = 'Pending' OR status = '' OR status IS NULL");
-$conn->query("UPDATE found_reports SET status = 'active' WHERE status = 'Pending' OR status = '' OR status IS NULL");
+$diagnostics = [];
 
-// 2. Fetch all active found reports
-$foundColsRes = $conn->query("SHOW COLUMNS FROM found_reports");
-$fCols = [];
-if ($foundColsRes) {
-    while ($fc = $foundColsRes->fetch_assoc()) $fCols[] = strtolower($fc['Field']);
-}
-$fIdCol = in_array('id', $fCols) ? 'id' : 'found_id';
-$fUserCol = in_array('user_id', $fCols) ? 'user_id' : (in_array('finder_id', $fCols) ? 'finder_id' : 'user_id');
+// 1. Check raw table counts
+$resLostCount = $conn->query("SELECT COUNT(*) as cnt FROM lost_reports");
+$lostCount = $resLostCount ? (int)$resLostCount->fetch_assoc()['cnt'] : 0;
 
+$resFoundCount = $conn->query("SELECT COUNT(*) as cnt FROM found_reports");
+$foundCount = $resFoundCount ? (int)$resFoundCount->fetch_assoc()['cnt'] : 0;
+
+$diagnostics['raw_lost_count'] = $lostCount;
+$diagnostics['raw_found_count'] = $foundCount;
+
+// 2. Normalize statuses: set anything not claimed/closed/matched to 'active'
+@$conn->query("UPDATE lost_reports SET status = 'active' WHERE status IS NULL OR status = '' OR status = 'Pending'");
+@$conn->query("UPDATE found_reports SET status = 'active' WHERE status IS NULL OR status = '' OR status = 'Pending'");
+
+// 3. Fetch all found reports using SELECT * so no column errors are possible
 $foundReports = [];
-$resF = $conn->query("SELECT $fIdCol AS id, $fUserCol AS user_id, category, title, description, location, image_path, status FROM found_reports WHERE status = 'active'");
+$resF = $conn->query("SELECT * FROM found_reports");
 if ($resF) {
     while ($row = $resF->fetch_assoc()) {
         $foundReports[] = $row;
     }
+} else {
+    $diagnostics['found_query_error'] = $conn->error;
+}
+
+// 4. Fetch all lost reports using SELECT *
+$lostReports = [];
+$resL = $conn->query("SELECT * FROM lost_reports");
+if ($resL) {
+    while ($row = $resL->fetch_assoc()) {
+        $lostReports[] = $row;
+    }
+} else {
+    $diagnostics['lost_query_error'] = $conn->error;
 }
 
 $allCreatedMatches = [];
 
-// 3. For each found report, run real-time matchmaking against all lost reports
+// 5. Run matching for every found report
 foreach ($foundReports as $fReport) {
-    $fId = (int)$fReport['id'];
-    $fUserId = (int)$fReport['user_id'];
+    $fId = (int)($fReport['id'] ?? $fReport['found_id'] ?? 0);
+    $fUserId = (int)($fReport['user_id'] ?? $fReport['finder_id'] ?? 0);
     $fCat = $fReport['category'] ?? '';
     $fTitle = $fReport['title'] ?? '';
     $fDesc = $fReport['description'] ?? '';
     $fLoc = $fReport['location'] ?? '';
-    $fImg = $fReport['image_path'] ?? '';
+    $fImg = $fReport['image_path'] ?? $fReport['image_url'] ?? '';
 
-    $matches = runRealtimeMatchmaking(
-        $fId,
-        'found',
-        $fCat,
-        $fTitle,
-        $fDesc,
-        $fLoc,
-        $fImg,
-        $fUserId
-    );
+    if ($fId > 0) {
+        $matches = runRealtimeMatchmaking(
+            $fId,
+            'found',
+            $fCat,
+            $fTitle,
+            $fDesc,
+            $fLoc,
+            $fImg,
+            $fUserId
+        );
 
-    if (!empty($matches)) {
-        foreach ($matches as $m) {
-            $allCreatedMatches[] = $m;
+        if (!empty($matches)) {
+            foreach ($matches as $m) {
+                $allCreatedMatches[] = $m;
+            }
         }
     }
 }
 
-// 4. Fetch count of all unread notifications in system
+// 6. Notifications count
 $notifCount = 0;
 $nRes = $conn->query("SELECT COUNT(*) as cnt FROM notifications");
 if ($nRes && ($nrow = $nRes->fetch_assoc())) {
     $notifCount = (int)$nrow['cnt'];
 }
 
+// 7. Recent notifications in DB
+$recentNotifs = [];
+$rnRes = $conn->query("SELECT notification_id, user_id, title, message, created_at FROM notifications ORDER BY notification_id DESC LIMIT 5");
+if ($rnRes) {
+    while ($rn = $rnRes->fetch_assoc()) {
+        $recentNotifs[] = $rn;
+    }
+}
+
 echo json_encode([
     'success' => true,
     'message' => 'Match synchronization completed successfully.',
+    'diagnostics' => $diagnostics,
     'active_found_reports_scanned' => count($foundReports),
+    'active_lost_reports_scanned' => count($lostReports),
     'new_matches_created' => count($allCreatedMatches),
     'total_notifications_in_db' => $notifCount,
-    'matches' => $allCreatedMatches
+    'matches' => $allCreatedMatches,
+    'recent_notifications' => $recentNotifs
 ], JSON_PRETTY_PRINT);
