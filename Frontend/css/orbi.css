@@ -1,0 +1,434 @@
+/**
+ * Reunite — Orbi Animated Mascot Stylesheet
+ * 
+ * States: IDLE, LOADING, THINKING, HAPPY, NOTFOUND
+ * Uses transform-box: fill-box and transform-origin: center for SVG transforms.
+ * Fully respects prefers-reduced-motion.
+ */
+
+/* ── Base Sizing & Presentation ───────────────────────────── */
+.orbi {
+  width: var(--orbi-size, 120px);
+  height: auto;
+  overflow: visible;
+  display: inline-block;
+  vertical-align: middle;
+  flex-shrink: 0;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* ── Layer Opacity & Transition ───────────────────────────── */
+.orbi .orbi-layer {
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  pointer-events: none;
+}
+
+/* ── State Visibility Rules ───────────────────────────────── */
+/* 1. IDLE (Default or explicit idle): eyes visible */
+.orbi:not([data-state]) .orbi-eyes,
+.orbi[data-state="idle"] .orbi-eyes {
+  opacity: 1;
+}
+
+/* 2. LOADING: eyes visible + bottom load dots visible */
+.orbi[data-state="loading"] .orbi-eyes,
+.orbi[data-state="loading"] .orbi-load {
+  opacity: 1;
+}
+
+/* 3. THINKING: eyes hidden, think dots visible inside visor */
+.orbi[data-state="thinking"] .orbi-think {
+  opacity: 1;
+}
+
+/* 4. HAPPY: happy curved eyes + sparkles visible */
+.orbi[data-state="happy"] .orbi-happy,
+.orbi[data-state="happy"] .orbi-sparkles {
+  opacity: 1;
+}
+
+/* 5. NOT FOUND: question mark visible */
+.orbi[data-state="notfound"] .orbi-q {
+  opacity: 1;
+}
+
+/* ── Animation Geometry & Keyframes ───────────────────────── */
+/* Base Float & Shadow */
+.orbi .orbi-float {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: orbiFloat 3s ease-in-out infinite;
+}
+
+.orbi .orbi-shadow {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: orbiShadow 3s ease-in-out infinite;
+}
+
+@keyframes orbiFloat {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+@keyframes orbiShadow {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.14;
+  }
+  50% {
+    transform: scale(0.75);
+    opacity: 0.07;
+  }
+}
+
+/* Pods Animation (ear engines) */
+.orbi .orbi-pod {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: orbiPod 2.2s ease-in-out infinite;
+}
+
+.orbi .orbi-pod-b {
+  animation-delay: -1.1s;
+}
+
+@keyframes orbiPod {
+  0%, 100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-6px) rotate(-12deg);
+  }
+}
+
+/* Bottom Glow Pulse */
+.orbi .orbi-glow {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: orbiGlow 3s ease-in-out infinite;
+}
+
+@keyframes orbiGlow {
+  0%, 100% {
+    transform: scaleX(1);
+    opacity: 0.5;
+  }
+  50% {
+    transform: scaleX(0.7);
+    opacity: 0.2;
+  }
+}
+
+/* Eyes Natural Blink (squishes briefly at ~96% of 4s cycle) */
+.orbi .orbi-blink {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: orbiBlink 4s ease-in-out infinite;
+}
+
+@keyframes orbiBlink {
+  0%, 94%, 98%, 100% {
+    transform: scaleY(1);
+  }
+  96% {
+    transform: scaleY(0.1);
+  }
+}
+
+/* Dots Pulse & Hop (used for both thinking and loading dots) */
+.orbi .orbi-dot {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: orbiDot 1.2s ease-in-out infinite;
+  animation-delay: var(--d, 0s);
+}
+
+@keyframes orbiDot {
+  0%, 100% {
+    transform: translateY(0);
+    opacity: 0.4;
+  }
+  50% {
+    transform: translateY(-5px);
+    opacity: 1;
+  }
+}
+
+/* Sparkles Twinkle */
+.orbi .orbi-tw {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: orbiTw 1.8s ease-in-out infinite;
+}
+
+@keyframes orbiTw {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.5);
+    opacity: 0.5;
+  }
+}
+
+/* ── State Specific Overrides ─────────────────────────────── */
+/* HAPPY: 3 quick hops (0.55s x 3 = 1.65s) then smooth return to float */
+.orbi[data-state="happy"] .orbi-float {
+  animation: orbiHappyHop 0.55s ease-out 3, orbiFloat 3s ease-in-out 1.65s infinite;
+}
+
+.orbi[data-state="happy"] .orbi-shadow {
+  animation: orbiHappyShadow 0.55s ease-out 3, orbiShadow 3s ease-in-out 1.65s infinite;
+}
+
+@keyframes orbiHappyHop {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-16px);
+  }
+}
+
+@keyframes orbiHappyShadow {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.14;
+  }
+  50% {
+    transform: scale(0.6);
+    opacity: 0.04;
+  }
+}
+
+/* NOT FOUND: tilted head with smooth 0.3s transition */
+.orbi .orbi-tilt {
+  transform-box: fill-box;
+  transform-origin: center;
+  transition: transform 0.3s ease;
+}
+
+.orbi[data-state="notfound"] .orbi-tilt {
+  transform: rotate(-6deg);
+}
+
+/* ── Dark Mode Harmony ────────────────────────────────────── */
+[data-theme="dark"] .orbi .orbi-shadow {
+  fill: #000000;
+  fill-opacity: 0.45;
+}
+
+/* ── Accessibility: Reduced Motion ────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  .orbi *,
+  .orbi .orbi-float,
+  .orbi .orbi-shadow,
+  .orbi .orbi-pod,
+  .orbi .orbi-glow,
+  .orbi .orbi-blink,
+  .orbi .orbi-dot,
+  .orbi .orbi-tw,
+  .orbi .orbi-tilt {
+    animation: none !important;
+    transition: none !important;
+  }
+  /* Layers still switch cleanly */
+  .orbi .orbi-layer {
+    transition: none !important;
+  }
+}
+
+/* ── Global Page Loader Overlay ───────────────────────────── */
+.reunite-page-loader {
+  position: fixed;
+  inset: 0;
+  z-index: 9999999;
+  background-color: var(--bg, #FAF8F5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  opacity: 1;
+  visibility: visible;
+  transition: opacity 0.35s ease, visibility 0.35s ease;
+  pointer-events: auto;
+  /* CSS Fallback: automatically fades out at 6.2s even if JS crashes */
+  animation: pageLoaderAutoDismiss 0.5s ease 6.2s forwards;
+}
+
+[data-theme="dark"] .reunite-page-loader {
+  background-color: var(--bg, #12100E);
+}
+
+.reunite-page-loader.loader-hidden {
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
+.page-loader-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.25rem;
+  text-align: center;
+}
+
+.page-loader-text {
+  font-family: 'Fraunces', serif;
+  font-size: 1.15rem;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: var(--ink, #1C1917);
+  margin: 0;
+  animation: pageLoaderTextPulse 2s ease-in-out infinite;
+}
+
+[data-theme="dark"] .page-loader-text {
+  color: var(--ink, #F7F3EE);
+}
+
+@keyframes pageLoaderTextPulse {
+  0%, 100% { opacity: 0.7; }
+  50% { opacity: 1; }
+}
+
+@keyframes pageLoaderAutoDismiss {
+  to {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+  }
+}
+
+/* Reduced motion disables pulse and text animation */
+@media (prefers-reduced-motion: reduce) {
+  .page-loader-text {
+    animation: none !important;
+  }
+  .reunite-page-loader {
+    transition: none !important;
+  }
+}
+
+/* ── Inline Section Loaders ───────────────────────────────── */
+.orbi-section-loader {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem 1.5rem;
+  text-align: center;
+  gap: 0.75rem;
+  width: 100%;
+}
+
+.orbi-section-loader-text {
+  font-size: 0.84rem;
+  font-weight: 500;
+  color: var(--muted, #78716C);
+}
+
+[data-theme="dark"] .orbi-section-loader-text {
+  color: var(--muted, #A89D94);
+}
+
+/* ── Thinking Indicator Banners & Chat Bubbles ─────────────── */
+.orbi-thinking-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem 1.25rem;
+  margin: 0.75rem 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 1rem;
+  box-shadow: var(--shadow-sm);
+  animation: orbiFadeIn 0.25s ease;
+  width: 100%;
+}
+
+.orbi-thinking-inner {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.orbi-thinking-caption {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--muted);
+  animation: pageLoaderTextPulse 1.8s ease-in-out infinite;
+}
+
+[data-theme="dark"] .orbi-thinking-caption {
+  color: var(--muted);
+}
+
+@keyframes orbiFadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Chat bubble thinking override */
+.chat-bubble.thinking.orbi-thinking-bubble {
+  display: inline-flex;
+  align-items: center;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  padding: 0.35rem 0.85rem 0.35rem 0.5rem;
+  border-radius: 1.25rem;
+  border-bottom-left-radius: 0.25rem;
+  box-shadow: var(--shadow-sm);
+  margin-bottom: 0.75rem;
+  animation: orbiFadeIn 0.2s ease;
+}
+
+.chat-bubble.thinking.orbi-thinking-bubble .chat-thinking-content {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.chat-bubble.thinking.orbi-thinking-bubble .chat-thinking-label {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--muted);
+  animation: pageLoaderTextPulse 1.6s ease-in-out infinite;
+}
+
+/* ── Toast Orbi Integration ──────────────────────────────── */
+.toast-orbi-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  margin-top: -2px;
+}
+
+.toast-orbi-wrap .orbi {
+  width: 36px;
+  height: 36px;
+}
+
+/* ── Report & Claim Success Orbi Wrappers ────────────────── */
+.success-orbi-wrap,
+.claim-orbi-wrap,
+.login-orbi-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 1rem;
+}
+

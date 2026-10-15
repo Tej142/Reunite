@@ -86,6 +86,7 @@ function isMaintenanceModeActive() {
  * - Page requests get redirected to maintenance.php.
  */
 function enforceMaintenanceMode() {
+    if (php_sapi_name() === 'cli') return;
     if (!isMaintenanceModeActive()) return;
 
     // Allow active admin sessions
@@ -107,7 +108,8 @@ function enforceMaintenanceMode() {
     }
 
     // JSON API callers
-    $isJson = function_exists('isApiRequest') && isApiRequest();
+    $uri    = $_SERVER['REQUEST_URI'] ?? '';
+    $isJson = (function_exists('isApiRequest') && isApiRequest()) || str_contains($uri, '/api/');
     $accept  = strtolower($_SERVER['HTTP_ACCEPT'] ?? '');
     $ct      = strtolower($_SERVER['CONTENT_TYPE'] ?? '');
     if ($isJson || str_contains($accept, 'application/json') || str_contains($ct, 'application/json')) {
@@ -125,12 +127,19 @@ function enforceMaintenanceMode() {
     }
 
     // Page request — redirect to maintenance page
-    $uri = $_SERVER['REQUEST_URI'] ?? '';
-    $inFrontend = str_contains($uri, '/Frontend/') || file_exists('maintenance.php');
-    $target = $inFrontend ? 'maintenance.php' : 'Frontend/maintenance.php';
-    header('HTTP/1.1 503 Service Unavailable');
-    header('Retry-After: ' . $retryAfter);
-    header('Location: ' . $target);
+    $scriptName = $_SERVER['SCRIPT_NAME'] ?? '';
+    if (strpos($scriptName, '/Frontend/') !== false) {
+        $target = substr($scriptName, 0, strpos($scriptName, '/Frontend/') + 10) . 'maintenance.php';
+    } elseif (strpos($scriptName, '/Backend/') !== false) {
+        $target = substr($scriptName, 0, strpos($scriptName, '/Backend/')) . '/Frontend/maintenance.php';
+    } else {
+        $target = file_exists(__DIR__ . '/../Frontend/maintenance.php') ? 'Frontend/maintenance.php' : 'maintenance.php';
+    }
+
+    if (!headers_sent()) {
+        header('Location: ' . $target, true, 302);
+    }
+    echo '<!DOCTYPE html><html><head><meta http-equiv="refresh" content="0;url=' . htmlspecialchars($target) . '"><script>window.location.replace(' . json_encode($target) . ');</script></head><body><p>System undergoing maintenance. Redirecting...</p></body></html>';
     exit;
 }
 
@@ -1002,6 +1011,12 @@ function resolveReportDateTime($dateInput = '', $descInput = '') {
         'time' => $resolvedTime
     ];
 }
+
+// Automatically enforce maintenance mode across all including endpoints
+if (function_exists('enforceMaintenanceMode')) {
+    enforceMaintenanceMode();
+}
+
 
 
 

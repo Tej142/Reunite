@@ -28,9 +28,12 @@ document.addEventListener('DOMContentLoaded', () => {
   // Cached audit logs for export
   let currentLogsData = [];
 
-  // Theme Toggle Support
-  const savedAdminTheme = localStorage.getItem('reunite_admin_theme') || 'dark';
-  if (savedAdminTheme === 'light') {
+  // Theme Toggle Support (defaults to light/white theme)
+  const savedAdminTheme = localStorage.getItem('reunite_admin_theme') || 'light';
+  if (savedAdminTheme === 'dark') {
+    document.body.classList.remove('admin-light');
+    document.documentElement.setAttribute('data-admin-theme', 'dark');
+  } else {
     document.body.classList.add('admin-light');
     document.documentElement.setAttribute('data-admin-theme', 'light');
   }

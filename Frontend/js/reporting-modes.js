@@ -212,6 +212,9 @@ document.addEventListener('DOMContentLoaded', () => {
       verification: guidedState.verification || ''
     };
 
+    const thinkingContainer = document.querySelector('.guided-wizard-card') || document.getElementById('mode2Container');
+    const thinkingHandle = window.Orbi && thinkingContainer ? window.Orbi.showThinking(thinkingContainer, { caption: 'Extracting details...', size: 44, delay: 300 }) : null;
+
     try {
       let dna = null;
       if (window.FlaskAIService) {
@@ -252,6 +255,9 @@ document.addEventListener('DOMContentLoaded', () => {
         showSuccessState(summaryText, { ...meta, dna });
       }
     } finally {
+      if (thinkingHandle) {
+        thinkingHandle.dismiss();
+      }
       if (btnNext && window.setButtonLoading) {
         window.setButtonLoading(btnNext, false);
       }
@@ -842,12 +848,18 @@ document.addEventListener('DOMContentLoaded', () => {
   function showThinkingIndicator(customText = null) {
     if (!chatMessages) return null;
     const thinking = document.createElement('div');
-    thinking.className = 'chat-bubble thinking';
-    let textHtml = '';
-    if (customText) {
-      textHtml = `<span style="font-size:12px; margin-left:8px; color:var(--text-secondary);">${escapeHtml(customText)}</span>`;
-    }
-    thinking.innerHTML = `<span class="dot"></span><span class="dot"></span><span class="dot"></span>${textHtml}`;
+    thinking.className = 'chat-bubble thinking orbi-thinking-bubble';
+    thinking.setAttribute('role', 'status');
+    thinking.setAttribute('aria-live', 'polite');
+    const caption = customText || 'Thinking...';
+    const orbiEl = window.Orbi ? window.Orbi.create({ state: 'thinking', size: 36, label: caption }) : null;
+    const orbiHtml = orbiEl ? orbiEl.outerHTML : '<span class="dot"></span><span class="dot"></span><span class="dot"></span>';
+    thinking.innerHTML = `
+      <div class="chat-thinking-content">
+        ${orbiHtml}
+        <span class="chat-thinking-label">${escapeHtml(caption)}</span>
+      </div>
+    `;
     chatMessages.appendChild(thinking);
     chatMessages.scrollTop = chatMessages.scrollHeight;
     return thinking;
@@ -1378,6 +1390,9 @@ document.addEventListener('DOMContentLoaded', () => {
         verification: currentDraft.verification_secret || ''
       };
 
+      const thinkingContainer = document.querySelector('.live-draft-card') || dynamicDraftContainer;
+      const thinkingHandle = window.Orbi && thinkingContainer ? window.Orbi.showThinking(thinkingContainer, { caption: 'Extracting details...', size: 44, delay: 300 }) : null;
+
       const primaryPhotoFile = attachedPhotos.length > 0 ? attachedPhotos[0].file : null;
       const primaryPhotoUrl = attachedPhotos.length > 0 ? attachedPhotos[0].serverUrl : null;
 
@@ -1432,6 +1447,9 @@ document.addEventListener('DOMContentLoaded', () => {
           showSuccessState(combinedDescription, { ...meta, dna });
         }
       } finally {
+        if (thinkingHandle) {
+          thinkingHandle.dismiss();
+        }
         btnDraftSubmit.disabled = false;
         btnDraftSubmit.textContent = 'Process & Extract Features';
       }

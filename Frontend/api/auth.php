@@ -361,7 +361,7 @@ if ($action === 'send_reset_link') {
 
     // Build absolute URL for reset password page
     $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off' || ($_SERVER['SERVER_PORT'] ?? 80) == 443) ? "https://" : "http://";
-    $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
+    $host = $_SERVER['HTTP_HOST'] ?? 'reunite-app.rf.gd';
     $scriptDir = dirname($_SERVER['PHP_SELF'] ?? '/Frontend/api');
     $baseFrontendDir = dirname($scriptDir); // gets /Frontend or /pw/reunitel/Frontend
     $resetUrl = rtrim($protocol . $host . $baseFrontendDir, '/') . '/reset-password.php?token=' . urlencode($token);

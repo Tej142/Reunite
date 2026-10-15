@@ -1,7 +1,7 @@
 <?php
 /**
- * REUNITE PLATFORM — PRODUCTION DATABASE SETUP & MIGRATOR
- * Access via: https://reunite.site.je/setup_db.php
+ * REUNITE PLATFORM — ONE-CLICK PRODUCTION DATABASE MIGRATOR & SETUP
+ * Run this by opening: https://reunite.site.je/setup_db.php (or your domain) in your browser.
  */
 
 require_once __DIR__ . '/Backend/config/config.php';
@@ -15,7 +15,7 @@ header('Content-Type: text/html; charset=utf-8');
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Reunite Database Auto-Migrator & Configuration</title>
+  <title>Reunite Database Auto-Migrator</title>
   <style>
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #12100E; color: #EDE5DE; padding: 40px 20px; line-height: 1.6; }
     .container { max-width: 780px; margin: 0 auto; background: #1C1917; border: 1px solid #332B25; border-radius: 12px; padding: 32px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
@@ -24,9 +24,8 @@ header('Content-Type: text/html; charset=utf-8');
     .status-ok { background: rgba(34, 197, 94, 0.1); border: 1px solid rgba(34, 197, 94, 0.3); color: #4ADE80; }
     .status-warn { background: rgba(234, 179, 8, 0.1); border: 1px solid rgba(234, 179, 8, 0.3); color: #FACC15; }
     .status-err { background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); color: #F87171; }
-    .btn { display: inline-block; background: #C4622D; color: #fff; text-decoration: none; padding: 12px 24px; border-radius: 8px; font-weight: 600; border: none; cursor: pointer; font-size: 15px; }
+    .btn { display: inline-block; background: #C4622D; color: #fff; text-decoration: none; padding: 12px 24px; border-radius: 8px; font-weight: 600; margin-top: 20px; }
     .btn:hover { background: #E07A44; }
-    .config-card { background: #161412; border: 1px solid #2B2520; border-radius: 8px; padding: 20px; margin-top: 20px; }
     pre { background: #0A0908; padding: 12px; border-radius: 6px; overflow-x: auto; color: #A89F91; font-size: 13px; }
   </style>
 </head>
@@ -36,19 +35,18 @@ header('Content-Type: text/html; charset=utf-8');
 
 <?php
 if (!$conn) {
-    global $db_connection_error;
     echo '<div class="status-item status-err">';
-    echo '<span><strong>Connection Failed:</strong> ' . htmlspecialchars($db_connection_error ?: 'Cannot connect to MySQL with current settings.') . '</span>';
-    echo '<span>NOT CONNECTED</span>';
+    echo '<span><strong>Connection Failed:</strong> Unable to connect to MySQL database.</span>';
+    echo '<span>Error</span>';
     echo '</div>';
-    echo '<p style="color:#A89F91;">Current target credentials from <code>.env.example</code> / <code>.env</code> / <code>config.php</code>:</p>';
-    echo '<pre>DB_HOST: ' . htmlspecialchars(DB_HOST) . "\nDB_NAME: " . htmlspecialchars(DB_NAME) . "\nDB_USER: " . htmlspecialchars(DB_USER) . "\nERROR:   " . htmlspecialchars($db_connection_error) . '</pre>';
+    echo '<p>Please check your database credentials in <code>.env</code> or <code>.env.example</code>.</p>';
+    echo '<pre>DB_HOST: ' . htmlspecialchars(DB_HOST) . "\nDB_NAME: " . htmlspecialchars(DB_NAME) . "\nDB_USER: " . htmlspecialchars(DB_USER) . '</pre>';
     echo '</div></body></html>';
     exit;
 }
 
 echo '<div class="status-item status-ok">';
-echo '<span><strong>Database Connected:</strong> Connected to MySQL database `' . htmlspecialchars(DB_NAME) . '` on `' . htmlspecialchars(DB_HOST) . '`</span>';
+echo '<span><strong>Database Connected:</strong> Connected to MySQL database `' . htmlspecialchars(DB_NAME) . '`</span>';
 echo '<span>SUCCESS</span>';
 echo '</div>';
 
@@ -273,6 +271,7 @@ if ($checkUser && $checkUser->num_rows === 0) {
         $insertUser->close();
     }
 } else {
+    // Make sure password is known and correct
     $passHash = password_hash('charan142009', PASSWORD_DEFAULT);
     $conn->query("UPDATE `users` SET password_hash = '$passHash', status = 'active' WHERE pin = '24155-cm-002'");
     echo "<div class='status-item status-ok'><span>Student account <strong>24155-cm-002</strong> verified & active!</span><span>READY</span></div>";

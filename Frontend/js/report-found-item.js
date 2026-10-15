@@ -129,15 +129,29 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const savedId = (result && result.data && result.data.report_id) ? result.data.report_id : ('RF-' + Math.random().toString(36).slice(2, 8).toUpperCase());
 
-            // Fire live vector similarity search
-            window.FlaskAIService.searchMatchesWithFlask({
-              query_text: rawData.description || confirmedDna.object_type,
-              item_id: savedId,
-              report_type: 'found'
-            });
+            // Fire live vector similarity search with Orbi thinking state
+            const successContainer = document.getElementById('successState');
+            const matchThinkingHandle = window.Orbi && successContainer ? window.Orbi.showThinking(successContainer, { caption: 'Searching for matches...', size: 44, delay: 300 }) : null;
+            try {
+              await window.FlaskAIService.searchMatchesWithFlask({
+                query_text: rawData.description || confirmedDna.object_type,
+                item_id: savedId,
+                report_type: 'found'
+              });
+            } catch (mErr) {
+              console.warn('[Matching] Match search notice:', mErr);
+            } finally {
+              if (matchThinkingHandle) matchThinkingHandle.dismiss();
+            }
 
             if (window.ReuniteToast) {
-              window.ReuniteToast.success('Report Registered', `Found item report ${savedId} indexed in ChromaDB successfully.`, 4500);
+              window.ReuniteToast.show({
+                title: 'Report Registered',
+                message: `Found item report ${savedId} indexed in ChromaDB successfully.`,
+                type: 'success',
+                orbiState: 'happy',
+                duration: 4500
+              });
             }
 
             aiReviewContainer.style.display = 'none';
@@ -180,6 +194,23 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     if (successState) {
+      let orbiWrap = successState.querySelector('.success-orbi-wrap');
+      if (!orbiWrap) {
+        orbiWrap = document.createElement('div');
+        orbiWrap.className = 'success-orbi-wrap';
+        const icon = successState.querySelector('.success-icon');
+        if (icon) {
+          icon.style.display = 'none';
+          icon.insertAdjacentElement('afterend', orbiWrap);
+        } else {
+          successState.insertBefore(orbiWrap, successState.firstChild);
+        }
+      }
+      if (window.Orbi) {
+        window.Orbi.mount(orbiWrap, { state: 'happy', size: 84, label: 'Report submitted successfully' });
+        const oEl = orbiWrap.querySelector('.orbi');
+        if (oEl) window.Orbi.happy(oEl, 3000);
+      }
       successState.classList.add('show');
       successState.style.display = 'block';
       successState.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -218,6 +249,10 @@ document.addEventListener('DOMContentLoaded', () => {
         when: whenEl ? whenEl.value.trim() : '',
         verification: verifEl ? verifEl.value.trim() : ''
       };
+
+      const hasImage = Boolean(imageFile);
+      const thinkingCaption = hasImage ? 'Looking at your photo...' : 'Extracting details...';
+      const formThinkingHandle = window.Orbi ? window.Orbi.showThinking(foundForm, { caption: thinkingCaption, size: 44, delay: 300 }) : null;
 
       try {
         let dna = null;
@@ -258,6 +293,7 @@ document.addEventListener('DOMContentLoaded', () => {
           imageFile: imageFile
         });
       } finally {
+        if (formThinkingHandle) formThinkingHandle.dismiss();
         if (submitBtn && window.setButtonLoading) {
           window.setButtonLoading(submitBtn, false);
         }

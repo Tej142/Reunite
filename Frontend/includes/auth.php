@@ -6,6 +6,7 @@
 
 require_once __DIR__ . '/../../Backend/config/config.php';
 require_once __DIR__ . '/../../Backend/functions.php';
+require_once __DIR__ . '/orbi.php';
 
 function init_session() {
     if (session_status() === PHP_SESSION_NONE) {
@@ -15,6 +16,9 @@ function init_session() {
         enforceMaintenanceMode();
     }
 }
+
+// Immediately initialize session and enforce maintenance checks
+init_session();
 
 function set_permanent_auth_cookie($userData) {
     $payload = [

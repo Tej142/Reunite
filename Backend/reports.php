@@ -160,6 +160,7 @@ if ($action === 'create' || ($method === 'POST' && ($action === '' || $action ==
 
     sendJsonResponse(true, ucfirst($reportType) . " report saved to database and ChromaDB successfully!", [
         'id' => $insertedId,
+        'db_id' => $insertedId,
         'report_id' => $formattedReportId,
         'dna_id' => $dnaId,
         'report_type' => $reportType,

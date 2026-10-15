@@ -43,7 +43,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const urlParams = new URLSearchParams(window.location.search);
   if (urlParams.get('reset') === 'success') {
     showTopAlert('Password reset successful! Please sign in with your new password.', true);
-    const pinParam = urlParams.get('pin');
+    const pinParam = urlParams.get('pin') || urlParams.get('email');
     if (pinParam && fields.pin) {
       fields.pin.value = pinParam;
       if (fields.password) fields.password.focus();
@@ -105,14 +105,14 @@ document.addEventListener('DOMContentLoaded', () => {
     return false;
   }
 
-  // ── Individual Validators ──────────────────────────────
   function validatePin() {
     const val = fields.pin ? fields.pin.value.trim() : '';
-    const pinRegex = /^[a-zA-Z0-9-]{4,15}$/; // e.g. 24155-cm-002
+    const pinRegex = /^[a-zA-Z0-9-]{4,20}$/; // e.g. 24155-cm-002
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/; // e.g. student@college.edu
     if (!val) {
-      return setInvalid('pin', 'College PIN is required.');
-    } else if (!pinRegex.test(val)) {
-      return setInvalid('pin', 'PIN must be 4 to 15 characters, numbers, or hyphens (e.g. 24155-cm-002).');
+      return setInvalid('pin', 'College PIN or Email is required.');
+    } else if (!pinRegex.test(val) && !emailRegex.test(val)) {
+      return setInvalid('pin', 'Please enter a valid College PIN (e.g. 24155-cm-002) or Email address.');
     }
     clearFieldWarning('pin');
     return true;
@@ -184,11 +184,28 @@ document.addEventListener('DOMContentLoaded', () => {
           form.classList.add('hide');
           form.style.display = 'none';
           if (successState) {
+            let orbiWrap = successState.querySelector('.login-orbi-wrap');
+            if (!orbiWrap) {
+              orbiWrap = document.createElement('div');
+              orbiWrap.className = 'login-orbi-wrap';
+              const icon = successState.querySelector('.success-icon');
+              if (icon) {
+                icon.style.display = 'none';
+                icon.insertAdjacentElement('afterend', orbiWrap);
+              } else {
+                successState.insertBefore(orbiWrap, successState.firstChild);
+              }
+            }
+            if (window.Orbi) {
+              window.Orbi.mount(orbiWrap, { state: 'happy', size: 68, label: 'Welcome back' });
+              const oEl = orbiWrap.querySelector('.orbi');
+              if (oEl) window.Orbi.happy(oEl, 1200);
+            }
             successState.classList.add('show');
           }
           setTimeout(() => {
             window.location.href = data.redirect || 'home.php';
-          }, 800);
+          }, 850);
         } else {
           submitBtn.disabled = false;
           submitBtn.textContent = 'Sign in';
@@ -198,7 +215,7 @@ document.addEventListener('DOMContentLoaded', () => {
           showTopAlert(errMsg);
 
           // Highlight the relevant field
-          if (errMsg.toLowerCase().includes('pin') || errMsg.toLowerCase().includes('account')) {
+          if (errMsg.toLowerCase().includes('pin') || errMsg.toLowerCase().includes('email') || errMsg.toLowerCase().includes('account')) {
             setInvalid('pin', '');
             if (fields.pin) fields.pin.focus();
           } else {

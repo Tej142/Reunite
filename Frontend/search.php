@@ -18,13 +18,13 @@ if (!empty($_GET['item']) || !empty($_GET['id']) || !empty($_GET['item_id']) || 
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Reunite — Search Lost &amp; Found Items</title>
   <meta name="description" content="Search across all found items, lost reports, and community listings on campus with instant filters and AI smart matching." />
   <script>
     (function(){
       var t = localStorage.getItem('reunite_theme');
-      if (t === 'dark' || (!t && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+      if (t === 'dark') {
         document.documentElement.setAttribute('data-theme', 'dark');
       }
     })();
@@ -234,6 +234,10 @@ if (!empty($_GET['item']) || !empty($_GET['id']) || !empty($_GET['item_id']) || 
 <!-- ── Item Details Slide-Over Drawer & Overlay ── -->
 <div id="itemDrawerOverlay" class="drawer-overlay" role="presentation"></div>
 <aside id="itemDrawer" class="item-slideover-drawer" role="dialog" aria-labelledby="modalItemTitle" aria-hidden="true" aria-modal="false"></aside>
+
+<!-- ── Global Modals (Match Verification & Founder Approval) ── -->
+<?php include_once __DIR__ . '/includes/match_verification_modal.php'; ?>
+<?php include_once __DIR__ . '/includes/founder_approval_modal.php'; ?>
 
 <!-- ── Scripts ── -->
 <script src="js/flask-ai-service.js?v=<?php echo time(); ?>"></script>

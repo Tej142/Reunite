@@ -1,0 +1,3 @@
+# Reunite Apache Configuration
+# Route missing paths to the custom 404 handler
+ErrorDocument 404 /Frontend/404.php

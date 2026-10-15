@@ -51,13 +51,13 @@ if (isset($conn) && $conn) {
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Reunite — Student Homepage Dashboard</title>
   <meta name="description" content="Reunite Student Dashboard — Report lost items, upload found items, and browse active community listings." />
   <script>
     (function(){
       var t = localStorage.getItem('reunite_theme');
-      if (t === 'dark' || (!t && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+      if (t === 'dark') {
         document.documentElement.setAttribute('data-theme', 'dark');
       }
     })();

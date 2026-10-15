@@ -58,7 +58,7 @@ if ($conn && $numericId > 0) {
     if ($reportType === 'found') {
         $stmt = $conn->prepare("SELECT id, user_id, category, title, description, location, date_found as report_date, image_path, status, created_at, 'found' as report_type FROM found_reports WHERE id = ? LIMIT 1");
     } else {
-        $stmt = $conn->prepare("SELECT id, user_id, category, title, description, location, date_lost as report_date, NULL as image_path, status, created_at, 'lost' as report_type FROM lost_reports WHERE id = ? LIMIT 1");
+        $stmt = $conn->prepare("SELECT id, user_id, category, title, description, location, date_lost as report_date, image_path, status, created_at, 'lost' as report_type FROM lost_reports WHERE id = ? LIMIT 1");
     }
 
     if ($stmt) {
@@ -77,7 +77,7 @@ if ($conn && $numericId > 0) {
         $oppType = ($reportType === 'found') ? 'lost' : 'found';
         $oppTable = ($oppType === 'found') ? 'found_reports' : 'lost_reports';
         $dateCol = ($oppType === 'found') ? 'date_found' : 'date_lost';
-        $imgCol = ($oppType === 'found') ? 'image_path' : 'NULL as image_path';
+        $imgCol = 'image_path';
 
         $stmtOpp = $conn->prepare("SELECT id, user_id, category, title, description, location, $dateCol as report_date, $imgCol, status, created_at, '$oppType' as report_type FROM `$oppTable` WHERE id = ? LIMIT 1");
         if ($stmtOpp) {
@@ -310,7 +310,7 @@ if ($isReunited) {
 }
 
 $shortDesc = !empty($item['description']) ? mb_strimwidth(strip_tags($item['description']), 0, 160, '...') : 'View campus lost & found report on Reunite.';
-$hostStr = $_SERVER['HTTP_HOST'] ?? 'localhost';
+$hostStr = $_SERVER['HTTP_HOST'] ?? 'reunite-app.rf.gd';
 $uriStr = $_SERVER['REQUEST_URI'] ?? '';
 $canonicalUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" : "http") . "://{$hostStr}{$uriStr}";
 
@@ -346,7 +346,7 @@ $similarItems = [
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title><?php echo htmlspecialchars($smartTitle); ?> &mdash; Reunite Campus Lost &amp; Found</title>
   <meta name="description" content="<?php echo htmlspecialchars($shortDesc); ?>" />
 
@@ -361,7 +361,7 @@ $similarItems = [
   <script>
     (function(){
       var t = localStorage.getItem('reunite_theme');
-      if (t === 'dark' || (!t && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+      if (t === 'dark') {
         document.documentElement.setAttribute('data-theme', 'dark');
       }
     })();
@@ -380,10 +380,8 @@ $similarItems = [
   <?php if (!$item): ?>
     <!-- ── 404 / Missing Item Friendly State ── -->
     <div class="item-404-container" role="alert">
-      <div class="item-404-icon" aria-hidden="true">
-        <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="12" cy="12" r="10"/><path d="m16 16-3.5-3.5"/><circle cx="11" cy="11" r="3"/>
-        </svg>
+      <div class="item-404-orbi" style="display: flex; justify-content: center; margin-bottom: 1.25rem;">
+        <?php echo orbi('notfound', 110, 'Item not found'); ?>
       </div>
       <h1 class="item-404-title">Item Not Found</h1>
       <p class="item-404-desc">
@@ -817,6 +815,10 @@ $similarItems = [
     </form>
   </div>
 </div>
+
+<!-- ── Global Modals (Match Verification & Founder Approval) ── -->
+<?php include_once __DIR__ . '/includes/match_verification_modal.php'; ?>
+<?php include_once __DIR__ . '/includes/founder_approval_modal.php'; ?>
 
 <script src="js/item.js?v=<?php echo time(); ?>"></script>
 </body>
