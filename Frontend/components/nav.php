@@ -215,13 +215,13 @@ if ($logged_in && isset($conn) && $conn) {
             </div>
           </div>
 
-          <!-- Circular Profile Avatar Badge -->
-          <a href="profile.php" id="navAvatarBtn" class="nav-avatar-btn <?php echo $is_profile ? 'active' : ''; ?>" title="My Profile (<?php echo htmlspecialchars($user['name'] ?? 'User'); ?>)">
+          <!-- Circular Profile Avatar Badge (Desktop Only) -->
+          <a href="profile.php" id="navAvatarBtn" class="nav-avatar-btn nav-desktop-only <?php echo $is_profile ? 'active' : ''; ?>" title="My Profile (<?php echo htmlspecialchars($user['name'] ?? 'User'); ?>)">
             <span class="avatar-initial"><?php echo htmlspecialchars($user_initial); ?></span>
           </a>
 
-          <!-- Logout Link -->
-          <a href="logout.php" class="nav-logout-link" title="Sign out">Logout</a>
+          <!-- Logout Link (Desktop Only - Mobile is in Hamburger Drawer) -->
+          <a href="logout.php" class="nav-logout-link nav-desktop-only" title="Sign out">Logout</a>
 
           <!-- Mobile Hamburger Toggle -->
           <button type="button" class="nav-hamburger-btn" id="navHamburgerBtn" aria-label="Toggle navigation menu" aria-expanded="false">
@@ -242,8 +242,11 @@ if ($logged_in && isset($conn) && $conn) {
     <div class="mobile-nav-drawer" id="mobileNavDrawer" aria-hidden="true">
       <div class="mobile-nav-links">
         <a href="profile.php" class="mobile-nav-link <?php echo $is_profile ? 'active-mobile' : ''; ?>">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-          <span>My Profile (<?php echo htmlspecialchars($user['name'] ?? 'Student'); ?>)</span>
+          <span class="mobile-avatar-badge"><?php echo htmlspecialchars($user_initial); ?></span>
+          <div style="display:flex;flex-direction:column;line-height:1.2;">
+            <span style="font-weight:600;"><?php echo htmlspecialchars(!empty($u_name) ? $u_name : 'My Profile'); ?></span>
+            <span style="font-size:0.75rem;color:var(--muted);">View Profile &amp; Settings</span>
+          </div>
         </a>
         <a href="search.php" class="mobile-nav-link <?php echo $is_search ? 'active-mobile' : ''; ?>">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>

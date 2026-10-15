@@ -902,10 +902,31 @@ nav:not(.admin-nav-bar):not(.maint-topnav) {
   .nav-hamburger-btn {
     display: inline-flex;
   }
+  .nav-avatar-btn,
+  .nav-logout-link,
   .nav-desktop-only {
     display: none !important;
   }
+  .nav-actions {
+    gap: clamp(0.35rem, 1.5vw, 0.65rem) !important;
+  }
 }
+
+.mobile-avatar-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--accent-tint);
+  color: var(--accent);
+  font-weight: 700;
+  font-size: 0.875rem;
+  border: 1.5px solid var(--border);
+  flex-shrink: 0;
+}
+
 
 /* ── Mobile Nav Drawer ── */
 .mobile-nav-drawer {
