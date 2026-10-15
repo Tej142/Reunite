@@ -8,9 +8,9 @@ document.addEventListener('DOMContentLoaded', () => {
   const aiStatusText = document.getElementById('aiStatusText');
 
   const modeDescriptions = {
-    mode1: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px; margin-right:4px;"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> <strong>AI Vision & Text Parser:</strong> Upload photos & describe your item directly. AI will parse details and index tags automatically.',
-    mode2: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px; margin-right:4px;"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg> <strong>Guided Choice Assistant:</strong> Step-by-step interactive questionnaire with AI smart prompts tailored for rapid input.',
-    mode3: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px; margin-right:4px;"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg> <strong>Talk to AI Live Copilot:</strong> Natural voice & chat intake assistant. Dynamically understands natural slang, asks tailored item-specific questions, and extracts attributes in real time.'
+    mode1: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px; margin-right:4px;"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> <strong>AI Vision &amp; Text Parser:</strong> Upload photos &amp; describe your item directly. AI extracts traits automatically.',
+    mode2: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px; margin-right:4px;"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg> <strong>Guided Choice Assistant:</strong> Step-by-step smart questionnaire tailored for quick input.',
+    mode3: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px; margin-right:4px;"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg> <strong>Talk to AI Live Copilot:</strong> Speak or type details naturally — AI drafts your report in real time.'
   };
 
   modeCards.forEach(card => {
@@ -278,6 +278,11 @@ document.addEventListener('DOMContentLoaded', () => {
   const voiceBadgeText = document.getElementById('voiceBadgeText');
   const voiceVisualizer = document.getElementById('voiceVisualizer');
   const voiceToggleLabel = document.getElementById('voiceToggleLabel');
+
+  if (voiceLiveBar) {
+    voiceLiveBar.style.display = 'none';
+    voiceLiveBar.classList.remove('active');
+  }
 
   // Photo Upload & Lightbox Elements
   const btnAttachPhoto = document.getElementById('btnAttachPhoto');
@@ -1421,7 +1426,10 @@ document.addEventListener('DOMContentLoaded', () => {
     if (voiceToggleLabel) voiceToggleLabel.textContent = 'Stop Voice Mode';
     if (btnVoiceToggle) btnVoiceToggle.classList.add('active');
     if (btnMicInline) btnMicInline.classList.add('active');
-    if (voiceLiveBar) voiceLiveBar.classList.add('active');
+    if (voiceLiveBar) {
+      voiceLiveBar.style.display = 'flex';
+      voiceLiveBar.classList.add('active');
+    }
     startRecognitionSafe();
   }
 
@@ -1436,7 +1444,10 @@ document.addEventListener('DOMContentLoaded', () => {
     if (voiceToggleLabel) voiceToggleLabel.textContent = 'Start Voice Mode';
     if (btnVoiceToggle) btnVoiceToggle.classList.remove('active');
     if (btnMicInline) btnMicInline.classList.remove('active');
-    if (voiceLiveBar) voiceLiveBar.classList.remove('active');
+    if (voiceLiveBar) {
+      voiceLiveBar.style.display = 'none';
+      voiceLiveBar.classList.remove('active');
+    }
     updateVoiceBadgeState();
     stopVisualizerAnimation();
   }

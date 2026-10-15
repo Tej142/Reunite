@@ -86,11 +86,13 @@
   </div>
 
   <!-- AI Status Banner -->
-  <div class="ai-status-banner">
-    <div class="ai-status-left">
-      <div class="ai-pulse-dot"></div>
-      <div class="ai-status-text" id="aiStatusText">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px; margin-right:4px;"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> <strong>AI Vision & Text Parser:</strong> Upload photos & describe your item directly. AI will parse details and index tags automatically.
+  <div class="ai-status-banner-wrap">
+    <div class="ai-status-banner">
+      <div class="ai-status-left">
+        <div class="ai-pulse-dot"></div>
+        <div class="ai-status-text" id="aiStatusText">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px; margin-right:4px;"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> <strong>AI Vision &amp; Text Parser:</strong> Upload photos &amp; describe your item directly. AI extracts traits automatically.
+        </div>
       </div>
     </div>
   </div>
@@ -286,7 +288,7 @@
         </div>
 
         <!-- Voice Live Visualizer Bar (Only shows when voice mode is active) -->
-        <div class="voice-live-bar" id="voiceLiveBar">
+        <div class="voice-live-bar" id="voiceLiveBar" style="display:none;">
           <div class="voice-live-indicator">
             <span class="live-pulse-dot"></span>
             <span class="voice-live-text">Voice Active &bull; Speak Naturally</span>
