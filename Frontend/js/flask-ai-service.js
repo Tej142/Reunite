@@ -165,6 +165,18 @@ async function submitReportToFlask({ description, imageFile = null, meta = {} })
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s timeout for Multimodal AI Vision & NLP
 
+    // Cold-start status indicator for Render cloud free-tier wake up
+    let coldStartToast = null;
+    const coldStartTimer = setTimeout(() => {
+      if (window.ReuniteToast && typeof window.ReuniteToast.info === 'function') {
+        coldStartToast = window.ReuniteToast.info(
+          'Waking AI Microservice',
+          'Cloud AI server is spinning up from cold sleep (takes ~25s on first request)...',
+          18000
+        );
+      }
+    }, 3500);
+
     const baseUrl = getFlaskServerUrl();
     const response = await fetch(`${baseUrl}/new-report`, {
       method: 'POST',
@@ -172,7 +184,11 @@ async function submitReportToFlask({ description, imageFile = null, meta = {} })
       signal: controller.signal
     });
 
+    clearTimeout(coldStartTimer);
     clearTimeout(timeoutId);
+    if (coldStartToast && typeof coldStartToast.dismiss === 'function') {
+      coldStartToast.dismiss();
+    }
     const data = await response.json();
 
     if (!response.ok || !data.success) {

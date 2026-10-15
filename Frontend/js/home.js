@@ -1,7 +1,20 @@
 let ITEMS = [];
 let currentFilter = 'all';
+let isFetchingHome = true;
 
 async function fetchLiveHomeItems() {
+  const grid = document.getElementById('itemsGrid');
+  if (grid && ITEMS.length === 0) {
+    const orbiEl = window.Orbi ? window.Orbi.create({ state: 'loading', size: 48, label: 'Loading campus listings' }) : null;
+    const orbiHtml = orbiEl ? orbiEl.outerHTML : '';
+    grid.innerHTML = `
+      <div class="orbi-section-loader" role="status" aria-live="polite" style="grid-column: 1 / -1;">
+        ${orbiHtml}
+        <span class="orbi-section-loader-text">Loading campus listings...</span>
+      </div>
+    `;
+  }
+
   try {
     const res = await fetch('../Backend/reports.php?action=list&type=lost&limit=20');
     if (!res.ok) return;
@@ -31,10 +44,12 @@ async function fetchLiveHomeItems() {
           };
         });
 
-      renderCards();
     }
   } catch (err) {
     console.warn('[Home] Live items sync notice:', err);
+  } finally {
+    isFetchingHome = false;
+    renderCards();
   }
 }
 
@@ -69,15 +84,32 @@ function renderCards() {
   }
 
   if (filtered.length === 0) {
+    if (isFetchingHome && ITEMS.length === 0) {
+      const orbiEl = window.Orbi ? window.Orbi.create({ state: 'loading', size: 48, label: 'Loading campus listings' }) : null;
+      const orbiHtml = orbiEl ? orbiEl.outerHTML : '';
+      grid.innerHTML = `
+        <div class="orbi-section-loader" role="status" aria-live="polite" style="grid-column: 1 / -1;">
+          ${orbiHtml}
+          <span class="orbi-section-loader-text">Loading campus listings...</span>
+        </div>
+      `;
+      return;
+    }
+
     const emptyMsg = currentFilter === 'matched' 
       ? 'No reunited items recorded yet.' 
       : 'No active missing item searches right now.';
 
+    const orbiNotFoundEl = window.Orbi ? window.Orbi.create({ state: 'notfound', size: 84, label: emptyMsg }) : null;
+    const orbiNotFoundHtml = orbiNotFoundEl
+      ? `<div style="display: flex; justify-content: center; margin-bottom: 0.75rem;">${orbiNotFoundEl.outerHTML}</div>`
+      : `<div style="display: flex; justify-content: center; margin-bottom: 0.75rem; color: var(--muted, #8C827A);">
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+        </div>`;
+
     grid.innerHTML = `
       <div style="grid-column: 1 / -1; text-align: center; padding: 3rem 1.5rem; background: var(--surface, #fff); border: 1px solid var(--border, #E4DCD3); border-radius: 1rem;">
-        <div style="display: flex; justify-content: center; margin-bottom: 0.75rem; color: var(--muted, #8C827A);">
-          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-        </div>
+        ${orbiNotFoundHtml}
         <h3 style="font-size: 1.15rem; font-weight: 600; color: var(--ink, #1C1917); margin-bottom: 0.35rem;">${emptyMsg}</h3>
         <p style="font-size: 0.875rem; color: var(--muted, #8C827A); margin-bottom: 1.25rem; max-width: 40ch; margin-left: auto; margin-right: auto;">
           When students report missing belongings on campus, they will appear live right here.
@@ -96,7 +128,7 @@ function renderCards() {
     return `
       <article class="item-card search-item-card" data-id="${item.reportId}" onclick="window.location.href='item.php?id=${item.reportId}'" style="cursor: pointer;">
         <div class="item-card-img-wrap">
-          <img src="${item.img}" alt="${item.title}" class="item-card-img card-img" loading="lazy" onerror="this.src='https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=480&h=320&fit=crop'" onload="this.classList.add('loaded')" />
+          <img src="${item.img}" alt="${item.title}" class="item-card-img card-img" loading="lazy" decoding="async" onerror="this.src='https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=480&h=320&fit=crop'" onload="this.classList.add('loaded')" />
           <div class="item-card-overlay"></div>
           <button type="button" class="btn-bookmark card-bookmark-btn ${isSaved ? 'active' : ''}" data-id="${item.reportId}" onclick="handleHomeBookmark(event, '${item.reportId}', '${item.title.replace(/'/g, "\\'")}')" aria-label="Save item" title="${isSaved ? 'Remove from saved' : 'Save this item'}">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/></svg>

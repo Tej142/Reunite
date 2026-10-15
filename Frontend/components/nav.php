@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/../includes/auth.php';
+require_once __DIR__ . '/../includes/orbi.php';
 $current_page = basename($_SERVER['PHP_SELF']);
 $logged_in = is_logged_in();
 $is_auth_page = in_array($current_page, ['login.php', 'signup.php', 'forgot-password.php', 'reset-password.php']);
@@ -16,9 +17,85 @@ $is_profile = ($current_page === 'profile.php');
   (function() {
     window.FLASK_BACKEND_URL = 'https://reunite-ai-backend.onrender.com';
     console.log('[Reunite] Connected Cloud Flask AI URL:', window.FLASK_BACKEND_URL);
+
+    // Low-priority idle pre-warmup ping to mitigate Render free-tier cold starts
+    if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
+      window.requestIdleCallback(function() {
+        try {
+          fetch(window.FLASK_BACKEND_URL + '/health', { mode: 'no-cors', cache: 'no-store' }).catch(function(){});
+        } catch(e) {}
+      }, { timeout: 3500 });
+    } else {
+      setTimeout(function() {
+        try {
+          fetch(window.FLASK_BACKEND_URL + '/health', { mode: 'no-cors', cache: 'no-store' }).catch(function(){});
+        } catch(e) {}
+      }, 2500);
+    }
+  })();
+
+  // Real-Time Maintenance Mode Sentinel for open tabs
+  (function() {
+    const isMaintenancePage = window.location.pathname.endsWith('maintenance.php');
+    const isAdminPage = window.location.pathname.endsWith('admin.php');
+    if (isMaintenancePage || isAdminPage) return;
+
+    function checkMaintenanceStatus() {
+      fetch('api/maintenance-status.php', { cache: 'no-store' })
+        .then(function(res) { return res.json(); })
+        .then(function(data) {
+          if (data && data.enabled) {
+            window.location.replace('maintenance.php');
+          }
+        })
+        .catch(function() {});
+    }
+
+    // Check periodically every 12 seconds
+    setInterval(checkMaintenanceStatus, 12000);
+    // Also check immediately when the user switches to or focuses the window/tab
+    window.addEventListener('focus', checkMaintenanceStatus);
   })();
 </script>
 <script src="js/microinteractions.js"></script>
+<link rel="stylesheet" href="css/orbi.css?v=<?php echo time(); ?>" />
+<script src="js/orbi.js?v=<?php echo time(); ?>"></script>
+
+<!-- ── Full-Screen Global Page Loader (Orbi Loading State) ── -->
+<div id="reunitePageLoader" class="reunite-page-loader" aria-hidden="true">
+  <div class="page-loader-content">
+    <?php echo orbi('loading', 96); ?>
+    <p class="page-loader-text" role="status" aria-live="polite">Loading Reunite...</p>
+  </div>
+</div>
+<noscript>
+  <style>#reunitePageLoader { display: none !important; }</style>
+</noscript>
+<script>
+  (function() {
+    const pageLoadStart = performance.now();
+    function dismissPageLoader() {
+      const loader = document.getElementById('reunitePageLoader');
+      if (!loader || loader.classList.contains('loader-hidden')) return;
+      const elapsed = performance.now() - pageLoadStart;
+      const remaining = Math.max(0, 400 - elapsed);
+      setTimeout(function() {
+        loader.classList.add('loader-hidden');
+        setTimeout(function() {
+          if (loader.parentNode) loader.parentNode.removeChild(loader);
+        }, 400);
+      }, remaining);
+    }
+
+    if (document.readyState === 'complete') {
+      dismissPageLoader();
+    } else {
+      window.addEventListener('load', dismissPageLoader);
+    }
+    // Safety max timeout of 6 seconds
+    setTimeout(dismissPageLoader, 6000);
+  })();
+</script>
 <nav class="reunite-main-nav">
   <div class="nav-inner">
     <a href="<?php echo $logged_in ? 'home.php' : 'index.php'; ?>" class="brand">
@@ -317,3 +394,6 @@ if ($logged_in && isset($conn) && $conn) {
     })();
   </script>
 </nav>
+
+<!-- ── Reusable Orbi Mascot Template for JavaScript dynamic cloning ── -->
+<template id="orbi-template"><?php echo orbi('idle', 120); ?></template>
