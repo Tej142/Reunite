@@ -366,11 +366,15 @@ input.valid {
 }
 
 .forgot-password-link {
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 500;
   color: var(--accent);
   text-decoration: none;
   transition: color 0.15s, opacity 0.15s;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0.25rem 0;
 }
 
 .forgot-password-link:hover {

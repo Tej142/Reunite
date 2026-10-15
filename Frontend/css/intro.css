@@ -181,13 +181,16 @@ svg {
   color: var(--ink);
   cursor: pointer;
   border-radius: 50%;
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
   transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-  width: 36px;
-  height: 36px;
+  width: var(--touch-target-min, 44px);
+  height: var(--touch-target-min, 44px);
+  min-width: var(--touch-target-min, 44px);
+  min-height: var(--touch-target-min, 44px);
   flex-shrink: 0;
+  box-sizing: border-box;
 }
 
 .nav-theme-btn:hover {
@@ -221,13 +224,18 @@ svg {
   background: none;
   border: 1px solid var(--line);
   color: var(--ink);
-  padding: 0.45rem 0.95rem;
+  padding: 0.5rem 1rem;
   border-radius: 9999px;
   font-size: 0.8125rem;
   font-weight: 600;
   text-decoration: none;
   transition: all 0.15s ease;
   white-space: nowrap;
+  min-height: var(--touch-target-min, 44px);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
 }
 
 .link-plain:hover {
@@ -236,21 +244,29 @@ svg {
 }
 
 .nav-actions .btn-primary {
-  padding: 0.45rem 1rem;
+  padding: 0.5rem 1.15rem;
   border-radius: 9999px;
   font-size: 0.8125rem;
   font-weight: 600;
   box-shadow: none;
+  min-height: var(--touch-target-min, 44px);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
 }
 
 .btn {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
   padding: 11px 22px;
   border-radius: 999px;
   font-size: 14.5px;
   font-weight: 600;
+  min-height: var(--touch-target-min, 44px);
+  box-sizing: border-box;
   transition: transform .25s cubic-bezier(.34,1.56,.64,1), box-shadow .25s ease, background .25s ease;
   white-space: nowrap;
 }

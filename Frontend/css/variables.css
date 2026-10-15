@@ -434,11 +434,13 @@ nav:not(.admin-nav-bar):not(.maint-topnav) {
 }
 
 .brand {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: .5rem;
   text-decoration: none;
   flex-shrink: 0;
+  min-height: var(--touch-target-min, 44px);
+  box-sizing: border-box;
 }
 
 .brand span {
@@ -458,7 +460,10 @@ nav:not(.admin-nav-bar):not(.maint-topnav) {
 .nav-links a {
   text-decoration: none;
   position: relative;
-  padding: 0.25rem 0.2rem;
+  padding: 0.45rem 0.4rem;
+  min-height: var(--touch-target-min, 44px);
+  display: inline-flex;
+  align-items: center;
   color: var(--muted);
   font-weight: 500;
   transition: color 0.2s ease;
@@ -533,13 +538,16 @@ nav:not(.admin-nav-bar):not(.maint-topnav) {
   color: var(--ink);
   cursor: pointer;
   border-radius: 50%;
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
   transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-  width: 36px;
-  height: 36px;
+  width: var(--touch-target-min, 44px);
+  height: var(--touch-target-min, 44px);
+  min-width: var(--touch-target-min, 44px);
+  min-height: var(--touch-target-min, 44px);
   flex-shrink: 0;
+  box-sizing: border-box;
 }
 
 .nav-theme-btn:hover {
@@ -577,14 +585,20 @@ nav:not(.admin-nav-bar):not(.maint-topnav) {
 .nav-notif-btn {
   background: none;
   border: none;
-  padding: 0.4rem;
+  padding: 0.5rem;
   color: var(--ink);
   cursor: pointer;
   border-radius: 50%;
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
   position: relative;
+  width: var(--touch-target-min, 44px);
+  height: var(--touch-target-min, 44px);
+  min-width: var(--touch-target-min, 44px);
+  min-height: var(--touch-target-min, 44px);
+  flex-shrink: 0;
+  box-sizing: border-box;
   transition: all 0.15s ease;
 }
 
@@ -595,8 +609,8 @@ nav:not(.admin-nav-bar):not(.maint-topnav) {
 
 .notif-badge-dot {
   position: absolute;
-  top: 4px;
-  right: 4px;
+  top: 6px;
+  right: 6px;
   width: 7px;
   height: 7px;
   background-color: #EF4444;
@@ -609,8 +623,9 @@ nav:not(.admin-nav-bar):not(.maint-topnav) {
   display: none;
   position: absolute;
   top: calc(100% + 0.6rem);
-  right: -0.5rem;
-  width: 20rem;
+  right: 0;
+  width: min(20rem, calc(100vw - 1.5rem));
+  max-width: calc(100vw - 1.5rem);
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 1rem;
@@ -716,11 +731,13 @@ nav:not(.admin-nav-bar):not(.maint-topnav) {
 
 /* Circular Avatar Badge */
 .nav-avatar-btn {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 2.15rem;
-  height: 2.15rem;
+  width: var(--touch-target-min, 44px);
+  height: var(--touch-target-min, 44px);
+  min-width: var(--touch-target-min, 44px);
+  min-height: var(--touch-target-min, 44px);
   border-radius: 50%;
   background: var(--accent-tint);
   color: var(--accent);
@@ -728,6 +745,7 @@ nav:not(.admin-nav-bar):not(.maint-topnav) {
   text-decoration: none;
   transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
   flex-shrink: 0;
+  box-sizing: border-box;
 }
 
 .nav-avatar-btn:hover {
@@ -755,6 +773,10 @@ nav:not(.admin-nav-bar):not(.maint-topnav) {
   text-decoration: none;
   transition: color 0.15s ease;
   white-space: nowrap;
+  min-height: var(--touch-target-min, 44px);
+  display: inline-flex;
+  align-items: center;
+  padding: 0 0.25rem;
 }
 
 .nav-logout-link:hover {
@@ -772,6 +794,11 @@ nav:not(.admin-nav-bar):not(.maint-topnav) {
   font-family: inherit;
   transition: background 0.15s ease, transform 0.15s ease;
   white-space: nowrap;
+  min-height: var(--touch-target-min, 44px);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
 }
 
 .btn-ghost:hover {
@@ -794,6 +821,11 @@ nav:not(.admin-nav-bar):not(.maint-topnav) {
   font-weight: 500;
   transition: opacity .15s, transform 0.15s ease, box-shadow 0.15s ease;
   white-space: nowrap;
+  min-height: var(--touch-target-min, 44px);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
 }
 
 .btn-nav-primary:hover {
@@ -815,20 +847,18 @@ nav:not(.admin-nav-bar):not(.maint-topnav) {
     padding: .45rem 1rem;
     font-size: .8125rem;
   }
-  .nav-notif-dropdown {
-    right: -3rem;
-    width: 17.5rem;
-  }
 }
 
 /* ── Hamburger Button ── */
 .nav-hamburger-btn {
   display: none;
-  background: none;
+  background: var(--surface);
   border: 1.5px solid var(--border);
   border-radius: 0.65rem;
-  width: 2.35rem;
-  height: 2.35rem;
+  width: var(--touch-target-min, 44px);
+  height: var(--touch-target-min, 44px);
+  min-width: var(--touch-target-min, 44px);
+  min-height: var(--touch-target-min, 44px);
   flex-direction: column;
   align-items: center;
   justify-content: center;
@@ -837,7 +867,8 @@ nav:not(.admin-nav-bar):not(.maint-topnav) {
   padding: 0;
   transition: all 0.2s ease;
   color: var(--ink);
-  background: var(--white);
+  flex-shrink: 0;
+  box-sizing: border-box;
 }
 
 .nav-hamburger-btn:hover {
@@ -869,7 +900,7 @@ nav:not(.admin-nav-bar):not(.maint-topnav) {
 
 @media (max-width: 768px) {
   .nav-hamburger-btn {
-    display: flex;
+    display: inline-flex;
   }
   .nav-desktop-only {
     display: none !important;
@@ -883,14 +914,20 @@ nav:not(.admin-nav-bar):not(.maint-topnav) {
   top: 100%;
   left: 0;
   right: 0;
-  background: rgba(250, 248, 245, 0.98);
+  background: var(--surface);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
   border-bottom: 1px solid var(--border);
-  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.08);
-  padding: 0.85rem 1rem 1.25rem;
-  z-index: 49;
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.1);
+  padding: 0.85rem 1rem calc(1.25rem + var(--sab, 0px));
+  z-index: 1050;
   animation: mobileDrawerSlide 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+[data-theme="dark"] .mobile-nav-drawer {
+  background: rgba(22, 19, 17, 0.98);
+  border-bottom-color: rgba(255, 255, 255, 0.1);
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.5);
 }
 
 @keyframes mobileDrawerSlide {
@@ -920,13 +957,15 @@ nav:not(.admin-nav-bar):not(.maint-topnav) {
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  padding: 0.7rem 0.85rem;
+  padding: 0.75rem 0.85rem;
+  min-height: var(--touch-target-min, 44px);
   border-radius: 0.75rem;
   text-decoration: none;
   font-size: 0.9375rem;
   font-weight: 500;
   color: var(--ink);
   transition: all 0.15s ease;
+  box-sizing: border-box;
 }
 
 .mobile-nav-link:hover {
@@ -1950,6 +1989,45 @@ mark {
 ::selection {
   background: var(--accent-tint);
   color: var(--accent);
+}
+
+/* ── Responsive Modal & Bottom Sheet System ────────────────── */
+@media (max-width: 640px) {
+  #founderApprovalOverlay,
+  #modalOverlay,
+  .modal-overlay,
+  .reunite-modal-backdrop {
+    padding: 0 !important;
+    align-items: flex-end !important;
+    justify-content: center !important;
+  }
+
+  #founderApprovalModal,
+  #matchDetailsModal,
+  #verifyOwnerModal,
+  .modal-container,
+  .modal-dialog-responsive {
+    max-width: 100% !important;
+    width: 100% !important;
+    max-height: 90dvh !important;
+    max-height: min(90dvh, 90vh) !important;
+    border-radius: 22px 22px 0 0 !important;
+    padding-bottom: calc(1rem + var(--sab, 0px)) !important;
+    border-bottom: none !important;
+    margin: 0 !important;
+    animation: modalSlideUpMobile 0.28s cubic-bezier(0.16, 1, 0.3, 1) both !important;
+  }
+
+  @keyframes modalSlideUpMobile {
+    from {
+      opacity: 0;
+      transform: translateY(100%);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
 }
 
 /* ── Print reset ──────────────────────────────────────────── */
