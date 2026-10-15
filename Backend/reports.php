@@ -267,7 +267,7 @@ if ($action === 'create' || ($method === 'POST' && ($action === '' || $action ==
     }
 
     if ($conn) {
-        $status = 'Pending';
+        $status = 'active'; // Valid enum in lost_reports & found_reports: ('active','matched','claimed','closed')
         
         // Smart Temporal Resolution (Resolves "yesterday", "today morning", "2 days ago", etc.)
         $temporalRes = resolveReportDateTime($dateLostFound, $description);
@@ -276,7 +276,15 @@ if ($action === 'create' || ($method === 'POST' && ($action === '' || $action ==
 
         $dbError = '';
         if ($reportType === 'found') {
-            $stmt = $conn->prepare("INSERT INTO found_reports (finder_id, category, title, description, location, date_found, found_time, image_path, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
+            $foundCols = [];
+            $fcRes = @$conn->query("SHOW COLUMNS FROM found_reports");
+            if ($fcRes) {
+                while ($c = $fcRes->fetch_assoc()) $foundCols[] = strtolower($c['Field']);
+            }
+            $userCol = in_array('finder_id', $foundCols) ? 'finder_id' : 'user_id';
+            $dateCol = in_array('date_found', $foundCols) ? 'date_found' : (in_array('found_date', $foundCols) ? 'found_date' : 'date_found');
+
+            $stmt = $conn->prepare("INSERT INTO found_reports ($userCol, category, title, description, location, $dateCol, found_time, image_path, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
             if ($stmt) {
                 $stmt->bind_param("issssssss", $userId, $category, $title, $description, $location, $reportDate, $reportTime, $imageWebPath, $status);
                 if (!$stmt->execute()) {
@@ -289,7 +297,14 @@ if ($action === 'create' || ($method === 'POST' && ($action === '' || $action ==
                 $dbError = $conn->error;
             }
         } else {
-            $stmt = $conn->prepare("INSERT INTO lost_reports (user_id, category, title, description, location, date_lost, lost_time, image_path, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
+            $lostCols = [];
+            $lcRes = @$conn->query("SHOW COLUMNS FROM lost_reports");
+            if ($lcRes) {
+                while ($c = $lcRes->fetch_assoc()) $lostCols[] = strtolower($c['Field']);
+            }
+            $dateCol = in_array('date_lost', $lostCols) ? 'date_lost' : (in_array('lost_date', $lostCols) ? 'lost_date' : 'date_lost');
+
+            $stmt = $conn->prepare("INSERT INTO lost_reports (user_id, category, title, description, location, $dateCol, lost_time, image_path, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
             if ($stmt) {
                 $stmt->bind_param("issssssss", $userId, $category, $title, $description, $location, $reportDate, $reportTime, $imageWebPath, $status);
                 if (!$stmt->execute()) {
