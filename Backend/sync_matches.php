@@ -33,6 +33,16 @@ $foundCount = $resFoundCount ? (int)$resFoundCount->fetch_assoc()['cnt'] : 0;
 $diagnostics['raw_lost_count'] = $lostCount;
 $diagnostics['raw_found_count'] = $foundCount;
 
+$mColsDiag = [];
+$mcRes = @$conn->query("SHOW COLUMNS FROM matches");
+if ($mcRes) { while ($c = $mcRes->fetch_assoc()) $mColsDiag[] = $c['Field']; }
+$diagnostics['matches_columns'] = $mColsDiag;
+
+$nColsDiag = [];
+$ncRes = @$conn->query("SHOW COLUMNS FROM notifications");
+if ($ncRes) { while ($c = $ncRes->fetch_assoc()) $nColsDiag[] = $c['Field']; }
+$diagnostics['notifications_columns'] = $nColsDiag;
+
 // 2. Normalize statuses: set anything not claimed/closed/matched to 'active'
 @$conn->query("UPDATE lost_reports SET status = 'active' WHERE status IS NULL OR status = '' OR status = 'Pending'");
 @$conn->query("UPDATE found_reports SET status = 'active' WHERE status IS NULL OR status = '' OR status = 'Pending'");

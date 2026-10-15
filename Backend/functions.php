@@ -784,6 +784,124 @@ function consumePasswordResetToken($token, $newPassword) {
 }
 
 /**
+ * Dynamically inserts or retrieves a match record across any table schema variations
+ */
+function insertMatchRecord($lostId, $foundId, $score) {
+    global $conn;
+    if (!$conn) return null;
+
+    $matchColsRes = $conn->query("SHOW COLUMNS FROM matches");
+    $mCols = [];
+    if ($matchColsRes) {
+        while ($mc = $matchColsRes->fetch_assoc()) $mCols[] = strtolower($mc['Field']);
+    }
+
+    $mLostCol = in_array('lost_report_id', $mCols) ? 'lost_report_id' : (in_array('lost_id', $mCols) ? 'lost_id' : 'lost_report_id');
+    $mFoundCol = in_array('found_report_id', $mCols) ? 'found_report_id' : (in_array('found_id', $mCols) ? 'found_id' : 'found_report_id');
+    $mScoreCol = in_array('similarity_score', $mCols) ? 'similarity_score' : (in_array('score', $mCols) ? 'score' : 'similarity_score');
+    $mIdCol = in_array('id', $mCols) ? 'id' : (in_array('match_id', $mCols) ? 'match_id' : 'id');
+
+    // Check if match already exists
+    $checkStmt = $conn->prepare("SELECT $mIdCol FROM matches WHERE $mLostCol = ? AND $mFoundCol = ?");
+    if ($checkStmt) {
+        $checkStmt->bind_param("ii", $lostId, $foundId);
+        $checkStmt->execute();
+        $res = $checkStmt->get_result();
+        if ($res && $res->num_rows > 0) {
+            $row = $res->fetch_assoc();
+            $checkStmt->close();
+            return (int)($row[$mIdCol] ?? 1);
+        }
+        $checkStmt->close();
+    }
+
+    $scoreDecimal = number_format($score, 2, '.', '');
+    $hasStatus = in_array('status', $mCols);
+    $hasCreated = in_array('created_at', $mCols);
+
+    $sql = "INSERT INTO matches ($mLostCol, $mFoundCol, $mScoreCol" . ($hasStatus ? ", status" : "") . ($hasCreated ? ", created_at" : "") . ") VALUES (?, ?, ?" . ($hasStatus ? ", 'pending'" : "") . ($hasCreated ? ", NOW()" : "") . ")";
+
+    $stmt = $conn->prepare($sql);
+    if ($stmt) {
+        $stmt->bind_param("iid", $lostId, $foundId, $scoreDecimal);
+        if ($stmt->execute()) {
+            $newId = $stmt->insert_id;
+            $stmt->close();
+            return $newId;
+        } else {
+            error_log("[Matches] Insert execute error: " . $stmt->error);
+            $stmt->close();
+        }
+    } else {
+        error_log("[Matches] Insert prepare error: " . $conn->error);
+    }
+    return null;
+}
+
+/**
+ * Dynamically inserts a notification record across any table schema variations
+ */
+function insertSystemNotification($targetUserId, $title, $message, $link = '', $reportType = 'LOST', $reportId = 0, $type = 'match') {
+    global $conn;
+    if (!$conn || empty($targetUserId)) return false;
+
+    $notifColsRes = $conn->query("SHOW COLUMNS FROM notifications");
+    $nCols = [];
+    if ($notifColsRes) {
+        while ($nc = $notifColsRes->fetch_assoc()) $nCols[] = strtolower($nc['Field']);
+    }
+
+    $uCol = in_array('user_id', $nCols) ? 'user_id' : 'userId';
+    $fields = [$uCol, 'title', 'message'];
+    $vals = [(int)$targetUserId, $title, $message];
+    $types = "iss";
+
+    if (in_array('report_type', $nCols)) {
+        $fields[] = 'report_type';
+        $vals[] = strtoupper($reportType);
+        $types .= 's';
+    }
+    if (in_array('report_id', $nCols)) {
+        $fields[] = 'report_id';
+        $vals[] = (int)$reportId;
+        $types .= 'i';
+    }
+    if (in_array('type', $nCols)) {
+        $fields[] = 'type';
+        $vals[] = $type;
+        $types .= 's';
+    }
+    if (in_array('link', $nCols)) {
+        $fields[] = 'link';
+        $vals[] = $link;
+        $types .= 's';
+    }
+    if (in_array('is_read', $nCols)) {
+        $fields[] = 'is_read';
+        $vals[] = 0;
+        $types .= 'i';
+    }
+
+    $fieldList = implode(', ', $fields);
+    $placeholders = implode(', ', array_fill(0, count($fields), '?'));
+    $hasCreatedAt = in_array('created_at', $nCols);
+
+    $sql = "INSERT INTO notifications ($fieldList" . ($hasCreatedAt ? ", created_at" : "") . ") VALUES ($placeholders" . ($hasCreatedAt ? ", NOW()" : "") . ")";
+
+    $stmt = $conn->prepare($sql);
+    if ($stmt) {
+        $stmt->bind_param($types, ...$vals);
+        $ok = $stmt->execute();
+        $insId = $stmt->insert_id;
+        $stmt->close();
+        return $insId;
+    } else {
+        error_log("[Notifications] Insert prepare error: " . $conn->error);
+        return false;
+    }
+}
+
+/**
  * Executes Vector + Hybrid Real-Time Matchmaking and generates user notifications
  */
 function runRealtimeMatchmaking($insertedId, $reportType, $category, $title, $description, $location, $imageWebPath, $userId) {
@@ -954,29 +1072,8 @@ function runRealtimeMatchmaking($insertedId, $reportType, $category, $title, $de
         $lostId = ($reportType === 'found') ? $oppId : $insertedId;
         $foundId = ($reportType === 'found') ? $insertedId : $oppId;
 
-        // Check if match already exists
-        $checkStmt = $conn->prepare("SELECT id FROM matches WHERE lost_report_id = ? AND found_report_id = ?");
-        if ($checkStmt) {
-            $checkStmt->bind_param("ii", $lostId, $foundId);
-            $checkStmt->execute();
-            $checkRes = $checkStmt->get_result();
-            if ($checkRes->num_rows > 0) {
-                $checkStmt->close();
-                continue; // Already recorded
-            }
-            $checkStmt->close();
-        }
-
-        // Insert into matches table
-        $insMatch = $conn->prepare("INSERT INTO matches (lost_report_id, found_report_id, similarity_score, status, created_at) VALUES (?, ?, ?, 'pending', NOW())");
-        $matchId = null;
-        if ($insMatch) {
-            $scoreDecimal = number_format($score, 2, '.', '');
-            $insMatch->bind_param("iid", $lostId, $foundId, $scoreDecimal);
-            $insMatch->execute();
-            $matchId = $insMatch->insert_id;
-            $insMatch->close();
-        }
+        // Insert or fetch match record dynamically
+        $matchId = insertMatchRecord($lostId, $foundId, $score);
 
         // Fetch details of both reports to construct personalized notifications
         $lostColsRes = $conn->query("SHOW COLUMNS FROM lost_reports");
@@ -1020,12 +1117,7 @@ function runRealtimeMatchmaking($insertedId, $reportType, $category, $title, $de
                 $nTitle = "Potential Match: " . substr($foundTitle, 0, 40);
                 $nMsg = "A found item '" . $foundTitle . "' matches your lost report '" . $lostTitle . "' with {$scoreDisplay} similarity.";
                 $nLink = "item.php?match_id=" . ($matchId ?: 1);
-                $nStmt = $conn->prepare("INSERT INTO notifications (user_id, title, report_type, report_id, type, message, link, is_read, created_at) VALUES (?, ?, 'LOST', ?, 'match', ?, ?, 0, NOW())");
-                if ($nStmt) {
-                    $nStmt->bind_param("isiss", $lostUserId, $nTitle, $lostId, $nMsg, $nLink);
-                    $nStmt->execute();
-                    $nStmt->close();
-                }
+                insertSystemNotification($lostUserId, $nTitle, $nMsg, $nLink, 'LOST', $lostId, 'match');
 
                 // Email notification to lost report owner (non-blocking)
                 try {
@@ -1057,12 +1149,7 @@ function runRealtimeMatchmaking($insertedId, $reportType, $category, $title, $de
                 $nTitle = "Potential Match: " . substr($lostTitle, 0, 40);
                 $nMsg = "Your reported found item '" . $foundTitle . "' has a {$scoreDisplay} match with a lost item ('" . $lostTitle . "').";
                 $nLink = "item.php?match_id=" . ($matchId ?: 1);
-                $nStmt = $conn->prepare("INSERT INTO notifications (user_id, title, report_type, report_id, type, message, link, is_read, created_at) VALUES (?, ?, 'FOUND', ?, 'match', ?, ?, 0, NOW())");
-                if ($nStmt) {
-                    $nStmt->bind_param("isiss", $foundUserId, $nTitle, $foundId, $nMsg, $nLink);
-                    $nStmt->execute();
-                    $nStmt->close();
-                }
+                insertSystemNotification($foundUserId, $nTitle, $nMsg, $nLink, 'FOUND', $foundId, 'match');
 
                 // Email notification to found report owner (non-blocking)
                 try {
