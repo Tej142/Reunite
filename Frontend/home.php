@@ -4,48 +4,90 @@ require_once __DIR__ . '/includes/auth.php';
 require_login();
 $user = get_current_user_data();
 
-// Live statistics from MySQL
-$homeStats = [
-    'items_reunited' => 0,
-    'active_searches' => 0,
-    'reported_this_week' => 0,
-    'match_accuracy' => '99.4%'
-];
+// Live statistics from MySQL with cross-schema resilience
+if (!function_exists('get_reunite_home_stats')) {
+    function get_reunite_home_stats($conn) {
+        $stats = [
+            'items_reunited' => 0,
+            'active_searches' => 0,
+            'reported_this_week' => 0,
+            'match_accuracy' => '99.4%'
+        ];
 
-if (isset($conn) && $conn) {
-    // Lost reports summary
-    $lRes = $conn->query("SELECT 
-        COUNT(*) as total,
-        SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as active,
-        SUM(CASE WHEN status IN ('matched', 'claimed', 'closed') THEN 1 ELSE 0 END) as reunited,
-        SUM(CASE WHEN created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY) THEN 1 ELSE 0 END) as week_count
-        FROM lost_reports");
-    if ($lRes && $lRow = $lRes->fetch_assoc()) {
-        $homeStats['active_searches'] += (int)($lRow['active'] ?? 0);
-        $homeStats['items_reunited'] += (int)($lRow['reunited'] ?? 0);
-        $homeStats['reported_this_week'] += (int)($lRow['week_count'] ?? 0);
-    }
-    // Found reports summary
-    $fRes = $conn->query("SELECT 
-        COUNT(*) as total,
-        SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as active,
-        SUM(CASE WHEN status IN ('matched', 'claimed', 'closed') THEN 1 ELSE 0 END) as reunited,
-        SUM(CASE WHEN created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY) THEN 1 ELSE 0 END) as week_count
-        FROM found_reports");
-    if ($fRes && $fRow = $fRes->fetch_assoc()) {
-        $homeStats['active_searches'] += (int)($fRow['active'] ?? 0);
-        $homeStats['items_reunited'] += (int)($fRow['reunited'] ?? 0);
-        $homeStats['reported_this_week'] += (int)($fRow['week_count'] ?? 0);
-    }
-    // Match accuracy calculation
-    $mRes = $conn->query("SELECT AVG(similarity_score) as avg_score, COUNT(*) as match_count FROM matches");
-    if ($mRes && $mRow = $mRes->fetch_assoc()) {
-        $avg = (float)($mRow['avg_score'] ?? 0);
-        if ($avg > 0) {
-            $homeStats['match_accuracy'] = round($avg <= 1 ? $avg * 100 : $avg, 1) . '%';
+        if (!$conn) return $stats;
+
+        // Inspect columns to avoid SQL syntax errors on cloud/local schema variations
+        $lostCols = [];
+        $lc = @$conn->query("SHOW COLUMNS FROM lost_reports");
+        if ($lc) {
+            while ($c = $lc->fetch_assoc()) $lostCols[] = strtolower($c['Field']);
         }
+
+        $foundCols = [];
+        $fc = @$conn->query("SHOW COLUMNS FROM found_reports");
+        if ($fc) {
+            while ($c = $fc->fetch_assoc()) $foundCols[] = strtolower($c['Field']);
+        }
+
+        // Detect date columns
+        $lostDateCol = null;
+        foreach (['created_at', 'lost_date', 'date_lost'] as $cand) {
+            if (in_array($cand, $lostCols)) { $lostDateCol = $cand; break; }
+        }
+
+        $foundDateCol = null;
+        foreach (['created_at', 'found_date', 'date_found'] as $cand) {
+            if (in_array($cand, $foundCols)) { $foundDateCol = $cand; break; }
+        }
+
+        $lostDateCond = $lostDateCol 
+            ? "CASE WHEN $lostDateCol >= DATE_SUB(CURDATE(), INTERVAL 7 DAY) THEN 1 ELSE 0 END" 
+            : "0";
+
+        $foundDateCond = $foundDateCol 
+            ? "CASE WHEN $foundDateCol >= DATE_SUB(CURDATE(), INTERVAL 7 DAY) THEN 1 ELSE 0 END" 
+            : "0";
+
+        // Query lost_reports
+        $lRes = @$conn->query("SELECT 
+            COUNT(*) as total,
+            SUM(CASE WHEN LOWER(status) IN ('active', 'pending') THEN 1 ELSE 0 END) as active,
+            SUM(CASE WHEN LOWER(status) IN ('matched', 'recovered', 'claimed', 'closed', 'returned', 'reunited') THEN 1 ELSE 0 END) as reunited,
+            SUM($lostDateCond) as week_count
+            FROM lost_reports");
+        if ($lRes && ($lRow = $lRes->fetch_assoc())) {
+            $stats['active_searches'] += (int)($lRow['active'] ?? 0);
+            $stats['items_reunited'] += (int)($lRow['reunited'] ?? 0);
+            $stats['reported_this_week'] += (int)($lRow['week_count'] ?? 0);
+        }
+
+        // Query found_reports
+        $fRes = @$conn->query("SELECT 
+            COUNT(*) as total,
+            SUM(CASE WHEN LOWER(status) IN ('active', 'pending') THEN 1 ELSE 0 END) as active,
+            SUM(CASE WHEN LOWER(status) IN ('matched', 'recovered', 'claimed', 'closed', 'returned', 'reunited') THEN 1 ELSE 0 END) as reunited,
+            SUM($foundDateCond) as week_count
+            FROM found_reports");
+        if ($fRes && ($fRow = $fRes->fetch_assoc())) {
+            $stats['active_searches'] += (int)($fRow['active'] ?? 0);
+            $stats['items_reunited'] += (int)($fRow['reunited'] ?? 0);
+            $stats['reported_this_week'] += (int)($fRow['week_count'] ?? 0);
+        }
+
+        // Match accuracy calculation
+        $mRes = @$conn->query("SELECT AVG(similarity_score) as avg_score, COUNT(*) as match_count FROM matches");
+        if ($mRes && ($mRow = $mRes->fetch_assoc())) {
+            $avg = (float)($mRow['avg_score'] ?? 0);
+            if ($avg > 0) {
+                $stats['match_accuracy'] = round($avg <= 1 ? $avg * 100 : $avg, 1) . '%';
+            }
+        }
+
+        return $stats;
     }
 }
+
+$homeStats = get_reunite_home_stats($conn ?? null);
 ?>
 <!doctype html>
 <html lang="en">
@@ -150,22 +192,22 @@ if (isset($conn) && $conn) {
   <div class="stats-container">
     <div class="stats-grid">
       <div class="stat-item">
-        <div class="stat-val serif"><?php echo number_format($homeStats['items_reunited']); ?></div>
+        <div id="stat-items-reunited" class="stat-val serif" data-val="<?php echo (int)$homeStats['items_reunited']; ?>"><?php echo number_format($homeStats['items_reunited']); ?></div>
         <div class="stat-label">Items reunited</div>
         <div class="stat-note">verified safe handoffs</div>
       </div>
       <div class="stat-item">
-        <div class="stat-val serif"><?php echo number_format($homeStats['active_searches']); ?></div>
+        <div id="stat-active-searches" class="stat-val serif" data-val="<?php echo (int)$homeStats['active_searches']; ?>"><?php echo number_format($homeStats['active_searches']); ?></div>
         <div class="stat-label">Active searches</div>
         <div class="stat-note">open right now</div>
       </div>
       <div class="stat-item">
-        <div class="stat-val serif"><?php echo number_format($homeStats['reported_this_week']); ?></div>
+        <div id="stat-reported-this-week" class="stat-val serif" data-val="<?php echo (int)$homeStats['reported_this_week']; ?>"><?php echo number_format($homeStats['reported_this_week']); ?></div>
         <div class="stat-label">Reported this week</div>
         <div class="stat-note">across campus hubs</div>
       </div>
       <div class="stat-item">
-        <div class="stat-val serif"><?php echo htmlspecialchars($homeStats['match_accuracy']); ?></div>
+        <div id="stat-match-accuracy" class="stat-val serif" data-val="<?php echo htmlspecialchars($homeStats['match_accuracy']); ?>"><?php echo htmlspecialchars($homeStats['match_accuracy']); ?></div>
         <div class="stat-label">Match accuracy</div>
         <div class="stat-note">powered by CLIP &amp; DINOv2 AI</div>
       </div>

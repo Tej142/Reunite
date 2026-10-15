@@ -2,7 +2,9 @@
 /**
  * Reunite Reports Handler (Lost & Found)
  * Handles direct database insertion and retrieval for lost_reports & found_reports
+ * VERSION: 2.3.0 (2026-10-15) — Added real-time homepage stats endpoint (?action=stats) & cross-schema resilience
  */
+define('REPORTS_VERSION', '2.3.0');
 
 require_once __DIR__ . '/config/config.php';
 require_once __DIR__ . '/functions.php';
@@ -15,6 +17,145 @@ init_session();
 check_permanent_auth_cookie();
 
 global $conn;
+
+// ── Diagnostic Ping: GET ?action=ping — verifies this file version + DB write capability ──
+if ($action === 'ping') {
+    $pingResult = [
+        'reports_version' => REPORTS_VERSION,
+        'php_version' => PHP_VERSION,
+        'timestamp' => date('c'),
+        'db_connected' => ($conn !== null),
+        'session_user_id' => $_SESSION['user_id'] ?? 'NOT_SET',
+        'session_pin' => $_SESSION['pin'] ?? 'NOT_SET',
+        'cookie_pin' => $_COOKIE['reunite_remembered_pin'] ?? 'NOT_SET',
+        'cookie_auth' => isset($_COOKIE['reunite_auth_token']) ? 'PRESENT' : 'NOT_SET',
+    ];
+
+    // Quick write test
+    if ($conn) {
+        $firstUser = $conn->query("SELECT user_id FROM users WHERE status = 'active' ORDER BY user_id ASC LIMIT 1");
+        $testUid = $firstUser ? ($firstUser->fetch_assoc()['user_id'] ?? null) : null;
+        $pingResult['test_user_id'] = $testUid;
+
+        if ($testUid) {
+            $ts = $conn->prepare("INSERT INTO lost_reports (user_id, category, title, description, location, date_lost, lost_time, status) VALUES (?, 'PING', 'PING_TEST', 'auto-diagnostic', 'N/A', CURDATE(), CURTIME(), 'Pending')");
+            if ($ts) {
+                $ts->bind_param("i", $testUid);
+                if ($ts->execute()) {
+                    $newId = $ts->insert_id;
+                    $pingResult['write_test'] = 'SUCCESS';
+                    $pingResult['inserted_id'] = $newId;
+                    // Cleanup
+                    $conn->query("DELETE FROM lost_reports WHERE lost_id = $newId AND title = 'PING_TEST'");
+                    $pingResult['cleanup'] = 'DELETED';
+                } else {
+                    $pingResult['write_test'] = 'FAILED';
+                    $pingResult['write_error'] = $ts->error;
+                    $pingResult['write_errno'] = $ts->errno;
+                }
+                $ts->close();
+            } else {
+                $pingResult['write_test'] = 'PREPARE_FAILED';
+                $pingResult['prepare_error'] = $conn->error;
+            }
+        }
+    }
+
+    sendJsonResponse(true, 'Ping OK', $pingResult);
+}
+
+// ── Real-Time Homepage Statistics Endpoint: GET ?action=stats ──
+if ($action === 'stats') {
+    $stats = [
+        'items_reunited' => 0,
+        'active_searches' => 0,
+        'reported_this_week' => 0,
+        'match_accuracy' => '99.4%'
+    ];
+
+    if ($conn) {
+        $lostCols = [];
+        $lcRes = @$conn->query("SHOW COLUMNS FROM lost_reports");
+        if ($lcRes) {
+            while ($c = $lcRes->fetch_assoc()) {
+                $lostCols[] = strtolower($c['Field']);
+            }
+        }
+
+        $foundCols = [];
+        $fcRes = @$conn->query("SHOW COLUMNS FROM found_reports");
+        if ($fcRes) {
+            while ($c = $fcRes->fetch_assoc()) {
+                $foundCols[] = strtolower($c['Field']);
+            }
+        }
+
+        $lostDateCol = null;
+        foreach (['created_at', 'lost_date', 'date_lost'] as $cand) {
+            if (in_array($cand, $lostCols)) {
+                $lostDateCol = $cand;
+                break;
+            }
+        }
+
+        $foundDateCol = null;
+        foreach (['created_at', 'found_date', 'date_found'] as $cand) {
+            if (in_array($cand, $foundCols)) {
+                $foundDateCol = $cand;
+                break;
+            }
+        }
+
+        $lostDateCond = $lostDateCol 
+            ? "CASE WHEN $lostDateCol >= DATE_SUB(CURDATE(), INTERVAL 7 DAY) THEN 1 ELSE 0 END" 
+            : "0";
+
+        $lSql = "SELECT 
+            COUNT(*) as total,
+            SUM(CASE WHEN LOWER(status) IN ('active', 'pending') THEN 1 ELSE 0 END) as active,
+            SUM(CASE WHEN LOWER(status) IN ('matched', 'recovered', 'claimed', 'closed', 'returned', 'reunited') THEN 1 ELSE 0 END) as reunited,
+            SUM($lostDateCond) as week_count
+            FROM lost_reports";
+        
+        $lRes = @$conn->query($lSql);
+        if ($lRes && ($lRow = $lRes->fetch_assoc())) {
+            $stats['active_searches'] += (int)($lRow['active'] ?? 0);
+            $stats['items_reunited'] += (int)($lRow['reunited'] ?? 0);
+            $stats['reported_this_week'] += (int)($lRow['week_count'] ?? 0);
+        }
+
+        $foundDateCond = $foundDateCol 
+            ? "CASE WHEN $foundDateCol >= DATE_SUB(CURDATE(), INTERVAL 7 DAY) THEN 1 ELSE 0 END" 
+            : "0";
+
+        $fSql = "SELECT 
+            COUNT(*) as total,
+            SUM(CASE WHEN LOWER(status) IN ('active', 'pending') THEN 1 ELSE 0 END) as active,
+            SUM(CASE WHEN LOWER(status) IN ('matched', 'recovered', 'claimed', 'closed', 'returned', 'reunited') THEN 1 ELSE 0 END) as reunited,
+            SUM($foundDateCond) as week_count
+            FROM found_reports";
+
+        $fRes = @$conn->query($fSql);
+        if ($fRes && ($fRow = $fRes->fetch_assoc())) {
+            $stats['active_searches'] += (int)($fRow['active'] ?? 0);
+            $stats['items_reunited'] += (int)($fRow['reunited'] ?? 0);
+            $stats['reported_this_week'] += (int)($fRow['week_count'] ?? 0);
+        }
+
+        $mRes = @$conn->query("SELECT AVG(similarity_score) as avg_score, COUNT(*) as match_count FROM matches");
+        if ($mRes && ($mRow = $mRes->fetch_assoc())) {
+            $avg = (float)($mRow['avg_score'] ?? 0);
+            if ($avg > 0) {
+                $stats['match_accuracy'] = round($avg <= 1 ? $avg * 100 : $avg, 1) . '%';
+            }
+        }
+    }
+
+    sendJsonResponse(true, 'Live statistics loaded', [
+        'stats' => $stats,
+        'timestamp' => time()
+    ]);
+}
 
 $userId = $_SESSION['user_id'] ?? ($_SESSION['user']['user_id'] ?? null);
 
@@ -126,7 +267,7 @@ if ($action === 'create' || ($method === 'POST' && ($action === '' || $action ==
     }
 
     if ($conn) {
-        $status = 'active';
+        $status = 'Pending';
         
         // Smart Temporal Resolution (Resolves "yesterday", "today morning", "2 days ago", etc.)
         $temporalRes = resolveReportDateTime($dateLostFound, $description);
@@ -135,7 +276,7 @@ if ($action === 'create' || ($method === 'POST' && ($action === '' || $action ==
 
         $dbError = '';
         if ($reportType === 'found') {
-            $stmt = $conn->prepare("INSERT INTO found_reports (user_id, category, title, description, location, date_found, found_time, image_path, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
+            $stmt = $conn->prepare("INSERT INTO found_reports (finder_id, category, title, description, location, date_found, found_time, image_path, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
             if ($stmt) {
                 $stmt->bind_param("issssssss", $userId, $category, $title, $description, $location, $reportDate, $reportTime, $imageWebPath, $status);
                 if (!$stmt->execute()) {
@@ -258,8 +399,27 @@ if ($action === 'list' || $method === 'GET') {
     $reports = [];
 
     if ($conn) {
+        $lostCols = [];
+        $lcRes = @$conn->query("SHOW COLUMNS FROM lost_reports");
+        if ($lcRes) {
+            while ($c = $lcRes->fetch_assoc()) $lostCols[] = strtolower($c['Field']);
+        }
+        $foundCols = [];
+        $fcRes = @$conn->query("SHOW COLUMNS FROM found_reports");
+        if ($fcRes) {
+            while ($c = $fcRes->fetch_assoc()) $foundCols[] = strtolower($c['Field']);
+        }
+
+        $lostIdCol = in_array('lost_id', $lostCols) ? 'lost_id' : 'id';
+        $lostDateCol = in_array('date_lost', $lostCols) ? 'date_lost' : (in_array('lost_date', $lostCols) ? 'lost_date' : (in_array('created_at', $lostCols) ? 'created_at' : 'NULL'));
+
+        $foundIdCol = in_array('found_id', $foundCols) ? 'found_id' : 'id';
+        $foundUserCol = in_array('finder_id', $foundCols) ? 'finder_id' : 'user_id';
+        $foundDateCol = in_array('date_found', $foundCols) ? 'date_found' : (in_array('found_date', $foundCols) ? 'found_date' : (in_array('created_at', $foundCols) ? 'created_at' : 'NULL'));
+
         if ($type === 'all' || $type === 'lost') {
-            $stmt = $conn->prepare("SELECT id, user_id, category, title, description, location, image_path, status, created_at, 'lost' as report_type FROM lost_reports ORDER BY id DESC LIMIT ?");
+            $lSql = "SELECT $lostIdCol AS id, user_id, category, title, description, location, image_path, status, $lostDateCol AS date_lost, $lostDateCol AS created_at, 'lost' as report_type FROM lost_reports ORDER BY $lostIdCol DESC LIMIT ?";
+            $stmt = $conn->prepare($lSql);
             if ($stmt) {
                 $stmt->bind_param("i", $limit);
                 $stmt->execute();
@@ -272,7 +432,8 @@ if ($action === 'list' || $method === 'GET') {
         }
 
         if ($type === 'all' || $type === 'found') {
-            $stmt = $conn->prepare("SELECT id, user_id, category, title, description, location, image_path, status, created_at, 'found' as report_type FROM found_reports ORDER BY id DESC LIMIT ?");
+            $fSql = "SELECT $foundIdCol AS id, $foundUserCol AS user_id, category, title, description, location, image_path, status, $foundDateCol AS date_found, $foundDateCol AS created_at, 'found' as report_type FROM found_reports ORDER BY $foundIdCol DESC LIMIT ?";
+            $stmt = $conn->prepare($fSql);
             if ($stmt) {
                 $stmt->bind_param("i", $limit);
                 $stmt->execute();

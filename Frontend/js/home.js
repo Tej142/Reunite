@@ -38,8 +38,8 @@ async function fetchLiveHomeItems() {
             title: r.title || r.category || 'Lost Item',
             desc: r.description || 'Reported on campus via Reunite.',
             city: r.location || 'Campus Hub',
-            when: r.created_at ? formatTimeAgo(r.created_at) : 'Recently',
-            status: inArray(r.status, ['matched', 'claimed', 'closed']) ? 'matched' : 'active',
+            when: formatTimeAgo(r.created_at || r.date_lost || r.lost_date || r.date_found || r.found_date),
+            status: inArray(String(r.status || '').toLowerCase(), ['matched', 'claimed', 'closed', 'recovered', 'returned']) ? 'matched' : 'active',
             type: 'lost'
           };
         });
@@ -185,9 +185,140 @@ function initFilters() {
   });
 }
 
+/* ── Real-Time Homepage Statistics Engine ───────────────────────── */
+let currentStats = {
+  items_reunited: null,
+  active_searches: null,
+  reported_this_week: null,
+  match_accuracy: null
+};
+
+function animateNumber(element, start, end, suffix = '', duration = 650) {
+  if (!element) return;
+  start = Number(start) || 0;
+  end = Number(end) || 0;
+  if (start === end) {
+    element.textContent = end.toLocaleString() + suffix;
+    return;
+  }
+  const startTime = performance.now();
+  function update(now) {
+    const elapsed = now - startTime;
+    const progress = Math.min(elapsed / duration, 1);
+    const ease = 1 - Math.pow(1 - progress, 3);
+    const current = Math.round(start + (end - start) * ease);
+    element.textContent = current.toLocaleString() + suffix;
+    if (progress < 1) {
+      requestAnimationFrame(update);
+    } else {
+      element.textContent = end.toLocaleString() + suffix;
+    }
+  }
+  requestAnimationFrame(update);
+}
+
+function flashStatUpdate(el) {
+  if (!el) return;
+  el.style.transition = 'transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), color 0.25s ease';
+  el.style.transform = 'scale(1.1)';
+  setTimeout(() => {
+    el.style.transform = 'scale(1)';
+  }, 260);
+}
+
+async function fetchRealtimeHomeStats() {
+  try {
+    const res = await fetch('../Backend/reports.php?action=stats');
+    if (!res.ok) return;
+    const json = await res.json();
+    const stats = json?.data?.stats || json?.stats;
+    if (!stats) return;
+
+    // 1. Items Reunited
+    const elReunited = document.getElementById('stat-items-reunited');
+    if (elReunited) {
+      const newVal = parseInt(stats.items_reunited, 10) || 0;
+      const prevVal = currentStats.items_reunited !== null ? currentStats.items_reunited : (parseInt(elReunited.getAttribute('data-val'), 10) || 0);
+      if (currentStats.items_reunited === null || prevVal !== newVal) {
+        animateNumber(elReunited, prevVal, newVal);
+        if (currentStats.items_reunited !== null && prevVal !== newVal) flashStatUpdate(elReunited);
+      }
+      currentStats.items_reunited = newVal;
+      elReunited.setAttribute('data-val', newVal);
+    }
+
+    // 2. Active Searches
+    const elActive = document.getElementById('stat-active-searches');
+    if (elActive) {
+      const newVal = parseInt(stats.active_searches, 10) || 0;
+      const prevVal = currentStats.active_searches !== null ? currentStats.active_searches : (parseInt(elActive.getAttribute('data-val'), 10) || 0);
+      if (currentStats.active_searches === null || prevVal !== newVal) {
+        animateNumber(elActive, prevVal, newVal);
+        if (currentStats.active_searches !== null && prevVal !== newVal) flashStatUpdate(elActive);
+      }
+      currentStats.active_searches = newVal;
+      elActive.setAttribute('data-val', newVal);
+    }
+
+    // 3. Reported This Week
+    const elWeek = document.getElementById('stat-reported-this-week');
+    if (elWeek) {
+      const newVal = parseInt(stats.reported_this_week, 10) || 0;
+      const prevVal = currentStats.reported_this_week !== null ? currentStats.reported_this_week : (parseInt(elWeek.getAttribute('data-val'), 10) || 0);
+      if (currentStats.reported_this_week === null || prevVal !== newVal) {
+        animateNumber(elWeek, prevVal, newVal);
+        if (currentStats.reported_this_week !== null && prevVal !== newVal) flashStatUpdate(elWeek);
+      }
+      currentStats.reported_this_week = newVal;
+      elWeek.setAttribute('data-val', newVal);
+    }
+
+    // 4. Match Accuracy
+    const elAccuracy = document.getElementById('stat-match-accuracy');
+    if (elAccuracy && stats.match_accuracy) {
+      const strVal = String(stats.match_accuracy).trim();
+      const numVal = parseFloat(strVal.replace(/[^0-9.]/g, '')) || 99.4;
+      const prevVal = currentStats.match_accuracy !== null ? currentStats.match_accuracy : (parseFloat(String(elAccuracy.getAttribute('data-val') || '').replace(/[^0-9.]/g, '')) || 0);
+      if (currentStats.match_accuracy === null || prevVal !== numVal) {
+        const startTime = performance.now();
+        const duration = 650;
+        function updateAcc(now) {
+          const progress = Math.min((now - startTime) / duration, 1);
+          const ease = 1 - Math.pow(1 - progress, 3);
+          const cur = (prevVal + (numVal - prevVal) * ease).toFixed(1);
+          elAccuracy.textContent = cur + '%';
+          if (progress < 1) requestAnimationFrame(updateAcc);
+          else elAccuracy.textContent = numVal.toFixed(1) + '%';
+        }
+        requestAnimationFrame(updateAcc);
+        if (currentStats.match_accuracy !== null && prevVal !== numVal) flashStatUpdate(elAccuracy);
+      }
+      currentStats.match_accuracy = numVal;
+      elAccuracy.setAttribute('data-val', strVal);
+    }
+  } catch (e) {
+    console.debug('[Home] Realtime stats sync notice:', e);
+  }
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   renderCards();
   initFilters();
   fetchLiveHomeItems();
+  
+  // Real-time statistics: immediate sync + continuous polling
+  fetchRealtimeHomeStats();
+  setInterval(fetchRealtimeHomeStats, 8000); // Poll every 8 seconds
+
+  // Auto-sync on visibility change & window focus
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) {
+      fetchRealtimeHomeStats();
+      fetchLiveHomeItems();
+    }
+  });
+  window.addEventListener('focus', () => {
+    fetchRealtimeHomeStats();
+  });
 });
 

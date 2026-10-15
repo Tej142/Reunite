@@ -1039,20 +1039,20 @@ nav:not(.admin-nav-bar):not(.maint-topnav) {
 
 /* ── Layout ────────────────────────────────────────── */
 main {
-  max-width: 56rem;
+  max-width: 64rem;
   margin: 0 auto;
-  padding: 3rem 1.5rem 5rem;
+  padding: 3.25rem 2rem 5.5rem;
 }
 
 @media (max-width: 768px) {
   main {
-    padding: 2rem 1.25rem 4rem;
+    padding: 2.25rem 1.25rem 4rem;
   }
 }
 
 @media (max-width: 480px) {
   main {
-    padding: 1.5rem 1rem 3.5rem;
+    padding: 1.75rem 1rem 3.5rem;
   }
 }
 
@@ -1060,8 +1060,8 @@ main {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 1.5rem;
-  margin-bottom: 2.5rem;
+  gap: 1.75rem;
+  margin-bottom: 2.75rem;
   flex-wrap: wrap;
 }
 
@@ -1069,30 +1069,30 @@ main {
   .header-row {
     flex-direction: column;
     gap: 1.25rem;
-    margin-bottom: 1.75rem;
+    margin-bottom: 2rem;
   }
 }
 
 .eyebrow {
   display: inline-flex;
   align-items: center;
-  gap: .5rem;
+  gap: .55rem;
   background: var(--accent-tint);
   color: var(--accent);
-  font-size: .75rem;
+  font-size: .78125rem;
   font-weight: 500;
-  padding: .375rem .75rem;
+  padding: .4rem .85rem;
   border-radius: 999px;
-  margin-bottom: 1rem;
+  margin-bottom: 1.25rem;
 }
 
 h1.page-title {
-  font-size: clamp(1.85rem, 5vw, 2.5rem);
+  font-size: clamp(2rem, 5vw, 2.75rem);
   font-weight: 500;
   letter-spacing: -0.025em;
-  line-height: 1.1;
-  margin: 0 0 .75rem;
-  max-width: 26ch;
+  line-height: 1.22;
+  margin: 0 0 1rem;
+  max-width: 28ch;
 }
 
 h1.page-title em {
@@ -1102,9 +1102,9 @@ h1.page-title em {
 
 .page-sub {
   color: var(--muted);
-  font-size: clamp(0.95rem, 2.5vw, 1.0625rem);
-  line-height: 1.6;
-  max-width: 46ch;
+  font-size: clamp(0.95rem, 2.2vw, 1.0625rem);
+  line-height: 1.68;
+  max-width: 52ch;
   margin: 0;
 }
 

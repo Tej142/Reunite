@@ -104,10 +104,10 @@ if ((empty($userId) || !is_numeric($userId)) && !empty($user_pin) && isset($conn
 // ── One-Click Test Data Seeder (via ?seed=1) ─────────────────
 if (isset($_GET['seed']) && $userId && isset($conn) && $conn) {
     // 1. Insert sample lost report for this user if none exists
-    $chk = $conn->query("SELECT id FROM lost_reports WHERE user_id = $userId LIMIT 1");
+    $chk = $conn->query("SELECT lost_id FROM lost_reports WHERE user_id = $userId LIMIT 1");
     $lostId = null;
     if ($chk && $chk->num_rows === 0) {
-        $sStmt = $conn->prepare("INSERT INTO lost_reports (user_id, category, title, description, location, date_lost, status) VALUES (?, 'Electronics', 'HP Pavilion 15 Laptop (Silver)', 'Left in 2nd floor library study area. Silver aluminum finish with black protective sleeve.', 'Campus Central Library', CURDATE(), 'active')");
+        $sStmt = $conn->prepare("INSERT INTO lost_reports (user_id, category, title, description, location, date_lost, status) VALUES (?, 'Electronics', 'HP Pavilion 15 Laptop (Silver)', 'Left in 2nd floor library study area. Silver aluminum finish with black protective sleeve.', 'Campus Central Library', CURDATE(), 'Pending')");
         if ($sStmt) {
             $sStmt->bind_param("i", $userId);
             $sStmt->execute();
@@ -115,14 +115,14 @@ if (isset($_GET['seed']) && $userId && isset($conn) && $conn) {
             $sStmt->close();
         }
     } else {
-        $lostId = (int)$chk->fetch_assoc()['id'];
+        $lostId = (int)$chk->fetch_assoc()['lost_id'];
     }
 
     // 2. Insert sample found report matching it if none exists
-    $fChk = $conn->query("SELECT id FROM found_reports LIMIT 1");
+    $fChk = $conn->query("SELECT found_id FROM found_reports LIMIT 1");
     $foundId = null;
     if ($fChk && $fChk->num_rows === 0) {
-        $fsStmt = $conn->prepare("INSERT INTO found_reports (user_id, category, title, description, location, date_found, status) VALUES (?, 'Electronics', 'Silver HP Laptop in Black Pouch', 'Found unattended laptop on study desk in 2nd floor library hall.', 'Central Library Hall', CURDATE(), 'active')");
+        $fsStmt = $conn->prepare("INSERT INTO found_reports (finder_id, category, title, description, location, date_found, status) VALUES (?, 'Electronics', 'Silver HP Laptop in Black Pouch', 'Found unattended laptop on study desk in 2nd floor library hall.', 'Central Library Hall', CURDATE(), 'Pending')");
         if ($fsStmt) {
             $fsStmt->bind_param("i", $userId);
             $fsStmt->execute();
@@ -130,12 +130,12 @@ if (isset($_GET['seed']) && $userId && isset($conn) && $conn) {
             $fsStmt->close();
         }
     } else {
-        $foundId = (int)$fChk->fetch_assoc()['id'];
+        $foundId = (int)$fChk->fetch_assoc()['found_id'];
     }
 
     // 3. Create AI Match
     if ($lostId && $foundId) {
-        $mChk = $conn->query("SELECT id FROM matches WHERE lost_report_id = $lostId AND found_report_id = $foundId LIMIT 1");
+        $mChk = @$conn->query("SELECT id FROM matches WHERE lost_report_id = $lostId AND found_report_id = $foundId LIMIT 1");
         if ($mChk && $mChk->num_rows === 0) {
             $mStmt = $conn->prepare("INSERT INTO matches (lost_report_id, found_report_id, similarity_score, status, return_type) VALUES (?, ?, 94.50, 'pending', 'hand_on_hand')");
             if ($mStmt) {
@@ -162,7 +162,7 @@ $userStats = [
 
 if ($userId && isset($conn) && $conn) {
     // 1. Fetch lost reports
-    $lStmt = $conn->prepare("SELECT id, 'lost' as report_type, title, description, category, location, image_path, status, created_at FROM lost_reports WHERE user_id = ? ORDER BY created_at DESC");
+    $lStmt = $conn->prepare("SELECT lost_id AS id, 'lost' as report_type, title, description, category, location, image_path, status, date_lost AS created_at FROM lost_reports WHERE user_id = ? ORDER BY lost_id DESC");
     if ($lStmt) {
         $lStmt->bind_param("i", $userId);
         $lStmt->execute();
@@ -170,7 +170,7 @@ if ($userId && isset($conn) && $conn) {
         while ($row = $res->fetch_assoc()) {
             $userReports[] = $row;
             $userStats['lost_count']++;
-            if (in_array(strtolower($row['status']), ['matched', 'claimed', 'closed', 'reunited'])) {
+            if (in_array(strtolower($row['status']), ['matched', 'recovered', 'claimed', 'closed', 'reunited', 'returned'])) {
                 $userStats['reunited_items']++;
             }
         }
@@ -178,7 +178,7 @@ if ($userId && isset($conn) && $conn) {
     }
 
     // 2. Fetch found reports
-    $fStmt = $conn->prepare("SELECT id, 'found' as report_type, title, description, category, location, image_path, status, created_at FROM found_reports WHERE user_id = ? ORDER BY created_at DESC");
+    $fStmt = $conn->prepare("SELECT found_id AS id, 'found' as report_type, title, description, category, location, image_path, status, date_found AS created_at FROM found_reports WHERE finder_id = ? ORDER BY found_id DESC");
     if ($fStmt) {
         $fStmt->bind_param("i", $userId);
         $fStmt->execute();
@@ -186,7 +186,7 @@ if ($userId && isset($conn) && $conn) {
         while ($row = $res->fetch_assoc()) {
             $userReports[] = $row;
             $userStats['found_count']++;
-            if (in_array(strtolower($row['status']), ['matched', 'claimed', 'closed', 'reunited'])) {
+            if (in_array(strtolower($row['status']), ['matched', 'returned', 'claimed', 'closed', 'reunited'])) {
                 $userStats['reunited_items']++;
             }
         }
@@ -195,13 +195,13 @@ if ($userId && isset($conn) && $conn) {
 
     // Sort all combined reports by created_at DESC
     usort($userReports, function($a, $b) {
-        return strtotime($b['created_at']) - strtotime($a['created_at']);
+        return ($b['id'] ?? 0) - ($a['id'] ?? 0);
     });
 
     $userStats['reports_filed'] = count($userReports);
 
     // 3. Count AI matches linked to user's reports (lost or found)
-    $mStmt = $conn->prepare("SELECT COUNT(DISTINCT m.id) as match_cnt FROM matches m LEFT JOIN lost_reports lr ON m.lost_report_id = lr.id LEFT JOIN found_reports fr ON m.found_report_id = fr.id WHERE lr.user_id = ? OR fr.user_id = ?");
+    $mStmt = $conn->prepare("SELECT COUNT(DISTINCT m.id) as match_cnt FROM matches m LEFT JOIN lost_reports lr ON m.lost_report_id = lr.lost_id LEFT JOIN found_reports fr ON m.found_report_id = fr.found_id WHERE lr.user_id = ? OR fr.finder_id = ?");
     if ($mStmt) {
         $mStmt->bind_param("ii", $userId, $userId);
         $mStmt->execute();
