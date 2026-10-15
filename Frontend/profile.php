@@ -101,6 +101,55 @@ if ((empty($userId) || !is_numeric($userId)) && !empty($user_pin) && isset($conn
     }
 }
 
+// ── One-Click Test Data Seeder (via ?seed=1) ─────────────────
+if (isset($_GET['seed']) && $userId && isset($conn) && $conn) {
+    // 1. Insert sample lost report for this user if none exists
+    $chk = $conn->query("SELECT id FROM lost_reports WHERE user_id = $userId LIMIT 1");
+    $lostId = null;
+    if ($chk && $chk->num_rows === 0) {
+        $sStmt = $conn->prepare("INSERT INTO lost_reports (user_id, category, title, description, location, date_lost, status) VALUES (?, 'Electronics', 'HP Pavilion 15 Laptop (Silver)', 'Left in 2nd floor library study area. Silver aluminum finish with black protective sleeve.', 'Campus Central Library', CURDATE(), 'active')");
+        if ($sStmt) {
+            $sStmt->bind_param("i", $userId);
+            $sStmt->execute();
+            $lostId = $sStmt->insert_id;
+            $sStmt->close();
+        }
+    } else {
+        $lostId = (int)$chk->fetch_assoc()['id'];
+    }
+
+    // 2. Insert sample found report matching it if none exists
+    $fChk = $conn->query("SELECT id FROM found_reports LIMIT 1");
+    $foundId = null;
+    if ($fChk && $fChk->num_rows === 0) {
+        $fsStmt = $conn->prepare("INSERT INTO found_reports (user_id, category, title, description, location, date_found, status) VALUES (?, 'Electronics', 'Silver HP Laptop in Black Pouch', 'Found unattended laptop on study desk in 2nd floor library hall.', 'Central Library Hall', CURDATE(), 'active')");
+        if ($fsStmt) {
+            $fsStmt->bind_param("i", $userId);
+            $fsStmt->execute();
+            $foundId = $fsStmt->insert_id;
+            $fsStmt->close();
+        }
+    } else {
+        $foundId = (int)$fChk->fetch_assoc()['id'];
+    }
+
+    // 3. Create AI Match
+    if ($lostId && $foundId) {
+        $mChk = $conn->query("SELECT id FROM matches WHERE lost_report_id = $lostId AND found_report_id = $foundId LIMIT 1");
+        if ($mChk && $mChk->num_rows === 0) {
+            $mStmt = $conn->prepare("INSERT INTO matches (lost_report_id, found_report_id, similarity_score, status, return_type) VALUES (?, ?, 94.50, 'pending', 'hand_on_hand')");
+            if ($mStmt) {
+                $mStmt->bind_param("ii", $lostId, $foundId);
+                $mStmt->execute();
+                $mStmt->close();
+            }
+        }
+    }
+
+    header("Location: profile.php");
+    exit;
+}
+
 $userReports = [];
 $userStats = [
     'reports_filed' => 0,
@@ -443,6 +492,7 @@ if ($userId && isset($conn) && $conn) {
               <div style="display: flex; gap: 0.75rem; justify-content: center; flex-wrap: wrap;">
                 <a href="report-lost-item.php" class="btn btn-primary" style="font-size: 0.8125rem; padding: 0.5rem 1rem;">Report Missing Item</a>
                 <a href="report-found-item.php" class="btn btn-ghost" style="font-size: 0.8125rem; padding: 0.5rem 1rem;">Upload Found Item</a>
+                <a href="profile.php?seed=1" class="btn btn-ghost" style="font-size: 0.8125rem; padding: 0.5rem 1rem; border-color: var(--brand); color: var(--brand);"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 4px; vertical-align: -2px;"><path d="M12 5v14M5 12h14"/></svg> Populate Sample Report &amp; Match</a>
               </div>
             </div>
           <?php endif; ?>

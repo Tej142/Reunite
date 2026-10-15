@@ -91,6 +91,65 @@ if ($conn && !$conn->connect_error) {
                 ];
             }
         }
+        // Optional: Seed action if requested via ?seed=1 or ?action=seed
+        if (isset($_GET['seed']) || (isset($_GET['action']) && $_GET['action'] === 'seed')) {
+            $seedPin = $_GET['pin'] ?? '24155-cm-002';
+            $uQ = $conn->query("SELECT user_id FROM `users` WHERE pin = '$seedPin' LIMIT 1");
+            if ($uQ && ($uRow = $uQ->fetch_assoc())) {
+                $targetUid = (int)$uRow['user_id'];
+                
+                // 1. Insert lost report if none exists
+                $lCheck = $conn->query("SELECT id FROM `lost_reports` WHERE user_id = $targetUid LIMIT 1");
+                $lostId = null;
+                if ($lCheck && $lCheck->num_rows === 0) {
+                    $lStmt = $conn->prepare("INSERT INTO `lost_reports` (user_id, category, title, description, location, date_lost, status) VALUES (?, 'Electronics', 'HP Pavilion 15 Laptop (Silver)', 'Left in 2nd floor library study area. Silver aluminum finish with black protective sleeve.', 'Campus Central Library', CURDATE(), 'active')");
+                    if ($lStmt) {
+                        $lStmt->bind_param("i", $targetUid);
+                        $lStmt->execute();
+                        $lostId = $lStmt->insert_id;
+                        $lStmt->close();
+                    }
+                } else {
+                    $lostId = (int)$lCheck->fetch_assoc()['id'];
+                }
+
+                // 2. Insert found report if none exists
+                $fCheck = $conn->query("SELECT id FROM `found_reports` LIMIT 1");
+                $foundId = null;
+                if ($fCheck && $fCheck->num_rows === 0) {
+                    $fStmt = $conn->prepare("INSERT INTO `found_reports` (user_id, category, title, description, location, date_found, status) VALUES (?, 'Electronics', 'Silver HP Laptop in Black Pouch', 'Found unattended laptop on study desk in 2nd floor library hall.', 'Central Library Hall', CURDATE(), 'active')");
+                    if ($fStmt) {
+                        $fStmt->bind_param("i", $targetUid);
+                        $fStmt->execute();
+                        $foundId = $fStmt->insert_id;
+                        $fStmt->close();
+                    }
+                } else {
+                    $foundId = (int)$fCheck->fetch_assoc()['id'];
+                }
+
+                // 3. Insert AI match if both exist
+                if ($lostId && $foundId) {
+                    $mCheck = $conn->query("SELECT id FROM `matches` WHERE lost_report_id = $lostId AND found_report_id = $foundId LIMIT 1");
+                    if ($mCheck && $mCheck->num_rows === 0) {
+                        $mStmt = $conn->prepare("INSERT INTO `matches` (lost_report_id, found_report_id, similarity_score, status, return_type) VALUES (?, ?, 94.50, 'pending', 'hand_on_hand')");
+                        if ($mStmt) {
+                            $mStmt->bind_param("ii", $lostId, $foundId);
+                            $mStmt->execute();
+                            $mStmt->close();
+                        }
+                    }
+                }
+
+                $results['database']['seed_result'] = [
+                    'status' => 'success',
+                    'message' => "Seeded sample lost report (ID #$lostId), found report (ID #$foundId), and 94.5% AI match for user $targetUid ($seedPin)!",
+                    'lost_id' => $lostId,
+                    'found_id' => $foundId
+                ];
+            }
+        }
+
         $results['database']['users_profile_verification'] = $uList;
     }
 } else {
