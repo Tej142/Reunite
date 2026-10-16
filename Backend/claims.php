@@ -117,13 +117,17 @@ if ($action === 'submit') {
     if ($rcRes) {
         while ($rc = $rcRes->fetch_assoc()) $rcCols[] = strtolower($rc['Field']);
     }
-    $rcPk = in_array('id', $rcCols) ? 'id' : (in_array('case_id', $rcCols) ? 'case_id' : 'id');
+    $rcPk = in_array('id', $rcCols) ? 'id' : (in_array('recovery_id', $rcCols) ? 'recovery_id' : (in_array('case_id', $rcCols) ? 'case_id' : 'id'));
     $rcRepCol = in_array('report_id', $rcCols) ? 'report_id' : (in_array('found_id', $rcCols) ? 'found_id' : 'report_id');
 
     // Check if user already submitted a pending claim on this report
-    $chkStmt = $conn->prepare("SELECT `$rcPk` as id FROM recovery_cases WHERE claimant_id = ? AND `$rcRepCol` = ? AND status = 'pending_verification'");
+    $chkStmt = $conn->prepare("SELECT `$rcPk` as id FROM recovery_cases WHERE claimant_id = ? AND (`$rcRepCol` = ?" . (in_array('found_id', $rcCols) && $rcRepCol !== 'found_id' ? " OR found_id = ?" : "") . ") AND status = 'pending_verification'");
     if ($chkStmt) {
-        $chkStmt->bind_param("ii", $userId, $reportId);
+        if (in_array('found_id', $rcCols) && $rcRepCol !== 'found_id') {
+            $chkStmt->bind_param("iii", $userId, $reportId, $reportId);
+        } else {
+            $chkStmt->bind_param("ii", $userId, $reportId);
+        }
         $chkStmt->execute();
         $chkRes = $chkStmt->get_result();
         if ($chkRes->num_rows > 0) {
@@ -138,15 +142,34 @@ if ($action === 'submit') {
         $chkStmt->close();
     }
 
-    // Insert claim into recovery_cases
-    $insStmt = $conn->prepare("INSERT INTO recovery_cases (claimant_id, proof_details, `$rcRepCol`, status, created_at) VALUES (?, ?, ?, 'pending_verification', NOW())");
+    // Build dynamic resilient INSERT statement
+    $insCols = ['claimant_id', 'proof_details', 'status', 'created_at'];
+    $insTypes = "iss";
+    $insParams = [$userId, $proofDetails, 'pending_verification'];
+    $insPlaceholders = ["?", "?", "?", "NOW()"];
+
+    if (in_array('report_id', $rcCols)) {
+        $insCols[] = '`report_id`';
+        $insTypes .= 'i';
+        $insParams[] = $reportId;
+        $insPlaceholders[] = "?";
+    }
+    if (in_array('found_id', $rcCols)) {
+        $insCols[] = '`found_id`';
+        $insTypes .= 'i';
+        $insParams[] = $reportId;
+        $insPlaceholders[] = "?";
+    }
+
+    $insSql = "INSERT INTO recovery_cases (" . implode(', ', $insCols) . ") VALUES (" . implode(', ', $insPlaceholders) . ")";
+    $insStmt = $conn->prepare($insSql);
     if (!$insStmt) {
         http_response_code(500);
-        echo json_encode(['success' => false, 'error' => 'Database error preparing claim record']);
+        echo json_encode(['success' => false, 'error' => 'Database error preparing claim record: ' . $conn->error]);
         exit;
     }
 
-    $insStmt->bind_param("isi", $userId, $proofDetails, $reportId);
+    $insStmt->bind_param($insTypes, ...$insParams);
     if (!$insStmt->execute()) {
         $insErr = $insStmt->error;
         $insStmt->close();
@@ -217,17 +240,30 @@ if ($action === 'list') {
         exit;
     }
 
-    $query = "SELECT c.id, c.report_id, c.proof_details, c.status, c.created_at,
-                     r.title, r.category, r.image_path, r.location, r.date_found
+    $rcCols = [];
+    $rcRes = @$conn->query("SHOW COLUMNS FROM recovery_cases");
+    if ($rcRes) while ($rc = $rcRes->fetch_assoc()) $rcCols[] = strtolower($rc['Field']);
+    $rcPk = in_array('id', $rcCols) ? 'id' : (in_array('recovery_id', $rcCols) ? 'recovery_id' : (in_array('case_id', $rcCols) ? 'case_id' : 'id'));
+    $rcRepCol = in_array('report_id', $rcCols) ? 'report_id' : (in_array('found_id', $rcCols) ? 'found_id' : 'report_id');
+
+    $fCols = [];
+    $fcRes = @$conn->query("SHOW COLUMNS FROM found_reports");
+    if ($fcRes) while ($c = $fcRes->fetch_assoc()) $fCols[] = strtolower($c['Field']);
+    $fIdCol = in_array('found_id', $fCols) ? 'found_id' : 'id';
+    $fDateCol = in_array('date_found', $fCols) ? 'date_found' : (in_array('found_date', $fCols) ? 'found_date' : 'created_at');
+    $fLocCol = in_array('location', $fCols) ? 'location' : (in_array('found_location', $fCols) ? 'found_location' : 'location');
+
+    $query = "SELECT c.`$rcPk` as id, c.`$rcRepCol` as report_id, c.proof_details, c.status, c.created_at,
+                     r.title, r.category, r.image_path, r.`$fLocCol` as location, r.`$fDateCol` as date_found
               FROM recovery_cases c
-              JOIN found_reports r ON c.report_id = r.id
+              JOIN found_reports r ON (c.`$rcRepCol` = r.`$fIdCol`" . (in_array('found_id', $rcCols) ? " OR c.found_id = r.`$fIdCol`" : "") . ")
               WHERE c.claimant_id = ?
               ORDER BY c.created_at DESC";
 
     $stmt = $conn->prepare($query);
     if (!$stmt) {
         http_response_code(500);
-        echo json_encode(['success' => false, 'error' => 'Query error']);
+        echo json_encode(['success' => false, 'error' => 'Query error: ' . $conn->error]);
         exit;
     }
 
@@ -265,14 +301,26 @@ if ($action === 'resolve') {
         exit;
     }
 
+    $rcCols = [];
+    $rcRes = @$conn->query("SHOW COLUMNS FROM recovery_cases");
+    if ($rcRes) while ($rc = $rcRes->fetch_assoc()) $rcCols[] = strtolower($rc['Field']);
+    $rcPk = in_array('id', $rcCols) ? 'id' : (in_array('recovery_id', $rcCols) ? 'recovery_id' : (in_array('case_id', $rcCols) ? 'case_id' : 'id'));
+    $rcRepCol = in_array('report_id', $rcCols) ? 'report_id' : (in_array('found_id', $rcCols) ? 'found_id' : 'report_id');
+
+    $fCols = [];
+    $fcRes = @$conn->query("SHOW COLUMNS FROM found_reports");
+    if ($fcRes) while ($c = $fcRes->fetch_assoc()) $fCols[] = strtolower($c['Field']);
+    $fIdCol = in_array('found_id', $fCols) ? 'found_id' : 'id';
+    $fUserCol = in_array('finder_id', $fCols) ? 'finder_id' : (in_array('user_id', $fCols) ? 'user_id' : 'finder_id');
+
     // Retrieve claim & report
-    $cStmt = $conn->prepare("SELECT c.*, r.user_id as finder_id, r.title 
+    $cStmt = $conn->prepare("SELECT c.*, r.`$fUserCol` as finder_id, r.title, c.`$rcRepCol` as target_report_id
                              FROM recovery_cases c 
-                             JOIN found_reports r ON c.report_id = r.id 
-                             WHERE c.id = ?");
+                             JOIN found_reports r ON (c.`$rcRepCol` = r.`$fIdCol`" . (in_array('found_id', $rcCols) ? " OR c.found_id = r.`$fIdCol`" : "") . ") 
+                             WHERE c.`$rcPk` = ?");
     if (!$cStmt) {
         http_response_code(500);
-        echo json_encode(['success' => false, 'error' => 'Database error']);
+        echo json_encode(['success' => false, 'error' => 'Database error: ' . $conn->error]);
         exit;
     }
     $cStmt->bind_param("i", $claimId);
@@ -297,17 +345,22 @@ if ($action === 'resolve') {
     $ownerVer = ($newStatus === 'approved' || $newStatus === 'handed_off') ? 1 : 0;
     $finderConf = ($newStatus === 'approved' || $newStatus === 'handed_off') ? 1 : 0;
 
-    $uStmt = $conn->prepare("UPDATE recovery_cases SET status = ?, owner_verified = ?, finder_confirmed = ? WHERE id = ?");
+    $uStmt = $conn->prepare("UPDATE recovery_cases SET status = ?, owner_verified = ?, finder_confirmed = ? WHERE `$rcPk` = ?");
     $uStmt->bind_param("siii", $newStatus, $ownerVer, $finderConf, $claimId);
     $uStmt->execute();
     $uStmt->close();
 
     // If approved or handed_off, update the found item status
     if ($newStatus === 'approved' || $newStatus === 'handed_off') {
-        $repStmt = $conn->prepare("UPDATE found_reports SET status = 'claimed' WHERE id = ?");
-        $repStmt->bind_param("i", $claim['report_id']);
-        $repStmt->execute();
-        $repStmt->close();
+        $targetReportId = (int)($claim['target_report_id'] ?? $claim['report_id'] ?? $claim['found_id'] ?? 0);
+        if ($targetReportId > 0) {
+            $repStmt = $conn->prepare("UPDATE found_reports SET status = 'claimed' WHERE `$fIdCol` = ?");
+            if ($repStmt) {
+                $repStmt->bind_param("i", $targetReportId);
+                $repStmt->execute();
+                $repStmt->close();
+            }
+        }
     }
 
     // Notify claimant

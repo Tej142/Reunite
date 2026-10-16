@@ -251,6 +251,28 @@ foreach ($alterCols as $col => $alterSql) {
     }
 }
 
+// ── Ensure Columns & Modifiers Exist in Recovery Cases Table ─
+$rcAlterCols = [
+    "claimant_id" => "ALTER TABLE `recovery_cases` ADD COLUMN `claimant_id` INT(11) NOT NULL DEFAULT 0 AFTER `id`",
+    "report_id" => "ALTER TABLE `recovery_cases` ADD COLUMN `report_id` INT(11) NOT NULL DEFAULT 0 AFTER `claimant_id`",
+    "found_id" => "ALTER TABLE `recovery_cases` ADD COLUMN `found_id` INT(11) NOT NULL DEFAULT 0 AFTER `report_id`",
+    "lost_id" => "ALTER TABLE `recovery_cases` ADD COLUMN `lost_id` INT(11) DEFAULT NULL AFTER `found_id`",
+    "proof_details" => "ALTER TABLE `recovery_cases` ADD COLUMN `proof_details` TEXT DEFAULT NULL AFTER `lost_id`",
+    "meeting_time" => "ALTER TABLE `recovery_cases` ADD COLUMN `meeting_time` VARCHAR(100) DEFAULT NULL AFTER `proof_details`",
+    "meeting_location" => "ALTER TABLE `recovery_cases` ADD COLUMN `meeting_location` VARCHAR(255) DEFAULT NULL AFTER `meeting_time`",
+    "otp" => "ALTER TABLE `recovery_cases` ADD COLUMN `otp` VARCHAR(10) DEFAULT NULL AFTER `meeting_location`",
+    "otp_expires_at" => "ALTER TABLE `recovery_cases` ADD COLUMN `otp_expires_at` DATETIME DEFAULT NULL AFTER `otp`"
+];
+foreach ($rcAlterCols as $col => $alterSql) {
+    $check = $conn->query("SHOW COLUMNS FROM `recovery_cases` LIKE '$col'");
+    if ($check && $check->num_rows === 0) {
+        $conn->query($alterSql);
+        echo "<div class='status-item status-warn'><span>Added missing column `$col` to `recovery_cases`</span><span>ADDED</span></div>";
+    }
+}
+// Ensure status column can accept modern status strings
+$conn->query("ALTER TABLE `recovery_cases` MODIFY `status` VARCHAR(50) DEFAULT 'pending_verification'");
+
 // ── Ensure Student Account (24155-cm-002) Exists ─────────
 $checkUser = $conn->query("SELECT user_id FROM `users` WHERE pin = '24155-cm-002'");
 if ($checkUser && $checkUser->num_rows === 0) {
