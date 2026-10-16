@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/../includes/auth.php';
+require_once __DIR__ . '/../includes/orbi.php';
 $current_page = basename($_SERVER['PHP_SELF']);
 $logged_in = is_logged_in();
 $is_auth_page = in_array($current_page, ['login.php', 'signup.php', 'forgot-password.php', 'reset-password.php']);
@@ -12,13 +13,89 @@ $is_home = ($current_page === 'home.php');
 $is_profile = ($current_page === 'profile.php');
 ?>
 <script>
-  // Local Flask AI Server Endpoint
+  // Cloud Python Flask AI Microservice Endpoint (Render)
   (function() {
-    window.FLASK_BACKEND_URL = 'http://127.0.0.1:5000';
-    console.log('[Reunite] Connected Local Flask Backend URL:', window.FLASK_BACKEND_URL);
+    window.FLASK_BACKEND_URL = 'https://reunite-ai-backend.onrender.com';
+    console.log('[Reunite] Connected Cloud Flask AI URL:', window.FLASK_BACKEND_URL);
+
+    // Low-priority idle pre-warmup ping to mitigate Render free-tier cold starts
+    if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
+      window.requestIdleCallback(function() {
+        try {
+          fetch(window.FLASK_BACKEND_URL + '/health', { mode: 'no-cors', cache: 'no-store' }).catch(function(){});
+        } catch(e) {}
+      }, { timeout: 3500 });
+    } else {
+      setTimeout(function() {
+        try {
+          fetch(window.FLASK_BACKEND_URL + '/health', { mode: 'no-cors', cache: 'no-store' }).catch(function(){});
+        } catch(e) {}
+      }, 2500);
+    }
+  })();
+
+  // Real-Time Maintenance Mode Sentinel for open tabs
+  (function() {
+    const isMaintenancePage = window.location.pathname.endsWith('maintenance.php');
+    const isAdminPage = window.location.pathname.endsWith('admin.php');
+    if (isMaintenancePage || isAdminPage) return;
+
+    function checkMaintenanceStatus() {
+      fetch('api/maintenance-status.php', { cache: 'no-store' })
+        .then(function(res) { return res.json(); })
+        .then(function(data) {
+          if (data && data.enabled) {
+            window.location.replace('maintenance.php');
+          }
+        })
+        .catch(function() {});
+    }
+
+    // Check periodically every 12 seconds
+    setInterval(checkMaintenanceStatus, 12000);
+    // Also check immediately when the user switches to or focuses the window/tab
+    window.addEventListener('focus', checkMaintenanceStatus);
   })();
 </script>
 <script src="js/microinteractions.js"></script>
+<link rel="stylesheet" href="css/orbi.css?v=<?php echo time(); ?>" />
+<script src="js/orbi.js?v=<?php echo time(); ?>"></script>
+
+<!-- ── Full-Screen Global Page Loader (Orbi Loading State) ── -->
+<div id="reunitePageLoader" class="reunite-page-loader" aria-hidden="true">
+  <div class="page-loader-content">
+    <?php echo orbi('loading', 96); ?>
+    <p class="page-loader-text" role="status" aria-live="polite">Loading Reunite...</p>
+  </div>
+</div>
+<noscript>
+  <style>#reunitePageLoader { display: none !important; }</style>
+</noscript>
+<script>
+  (function() {
+    const pageLoadStart = performance.now();
+    function dismissPageLoader() {
+      const loader = document.getElementById('reunitePageLoader');
+      if (!loader || loader.classList.contains('loader-hidden')) return;
+      const elapsed = performance.now() - pageLoadStart;
+      const remaining = Math.max(0, 400 - elapsed);
+      setTimeout(function() {
+        loader.classList.add('loader-hidden');
+        setTimeout(function() {
+          if (loader.parentNode) loader.parentNode.removeChild(loader);
+        }, 400);
+      }, remaining);
+    }
+
+    if (document.readyState === 'complete') {
+      dismissPageLoader();
+    } else {
+      window.addEventListener('load', dismissPageLoader);
+    }
+    // Safety max timeout of 6 seconds
+    setTimeout(dismissPageLoader, 6000);
+  })();
+</script>
 <nav class="reunite-main-nav">
   <div class="nav-inner">
     <a href="<?php echo $logged_in ? 'home.php' : 'index.php'; ?>" class="brand">
@@ -65,7 +142,7 @@ $userNotifs = [];
 $unreadNotifCount = 0;
 if ($logged_in && isset($conn) && $conn) {
     $currUid = $user['user_id'] ?? ($_SESSION['user_id'] ?? 0);
-    $nStmt = $conn->prepare("SELECT notification_id, title, message, link, is_read, created_at, type FROM notifications WHERE user_id = ? OR user_id = 0 ORDER BY created_at DESC LIMIT 8");
+    $nStmt = $conn->prepare("SELECT * FROM notifications WHERE user_id = ? OR user_id = 0 ORDER BY notification_id DESC LIMIT 8");
     if ($nStmt) {
         $nStmt->bind_param("i", $currUid);
         $nStmt->execute();
@@ -106,21 +183,76 @@ if ($logged_in && isset($conn) && $conn) {
                 <?php if (!empty($userNotifs)): ?>
                   <?php foreach ($userNotifs as $notif): 
                     $isUnread = empty($notif['is_read']);
+                    $nType = $notif['type'] ?? 'match';
                     $iconSvg = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>';
-                    if (stripos($notif['title'], 'match') !== false) {
+                    if ($nType === 'match' || stripos($notif['title'] ?? '', 'match') !== false || stripos($notif['message'] ?? '', 'match') !== false) {
                         $iconSvg = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>';
-                    } elseif (stripos($notif['title'], 'claim') !== false) {
+                    } elseif (stripos($notif['title'] ?? '', 'claim') !== false) {
                         $iconSvg = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>';
-                    } elseif (stripos($notif['title'], 'found') !== false) {
+                    } elseif (stripos($notif['title'] ?? '', 'found') !== false) {
                         $iconSvg = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>';
                     }
                     $timeStr = !empty($notif['created_at']) ? date('M d, H:i', strtotime($notif['created_at'])) : 'Recently';
-                    $linkUrl = !empty($notif['link']) ? htmlspecialchars($notif['link']) : 'search.php';
+
+                    // Smart link resolution
+                    $linkUrl = !empty($notif['link']) ? $notif['link'] : '';
+                    $repId = (int)($notif['report_id'] ?? 0);
+                    $rType = strtolower($notif['report_type'] ?? 'found');
+                    if (empty($linkUrl)) {
+                        if ($nType === 'match' || stripos($notif['message'] ?? '', 'match') !== false) {
+                            $extractedPct = null;
+                            if (preg_match('/(\d+(?:\.\d+)?)\s*%/i', $notif['message'] ?? '', $pctMatches)) {
+                                $extractedPct = (float)$pctMatches[1];
+                            }
+                            if ($repId > 0 && isset($conn) && $conn) {
+                                $targetCol = ($rType === 'found') ? 'found_id' : 'lost_id';
+                                if ($extractedPct !== null) {
+                                    $mStmt = $conn->prepare("SELECT match_id, found_id FROM matches WHERE `$targetCol` = ? AND (ROUND(match_percentage) = ROUND(?) OR ROUND(match_percentage) = FLOOR(?) OR ROUND(match_percentage) = CEIL(?)) ORDER BY match_id DESC LIMIT 1");
+                                    if ($mStmt) {
+                                        $mStmt->bind_param("iddd", $repId, $extractedPct, $extractedPct, $extractedPct);
+                                        $mStmt->execute();
+                                        $mRes = $mStmt->get_result();
+                                        if ($mRes && ($rowM = $mRes->fetch_assoc())) {
+                                            $foundTargetId = (int)($rowM['found_id'] ?? 0);
+                                            $matchTargetId = (int)($rowM['match_id'] ?? 0);
+                                            if ($foundTargetId > 0) {
+                                                $linkUrl = "item.php?type=found&id={$foundTargetId}" . ($matchTargetId > 0 ? "&match_id={$matchTargetId}" : "");
+                                            }
+                                        }
+                                        $mStmt->close();
+                                    }
+                                }
+                                if (empty($linkUrl)) {
+                                    $mStmt = $conn->prepare("SELECT match_id, found_id FROM matches WHERE `$targetCol` = ? ORDER BY match_id DESC LIMIT 1");
+                                    if ($mStmt) {
+                                        $mStmt->bind_param("i", $repId);
+                                        $mStmt->execute();
+                                        $mRes = $mStmt->get_result();
+                                        if ($mRes && ($rowM = $mRes->fetch_assoc())) {
+                                            $foundTargetId = (int)($rowM['found_id'] ?? 0);
+                                            $matchTargetId = (int)($rowM['match_id'] ?? 0);
+                                            if ($foundTargetId > 0) {
+                                                $linkUrl = "item.php?type=found&id={$foundTargetId}" . ($matchTargetId > 0 ? "&match_id={$matchTargetId}" : "");
+                                            }
+                                        }
+                                        $mStmt->close();
+                                    }
+                                }
+                            }
+                        }
+                        if (empty($linkUrl) && $repId > 0) {
+                            $linkUrl = "item.php?type={$rType}&id={$repId}";
+                        }
+                        if (empty($linkUrl)) {
+                            $linkUrl = 'search.php';
+                        }
+                    }
+                    $notifTitle = !empty($notif['title']) ? $notif['title'] : ($nType === 'match' ? 'Potential Match Detected!' : 'Notification');
                   ?>
-                    <a href="<?php echo $linkUrl; ?>" class="notif-dropdown-item <?php echo $isUnread ? 'unread' : ''; ?>" data-notif-id="<?php echo $notif['notification_id']; ?>">
+                    <a href="<?php echo htmlspecialchars($linkUrl); ?>" class="notif-dropdown-item <?php echo $isUnread ? 'unread' : ''; ?>" data-notif-id="<?php echo $notif['notification_id']; ?>">
                       <span class="notif-item-icon"><?php echo $iconSvg; ?></span>
                       <div class="notif-item-info">
-                        <p class="notif-item-title"><?php echo htmlspecialchars($notif['title'] ?? 'Notification'); ?></p>
+                        <p class="notif-item-title"><?php echo htmlspecialchars($notifTitle); ?></p>
                         <p class="notif-item-desc"><?php echo htmlspecialchars($notif['message'] ?? ''); ?></p>
                         <span class="notif-item-time"><?php echo $timeStr; ?></span>
                       </div>
@@ -138,13 +270,13 @@ if ($logged_in && isset($conn) && $conn) {
             </div>
           </div>
 
-          <!-- Circular Profile Avatar Badge -->
-          <a href="profile.php" id="navAvatarBtn" class="nav-avatar-btn <?php echo $is_profile ? 'active' : ''; ?>" title="My Profile (<?php echo htmlspecialchars($user['name'] ?? 'User'); ?>)">
+          <!-- Circular Profile Avatar Badge (Desktop Only) -->
+          <a href="profile.php" id="navAvatarBtn" class="nav-avatar-btn nav-desktop-only <?php echo $is_profile ? 'active' : ''; ?>" title="My Profile (<?php echo htmlspecialchars($user['name'] ?? 'User'); ?>)">
             <span class="avatar-initial"><?php echo htmlspecialchars($user_initial); ?></span>
           </a>
 
-          <!-- Logout Link -->
-          <a href="logout.php" class="nav-logout-link" title="Sign out">Logout</a>
+          <!-- Logout Link (Desktop Only - Mobile is in Hamburger Drawer) -->
+          <a href="logout.php" class="nav-logout-link nav-desktop-only" title="Sign out">Logout</a>
 
           <!-- Mobile Hamburger Toggle -->
           <button type="button" class="nav-hamburger-btn" id="navHamburgerBtn" aria-label="Toggle navigation menu" aria-expanded="false">
@@ -165,8 +297,11 @@ if ($logged_in && isset($conn) && $conn) {
     <div class="mobile-nav-drawer" id="mobileNavDrawer" aria-hidden="true">
       <div class="mobile-nav-links">
         <a href="profile.php" class="mobile-nav-link <?php echo $is_profile ? 'active-mobile' : ''; ?>">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-          <span>My Profile (<?php echo htmlspecialchars($user['name'] ?? 'Student'); ?>)</span>
+          <span class="mobile-avatar-badge"><?php echo htmlspecialchars($user_initial); ?></span>
+          <div style="display:flex;flex-direction:column;line-height:1.2;">
+            <span style="font-weight:600;"><?php echo htmlspecialchars(!empty($u_name) ? $u_name : 'My Profile'); ?></span>
+            <span style="font-size:0.75rem;color:var(--muted);">View Profile &amp; Settings</span>
+          </div>
         </a>
         <a href="search.php" class="mobile-nav-link <?php echo $is_search ? 'active-mobile' : ''; ?>">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
@@ -317,3 +452,6 @@ if ($logged_in && isset($conn) && $conn) {
     })();
   </script>
 </nav>
+
+<!-- ── Reusable Orbi Mascot Template for JavaScript dynamic cloning ── -->
+<template id="orbi-template"><?php echo orbi('idle', 120); ?></template>

@@ -30,6 +30,126 @@ function decryptData($data) {
 }
 
 /**
+ * Production Image Optimizer: Auto-Rotates EXIF, Resizes to Max Bounding Box (1200px),
+ * Strips GPS Metadata, and Compresses to WebP / High-Efficiency JPEG (82%)
+ */
+function optimizeAndStoreReportImage($sourcePath, $targetDir, $baseName = '', $maxDim = 1200, $quality = 82) {
+    if (!file_exists($sourcePath)) return false;
+    if (!is_dir($targetDir)) mkdir($targetDir, 0777, true);
+
+    $baseName = !empty($baseName) ? $baseName : ('upload_' . time() . '_' . rand(1000, 9999));
+
+    // Fallback if GD is not available
+    if (!extension_loaded('gd') || !function_exists('imagecreatetruecolor')) {
+        $ext = pathinfo($sourcePath, PATHINFO_EXTENSION) ?: 'jpg';
+        $dest = rtrim($targetDir, '/\\') . '/' . $baseName . '.' . $ext;
+        if (is_uploaded_file($sourcePath)) {
+            move_uploaded_file($sourcePath, $dest);
+        } else {
+            copy($sourcePath, $dest);
+        }
+        return $baseName . '.' . $ext;
+    }
+
+    $imgInfo = @getimagesize($sourcePath);
+    if (!$imgInfo) {
+        $dest = rtrim($targetDir, '/\\') . '/' . $baseName . '.jpg';
+        if (is_uploaded_file($sourcePath)) {
+            move_uploaded_file($sourcePath, $dest);
+        } else {
+            copy($sourcePath, $dest);
+        }
+        return $baseName . '.jpg';
+    }
+
+    $origWidth = $imgInfo[0];
+    $origHeight = $imgInfo[1];
+    $mime = $imgInfo['mime'] ?? 'image/jpeg';
+
+    switch ($mime) {
+        case 'image/jpeg':
+            $src = @imagecreatefromjpeg($sourcePath);
+            break;
+        case 'image/png':
+            $src = @imagecreatefrompng($sourcePath);
+            break;
+        case 'image/webp':
+            $src = @imagecreatefromwebp($sourcePath);
+            break;
+        default:
+            $dest = rtrim($targetDir, '/\\') . '/' . $baseName . '.jpg';
+            if (is_uploaded_file($sourcePath)) {
+                move_uploaded_file($sourcePath, $dest);
+            } else {
+                copy($sourcePath, $dest);
+            }
+            return $baseName . '.jpg';
+    }
+
+    if (!$src) {
+        $dest = rtrim($targetDir, '/\\') . '/' . $baseName . '.jpg';
+        if (is_uploaded_file($sourcePath)) {
+            move_uploaded_file($sourcePath, $dest);
+        } else {
+            copy($sourcePath, $dest);
+        }
+        return $baseName . '.jpg';
+    }
+
+    // Auto-rotate based on EXIF orientation (fixes sideways phone photos)
+    if (function_exists('exif_read_data') && ($mime === 'image/jpeg' || $mime === 'image/tiff')) {
+        $exif = @exif_read_data($sourcePath);
+        if (!empty($exif['Orientation'])) {
+            switch ($exif['Orientation']) {
+                case 3: $src = imagerotate($src, 180, 0); break;
+                case 6: 
+                    $src = imagerotate($src, -90, 0); 
+                    $t = $origWidth; $origWidth = $origHeight; $origHeight = $t;
+                    break;
+                case 8: 
+                    $src = imagerotate($src, 90, 0); 
+                    $t = $origWidth; $origWidth = $origHeight; $origHeight = $t;
+                    break;
+            }
+        }
+    }
+
+    // Calculate aspect ratio dimensions (never upscale smaller images)
+    $ratio = min($maxDim / $origWidth, $maxDim / $origHeight, 1.0);
+    $targetWidth = max(1, (int)round($origWidth * $ratio));
+    $targetHeight = max(1, (int)round($origHeight * $ratio));
+
+    $dst = imagecreatetruecolor($targetWidth, $targetHeight);
+
+    // Alpha channel handling for PNG & WebP
+    if ($mime === 'image/png' || $mime === 'image/webp') {
+        imagealphablending($dst, false);
+        imagesavealpha($dst, true);
+        $transparent = imagecolorallocatealpha($dst, 255, 255, 255, 127);
+        imagefilledrectangle($dst, 0, 0, $targetWidth, $targetHeight, $transparent);
+    }
+
+    // High quality bicubic resample (strips all EXIF GPS metadata automatically)
+    imagecopyresampled($dst, $src, 0, 0, 0, 0, $targetWidth, $targetHeight, $origWidth, $origHeight);
+
+    // Prefer modern WebP (30% smaller than JPEG), fallback to optimized JPEG
+    $savedExt = function_exists('imagewebp') ? 'webp' : 'jpg';
+    $finalFilename = $baseName . '.' . $savedExt;
+    $finalFullPath = rtrim($targetDir, '/\\') . '/' . $finalFilename;
+
+    if ($savedExt === 'webp') {
+        imagewebp($dst, $finalFullPath, $quality);
+    } else {
+        imagejpeg($dst, $finalFullPath, $quality);
+    }
+
+    imagedestroy($src);
+    imagedestroy($dst);
+
+    return $finalFilename;
+}
+
+/**
  * Read maintenance settings from DB (with json file fallback).
  * Returns array: [enabled, message, eta, support_email]
  */
@@ -86,6 +206,7 @@ function isMaintenanceModeActive() {
  * - Page requests get redirected to maintenance.php.
  */
 function enforceMaintenanceMode() {
+    if (php_sapi_name() === 'cli') return;
     if (!isMaintenanceModeActive()) return;
 
     // Allow active admin sessions
@@ -107,7 +228,8 @@ function enforceMaintenanceMode() {
     }
 
     // JSON API callers
-    $isJson = function_exists('isApiRequest') && isApiRequest();
+    $uri    = $_SERVER['REQUEST_URI'] ?? '';
+    $isJson = (function_exists('isApiRequest') && isApiRequest()) || str_contains($uri, '/api/');
     $accept  = strtolower($_SERVER['HTTP_ACCEPT'] ?? '');
     $ct      = strtolower($_SERVER['CONTENT_TYPE'] ?? '');
     if ($isJson || str_contains($accept, 'application/json') || str_contains($ct, 'application/json')) {
@@ -125,12 +247,19 @@ function enforceMaintenanceMode() {
     }
 
     // Page request — redirect to maintenance page
-    $uri = $_SERVER['REQUEST_URI'] ?? '';
-    $inFrontend = str_contains($uri, '/Frontend/') || file_exists('maintenance.php');
-    $target = $inFrontend ? 'maintenance.php' : 'Frontend/maintenance.php';
-    header('HTTP/1.1 503 Service Unavailable');
-    header('Retry-After: ' . $retryAfter);
-    header('Location: ' . $target);
+    $scriptName = $_SERVER['SCRIPT_NAME'] ?? '';
+    if (strpos($scriptName, '/Frontend/') !== false) {
+        $target = substr($scriptName, 0, strpos($scriptName, '/Frontend/') + 10) . 'maintenance.php';
+    } elseif (strpos($scriptName, '/Backend/') !== false) {
+        $target = substr($scriptName, 0, strpos($scriptName, '/Backend/')) . '/Frontend/maintenance.php';
+    } else {
+        $target = file_exists(__DIR__ . '/../Frontend/maintenance.php') ? 'Frontend/maintenance.php' : 'maintenance.php';
+    }
+
+    if (!headers_sent()) {
+        header('Location: ' . $target, true, 302);
+    }
+    echo '<!DOCTYPE html><html><head><meta http-equiv="refresh" content="0;url=' . htmlspecialchars($target) . '"><script>window.location.replace(' . json_encode($target) . ');</script></head><body><p>System undergoing maintenance. Redirecting...</p></body></html>';
     exit;
 }
 
@@ -775,6 +904,132 @@ function consumePasswordResetToken($token, $newPassword) {
 }
 
 /**
+ * Dynamically inserts or retrieves a match record across any table schema variations
+ */
+function insertMatchRecord($lostId, $foundId, $score) {
+    global $conn;
+    if (!$conn) return null;
+
+    $matchColsRes = $conn->query("SHOW COLUMNS FROM matches");
+    $mCols = [];
+    if ($matchColsRes) {
+        while ($mc = $matchColsRes->fetch_assoc()) $mCols[] = strtolower($mc['Field']);
+    }
+
+    $mLostCol = in_array('lost_id', $mCols) ? 'lost_id' : (in_array('lost_report_id', $mCols) ? 'lost_report_id' : 'lost_id');
+    $mFoundCol = in_array('found_id', $mCols) ? 'found_id' : (in_array('found_report_id', $mCols) ? 'found_report_id' : 'found_id');
+    $mScoreCol = in_array('match_percentage', $mCols) ? 'match_percentage' : (in_array('similarity_score', $mCols) ? 'similarity_score' : (in_array('score', $mCols) ? 'score' : 'match_percentage'));
+    $mIdCol = in_array('match_id', $mCols) ? 'match_id' : (in_array('id', $mCols) ? 'id' : 'match_id');
+
+    // Check if match already exists
+    $checkStmt = $conn->prepare("SELECT $mIdCol FROM matches WHERE $mLostCol = ? AND $mFoundCol = ?");
+    if ($checkStmt) {
+        $checkStmt->bind_param("ii", $lostId, $foundId);
+        $checkStmt->execute();
+        $res = $checkStmt->get_result();
+        if ($res && $res->num_rows > 0) {
+            $row = $res->fetch_assoc();
+            $checkStmt->close();
+            return (int)($row[$mIdCol] ?? 1);
+        }
+        $checkStmt->close();
+    }
+
+    $scoreDecimal = number_format($score, 2, '.', '');
+    $hasStatus = in_array('status', $mCols);
+    $hasCreated = in_array('created_at', $mCols);
+
+    $sql = "INSERT INTO matches ($mLostCol, $mFoundCol, $mScoreCol" . ($hasStatus ? ", status" : "") . ($hasCreated ? ", created_at" : "") . ") VALUES (?, ?, ?" . ($hasStatus ? ", 'pending'" : "") . ($hasCreated ? ", NOW()" : "") . ")";
+
+    $stmt = $conn->prepare($sql);
+    if ($stmt) {
+        $stmt->bind_param("iid", $lostId, $foundId, $scoreDecimal);
+        if ($stmt->execute()) {
+            $newId = $stmt->insert_id;
+            $stmt->close();
+            return $newId;
+        } else {
+            error_log("[Matches] Insert execute error: " . $stmt->error);
+            $stmt->close();
+        }
+    } else {
+        error_log("[Matches] Insert prepare error: " . $conn->error);
+    }
+    return null;
+}
+
+/**
+ * Dynamically inserts a notification record across any table schema variations
+ */
+function insertSystemNotification($targetUserId, $title, $message, $link = '', $reportType = 'LOST', $reportId = 0, $type = 'match') {
+    global $conn;
+    if (!$conn || empty($targetUserId)) return false;
+
+    $notifColsRes = $conn->query("SHOW COLUMNS FROM notifications");
+    $nCols = [];
+    if ($notifColsRes) {
+        while ($nc = $notifColsRes->fetch_assoc()) $nCols[] = strtolower($nc['Field']);
+    }
+
+    $uCol = in_array('user_id', $nCols) ? 'user_id' : 'userId';
+    $hasTitle = in_array('title', $nCols);
+    $finalMessage = $hasTitle ? $message : (!empty($title) ? "$title: $message" : $message);
+
+    $fields = [$uCol, 'message'];
+    $vals = [(int)$targetUserId, $finalMessage];
+    $types = "is";
+
+    if ($hasTitle) {
+        $fields[] = 'title';
+        $vals[] = $title;
+        $types .= 's';
+    }
+    if (in_array('report_type', $nCols)) {
+        $fields[] = 'report_type';
+        $vals[] = strtoupper($reportType);
+        $types .= 's';
+    }
+    if (in_array('report_id', $nCols)) {
+        $fields[] = 'report_id';
+        $vals[] = (int)$reportId;
+        $types .= 'i';
+    }
+    if (in_array('type', $nCols)) {
+        $fields[] = 'type';
+        $vals[] = $type;
+        $types .= 's';
+    }
+    if (in_array('link', $nCols)) {
+        $fields[] = 'link';
+        $vals[] = $link;
+        $types .= 's';
+    }
+    if (in_array('is_read', $nCols)) {
+        $fields[] = 'is_read';
+        $vals[] = 0;
+        $types .= 'i';
+    }
+
+    $fieldList = implode(', ', $fields);
+    $placeholders = implode(', ', array_fill(0, count($fields), '?'));
+    $hasCreatedAt = in_array('created_at', $nCols);
+
+    $sql = "INSERT INTO notifications ($fieldList" . ($hasCreatedAt ? ", created_at" : "") . ") VALUES ($placeholders" . ($hasCreatedAt ? ", NOW()" : "") . ")";
+
+    $stmt = $conn->prepare($sql);
+    if ($stmt) {
+        $stmt->bind_param($types, ...$vals);
+        $ok = $stmt->execute();
+        $insId = $stmt->insert_id;
+        $stmt->close();
+        return $insId;
+    } else {
+        error_log("[Notifications] Insert prepare error: " . $conn->error);
+        return false;
+    }
+}
+
+/**
  * Executes Vector + Hybrid Real-Time Matchmaking and generates user notifications
  */
 function runRealtimeMatchmaking($insertedId, $reportType, $category, $title, $description, $location, $imageWebPath, $userId) {
@@ -788,7 +1043,7 @@ function runRealtimeMatchmaking($insertedId, $reportType, $category, $title, $de
     // 1. Query Vector Matches from Flask AI Engine
     $vectorMatches = [];
     try {
-        $flaskUrl = (defined('FLASK_AI_URL') ? FLASK_AI_URL : 'http://127.0.0.1:5000') . '/report/search-matches';
+        $flaskUrl = (defined('FLASK_AI_URL') ? FLASK_AI_URL : 'https://reunite-ai-backend.onrender.com') . '/report/search-matches';
         $searchPayload = [
             'text' => "$category. $title. $description. $location.",
             'report_id' => ($reportType === 'found' ? 'RF-' : 'RL-') . str_pad($insertedId, 5, '0', STR_PAD_LEFT),
@@ -831,38 +1086,109 @@ function runRealtimeMatchmaking($insertedId, $reportType, $category, $title, $de
     }
 
     // 2. Hybrid / Fallback DB Similarity Matcher
-    $queryOpposite = "SELECT id, user_id, title, description, category, location FROM `$targetTable` WHERE status = 'active' AND id != ?";
+    $colsRes = $conn->query("SHOW COLUMNS FROM `$targetTable`");
+    $targetCols = [];
+    if ($colsRes) {
+        while ($c = $colsRes->fetch_assoc()) $targetCols[] = strtolower($c['Field']);
+    }
+    $idCol = in_array('id', $targetCols) ? 'id' : (($targetType === 'found') ? 'found_id' : 'lost_id');
+    $userCol = in_array('user_id', $targetCols) ? 'user_id' : (in_array('finder_id', $targetCols) ? 'finder_id' : 'user_id');
+
+    $queryOpposite = "SELECT $idCol AS id, $userCol AS user_id, title, description, category, location, status FROM `$targetTable` WHERE ($idCol != ?) AND (status = 'active' OR status = 'Pending' OR status = '' OR status IS NULL)";
     $stmtOpp = $conn->prepare($queryOpposite);
     if ($stmtOpp) {
         $stmtOpp->bind_param("i", $insertedId);
         $stmtOpp->execute();
         $resOpp = $stmtOpp->get_result();
         
-        $tokens1 = array_unique(array_filter(preg_split('/[\s,\.\-_]+/', strtolower("$title $description $category $location"))));
+        $tokens1 = array_unique(array_filter(preg_split('/[\s,\.\-_:\/()]+/', strtolower("$title $description $category $location"))));
+        $stopWords = ['the','a','an','in','on','at','near','by','is','was','of','for','and','or','with','i','my','to','from','it','its','have','has','had','found','lost','item','report','reported'];
+        $cleanTokens1 = array_diff($tokens1, $stopWords);
         
         while ($opp = $resOpp->fetch_assoc()) {
             $oppId = (int)$opp['id'];
             if (isset($matchedDbIds[$oppId])) continue; // Already matched by vector engine
 
-            $oppTokens = array_unique(array_filter(preg_split('/[\s,\.\-_]+/', strtolower("{$opp['title']} {$opp['description']} {$opp['category']} {$opp['location']}"))));
-            $common = array_intersect($tokens1, $oppTokens);
+            $oppTokens = array_unique(array_filter(preg_split('/[\s,\.\-_:\/()]+/', strtolower("{$opp['title']} {$opp['description']} {$opp['category']} {$opp['location']}"))));
+            $cleanOppTokens = array_diff($oppTokens, $stopWords);
             
-            // Remove common stop words
-            $stopWords = ['the','a','an','in','on','at','near','by','is','was','of','for','and','or','with','i','my','to','from'];
-            $meaningfulCommon = array_diff($common, $stopWords);
-
+            $common = array_intersect($cleanTokens1, $cleanOppTokens);
+            
             $score = 0;
-            if (strcasecmp($category, $opp['category']) === 0 && !empty($category) && $category !== 'General') {
-                $score += 40;
-            }
-            if (!empty($meaningfulCommon)) {
-                $score += min(count($meaningfulCommon) * 20, 50);
-            }
-            if (!empty($location) && !empty($opp['location']) && (stripos($location, $opp['location']) !== false || stripos($opp['location'], $location) !== false)) {
-                $score += 15;
+
+            // 1. Direct Title & Object Similarity
+            $titleA = strtolower(trim($title));
+            $titleB = strtolower(trim($opp['title'] ?? ''));
+            if (!empty($titleA) && !empty($titleB)) {
+                if ($titleA === $titleB) {
+                    $score += 50;
+                } elseif (stripos($titleA, $titleB) !== false || stripos($titleB, $titleA) !== false) {
+                    $score += 40;
+                } else {
+                    similar_text($titleA, $titleB, $simPct);
+                    if ($simPct >= 70) {
+                        $score += 40;
+                    } elseif ($simPct >= 50) {
+                        $score += 25;
+                    }
+                }
             }
 
-            if ($score >= 45) {
+            // 2. Category Similarity (Exact, Substring, or Stem)
+            $catA = strtolower(trim($category));
+            $catB = strtolower(trim($opp['category'] ?? ''));
+            if (!empty($catA) && !empty($catB) && $catA !== 'general' && $catB !== 'general') {
+                if ($catA === $catB) {
+                    $score += 40;
+                } elseif (stripos($catA, $catB) !== false || stripos($catB, $catA) !== false) {
+                    $score += 35;
+                } else {
+                    $keyStems = ['mouse', 'watch', 'wallet', 'phone', 'bag', 'key', 'card', 'airpod', 'earbud', 'headphone', 'laptop', 'bottle', 'id', 'license', 'book', 'umbrella', 'charger', 'glasses', 'calculator'];
+                    foreach ($keyStems as $stem) {
+                        if (stripos($catA, $stem) !== false && stripos($catB, $stem) !== false) {
+                            $score += 35;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            // 2. Meaningful Word Overlap
+            $overlapCount = count($common);
+            if ($overlapCount > 0) {
+                $score += min($overlapCount * 20, 50);
+            }
+
+            // 3. Partial Token Matches (e.g. "watches" vs "watch", "leather" vs "leather-strap")
+            if ($overlapCount === 0) {
+                foreach ($cleanTokens1 as $t1) {
+                    if (strlen($t1) < 4) continue;
+                    foreach ($cleanOppTokens as $t2) {
+                        if (strlen($t2) < 4) continue;
+                        if (stripos($t1, $t2) !== false || stripos($t2, $t1) !== false) {
+                            $score += 20;
+                            break 2;
+                        }
+                    }
+                }
+            }
+
+            // 4. Location Proximity
+            $locA = strtolower(trim($location));
+            $locB = strtolower(trim($opp['location'] ?? ''));
+            if (!empty($locA) && !empty($locB)) {
+                if (stripos($locA, $locB) !== false || stripos($locB, $locA) !== false) {
+                    $score += 15;
+                } else {
+                    $locTokensA = array_diff(array_filter(preg_split('/[\s,\.\-_]+/', $locA)), $stopWords);
+                    $locTokensB = array_diff(array_filter(preg_split('/[\s,\.\-_]+/', $locB)), $stopWords);
+                    if (!empty(array_intersect($locTokensA, $locTokensB))) {
+                        $score += 15;
+                    }
+                }
+            }
+
+            if ($score >= 35) {
                 $matchedDbIds[$oppId] = min($score, 98.0);
             }
         }
@@ -874,37 +1200,41 @@ function runRealtimeMatchmaking($insertedId, $reportType, $category, $title, $de
         $lostId = ($reportType === 'found') ? $oppId : $insertedId;
         $foundId = ($reportType === 'found') ? $insertedId : $oppId;
 
-        // Check if match already exists
-        $checkStmt = $conn->prepare("SELECT id FROM matches WHERE lost_report_id = ? AND found_report_id = ?");
-        if ($checkStmt) {
-            $checkStmt->bind_param("ii", $lostId, $foundId);
-            $checkStmt->execute();
-            $checkRes = $checkStmt->get_result();
-            if ($checkRes->num_rows > 0) {
-                $checkStmt->close();
-                continue; // Already recorded
-            }
-            $checkStmt->close();
-        }
-
-        // Insert into matches table
-        $insMatch = $conn->prepare("INSERT INTO matches (lost_report_id, found_report_id, similarity_score, status, created_at) VALUES (?, ?, ?, 'pending', NOW())");
-        $matchId = null;
-        if ($insMatch) {
-            $scoreDecimal = number_format($score, 2, '.', '');
-            $insMatch->bind_param("iid", $lostId, $foundId, $scoreDecimal);
-            $insMatch->execute();
-            $matchId = $insMatch->insert_id;
-            $insMatch->close();
-        }
+        // Insert or fetch match record dynamically
+        $matchId = insertMatchRecord($lostId, $foundId, $score);
 
         // Fetch details of both reports to construct personalized notifications
-        $lostInfo = $conn->query("SELECT user_id, title FROM lost_reports WHERE id = $lostId")->fetch_assoc();
-        $foundInfo = $conn->query("SELECT user_id, title FROM found_reports WHERE id = $foundId")->fetch_assoc();
+        $lostColsRes = $conn->query("SHOW COLUMNS FROM lost_reports");
+        $lCols = [];
+        if ($lostColsRes) {
+            while ($lc = $lostColsRes->fetch_assoc()) $lCols[] = strtolower($lc['Field']);
+        }
+        $lIdCol = in_array('id', $lCols) ? 'id' : 'lost_id';
+
+        $foundColsRes = $conn->query("SHOW COLUMNS FROM found_reports");
+        $fCols = [];
+        if ($foundColsRes) {
+            while ($fc = $foundColsRes->fetch_assoc()) $fCols[] = strtolower($fc['Field']);
+        }
+        $fIdCol = in_array('id', $fCols) ? 'id' : 'found_id';
+
+        $lostInfoRes = $conn->query("SELECT * FROM lost_reports WHERE $lIdCol = $lostId LIMIT 1");
+        $lostInfo = $lostInfoRes ? $lostInfoRes->fetch_assoc() : null;
+
+        $foundInfoRes = $conn->query("SELECT * FROM found_reports WHERE $fIdCol = $foundId LIMIT 1");
+        $foundInfo = $foundInfoRes ? $foundInfoRes->fetch_assoc() : null;
 
         if ($lostInfo && $foundInfo) {
-            $lostUserId = (int)$lostInfo['user_id'];
-            $foundUserId = (int)$foundInfo['user_id'];
+            $lostUserId = (int)($lostInfo['user_id'] ?? 0);
+            $foundUserId = (int)($foundInfo['user_id'] ?? $foundInfo['finder_id'] ?? 0);
+
+            if ($lostUserId === 0 && $reportType === 'lost' && $userId > 0) {
+                $lostUserId = (int)$userId;
+            }
+            if ($foundUserId === 0 && $reportType === 'found' && $userId > 0) {
+                $foundUserId = (int)$userId;
+            }
+
             $emojiRegex = '/[\x{1F300}-\x{1FAFF}\x{1F000}-\x{1F2FF}\x{2300}-\x{23FF}\x{2600}-\x{27BF}\x{2B00}-\x{2BFF}\x{FE00}-\x{FE0F}\x{200D}]/u';
             $lostTitle = trim(preg_replace('/\s+/', ' ', preg_replace($emojiRegex, '', $lostInfo['title'] ?? '')));
             $foundTitle = trim(preg_replace('/\s+/', ' ', preg_replace($emojiRegex, '', $foundInfo['title'] ?? '')));
@@ -914,26 +1244,64 @@ function runRealtimeMatchmaking($insertedId, $reportType, $category, $title, $de
             if ($lostUserId > 0) {
                 $nTitle = "Potential Match: " . substr($foundTitle, 0, 40);
                 $nMsg = "A found item '" . $foundTitle . "' matches your lost report '" . $lostTitle . "' with {$scoreDisplay} similarity.";
-                $nLink = "item.php?match_id=" . ($matchId ?: 1);
-                $nStmt = $conn->prepare("INSERT INTO notifications (user_id, title, report_type, report_id, type, message, link, is_read, created_at) VALUES (?, ?, 'LOST', ?, 'match', ?, ?, 0, NOW())");
-                if ($nStmt) {
-                    $nStmt->bind_param("isiss", $lostUserId, $nTitle, $lostId, $nMsg, $nLink);
-                    $nStmt->execute();
-                    $nStmt->close();
-                }
+                $nLink = "item.php?type=found&id=" . $foundId . ($matchId ? "&match_id=" . $matchId : "");
+                insertSystemNotification($lostUserId, $nTitle, $nMsg, $nLink, 'FOUND', $foundId, 'match');
+
+                // Email notification to lost report owner (non-blocking)
+                try {
+                    $uRes = $conn->query("SELECT email, full_name FROM users WHERE user_id = $lostUserId LIMIT 1");
+                    if ($uRes && ($uRow = $uRes->fetch_assoc())) {
+                        $uEmail = function_exists('decryptData') ? decryptData($uRow['email']) : $uRow['email'];
+                        if (!empty($uEmail) && filter_var($uEmail, FILTER_VALIDATE_EMAIL) && function_exists('sendBrevoEmail')) {
+                            $emailSubj = "Reunite: Potential Match Detected for Your Lost Item!";
+                            $emailHtml = "<div style='font-family:sans-serif;max-width:550px;margin:0 auto;padding:24px;background:#ffffff;border:1px solid #e2e8f0;border-radius:12px;'>"
+                                . "<h2 style='color:#0d9488;margin-top:0;'>Potential Match Found!</h2>"
+                                . "<p>Hi <strong>" . htmlspecialchars($uRow['full_name'] ?? 'Student') . "</strong>,</p>"
+                                . "<p>Our matchmaking engine has detected a potential match for your reported lost item:</p>"
+                                . "<div style='background:#f8fafc;padding:14px;border-left:4px solid #0d9488;margin:16px 0;border-radius:4px;'>"
+                                . "<p style='margin:4px 0;'><strong>Your Lost Item:</strong> " . htmlspecialchars($lostTitle) . "</p>"
+                                . "<p style='margin:4px 0;'><strong>Matching Found Item:</strong> " . htmlspecialchars($foundTitle) . "</p>"
+                                . "<p style='margin:4px 0;color:#0d9488;font-weight:bold;'>Match Confidence: " . $scoreDisplay . "</p>"
+                                . "</div>"
+                                . "<p style='margin-top:20px;'><a href='https://reunite.site.je/" . $nLink . "' style='display:inline-block;padding:10px 20px;background:#0d9488;color:#ffffff;text-decoration:none;border-radius:6px;font-weight:bold;'>View Match Details</a></p>"
+                                . "<hr style='margin:25px 0 15px 0;border:none;border-top:1px solid #e2e8f0;'>"
+                                . "<p style='font-size:12px;color:#94a3b8;margin:0;'>Reunite - Campus Lost and Found Platform</p></div>";
+                            @sendBrevoEmail($uEmail, $uRow['full_name'], $emailSubj, $emailHtml);
+                        }
+                    }
+                } catch (Exception $e) {}
             }
 
-            // Notification for Found Report Owner (if different user)
-            if ($foundUserId > 0 && $foundUserId !== $lostUserId) {
+            // Notification for Found Report Owner
+            if ($foundUserId > 0) {
                 $nTitle = "Potential Match: " . substr($lostTitle, 0, 40);
                 $nMsg = "Your reported found item '" . $foundTitle . "' has a {$scoreDisplay} match with a lost item ('" . $lostTitle . "').";
-                $nLink = "item.php?match_id=" . ($matchId ?: 1);
-                $nStmt = $conn->prepare("INSERT INTO notifications (user_id, title, report_type, report_id, type, message, link, is_read, created_at) VALUES (?, ?, 'FOUND', ?, 'match', ?, ?, 0, NOW())");
-                if ($nStmt) {
-                    $nStmt->bind_param("isiss", $foundUserId, $nTitle, $foundId, $nMsg, $nLink);
-                    $nStmt->execute();
-                    $nStmt->close();
-                }
+                $nLink = "item.php?type=found&id=" . $foundId . ($matchId ? "&match_id=" . $matchId : "");
+                insertSystemNotification($foundUserId, $nTitle, $nMsg, $nLink, 'FOUND', $foundId, 'match');
+
+                // Email notification to found report owner (non-blocking)
+                try {
+                    $fRes = $conn->query("SELECT email, full_name FROM users WHERE user_id = $foundUserId LIMIT 1");
+                    if ($fRes && ($fRow = $fRes->fetch_assoc())) {
+                        $fEmail = function_exists('decryptData') ? decryptData($fRow['email']) : $fRow['email'];
+                        if (!empty($fEmail) && filter_var($fEmail, FILTER_VALIDATE_EMAIL) && function_exists('sendBrevoEmail')) {
+                            $emailSubj = "Reunite: Match Alert for Item You Found!";
+                            $emailHtml = "<div style='font-family:sans-serif;max-width:550px;margin:0 auto;padding:24px;background:#ffffff;border:1px solid #e2e8f0;border-radius:12px;'>"
+                                . "<h2 style='color:#0d9488;margin-top:0;'>Match Alert!</h2>"
+                                . "<p>Hi <strong>" . htmlspecialchars($fRow['full_name'] ?? 'Student') . "</strong>,</p>"
+                                . "<p>A student has reported a lost item that closely matches the item you found:</p>"
+                                . "<div style='background:#f8fafc;padding:14px;border-left:4px solid #0d9488;margin:16px 0;border-radius:4px;'>"
+                                . "<p style='margin:4px 0;'><strong>Found Item:</strong> " . htmlspecialchars($foundTitle) . "</p>"
+                                . "<p style='margin:4px 0;'><strong>Matching Lost Report:</strong> " . htmlspecialchars($lostTitle) . "</p>"
+                                . "<p style='margin:4px 0;color:#0d9488;font-weight:bold;'>Match Confidence: " . $scoreDisplay . "</p>"
+                                . "</div>"
+                                . "<p style='margin-top:20px;'><a href='https://reunite.site.je/" . $nLink . "' style='display:inline-block;padding:10px 20px;background:#0d9488;color:#ffffff;text-decoration:none;border-radius:6px;font-weight:bold;'>View Match Details</a></p>"
+                                . "<hr style='margin:25px 0 15px 0;border:none;border-top:1px solid #e2e8f0;'>"
+                                . "<p style='font-size:12px;color:#94a3b8;margin:0;'>Reunite - Campus Lost and Found Platform</p></div>";
+                            @sendBrevoEmail($fEmail, $fRow['full_name'], $emailSubj, $emailHtml);
+                        }
+                    }
+                } catch (Exception $e) {}
             }
 
             $createdMatches[] = [
@@ -1001,6 +1369,11 @@ function resolveReportDateTime($dateInput = '', $descInput = '') {
         'date' => $resolvedDate,
         'time' => $resolvedTime
     ];
+}
+
+// Automatically enforce maintenance mode across all including endpoints
+if (function_exists('enforceMaintenanceMode')) {
+    enforceMaintenanceMode();
 }
 
 
