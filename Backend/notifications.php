@@ -163,11 +163,60 @@ if ($conn) {
             $resolvedLink = !empty($row['link']) ? $row['link'] : '';
             $repId = (int)($row['report_id'] ?? 0);
             $rType = strtolower($row['report_type'] ?? 'found');
-            if (empty($resolvedLink) && $repId > 0) {
-                $resolvedLink = "item.php?type={$rType}&id={$repId}";
-            }
+
             if (empty($resolvedLink)) {
-                $resolvedLink = 'search.php';
+                // If this is a match notification, dynamically find the exact match and found item!
+                if ($nType === 'match' || stripos($cleanTitle . ' ' . $cleanMessage, 'match') !== false) {
+                    $extractedPct = null;
+                    if (preg_match('/(\d+(?:\.\d+)?)\s*%/i', $cleanMessage, $pctMatches)) {
+                        $extractedPct = (float)$pctMatches[1];
+                    }
+
+                    $matchedRow = null;
+                    if ($repId > 0) {
+                        $targetCol = ($rType === 'found') ? 'found_id' : 'lost_id';
+                        if ($extractedPct !== null) {
+                            $mStmt = $conn->prepare("SELECT match_id, found_id, lost_id FROM matches WHERE `$targetCol` = ? AND (ROUND(match_percentage) = ROUND(?) OR ROUND(match_percentage) = FLOOR(?) OR ROUND(match_percentage) = CEIL(?)) ORDER BY match_id DESC LIMIT 1");
+                            if ($mStmt) {
+                                $mStmt->bind_param("iddd", $repId, $extractedPct, $extractedPct, $extractedPct);
+                                $mStmt->execute();
+                                $mRes = $mStmt->get_result();
+                                if ($mRes && ($rowM = $mRes->fetch_assoc())) {
+                                    $matchedRow = $rowM;
+                                }
+                                $mStmt->close();
+                            }
+                        }
+
+                        if (!$matchedRow) {
+                            $mStmt = $conn->prepare("SELECT match_id, found_id, lost_id FROM matches WHERE `$targetCol` = ? ORDER BY match_id DESC LIMIT 1");
+                            if ($mStmt) {
+                                $mStmt->bind_param("i", $repId);
+                                $mStmt->execute();
+                                $mRes = $mStmt->get_result();
+                                if ($mRes && ($rowM = $mRes->fetch_assoc())) {
+                                    $matchedRow = $rowM;
+                                }
+                                $mStmt->close();
+                            }
+                        }
+                    }
+
+                    if ($matchedRow) {
+                        $foundTargetId = (int)($matchedRow['found_id'] ?? 0);
+                        $matchTargetId = (int)($matchedRow['match_id'] ?? 0);
+                        if ($foundTargetId > 0) {
+                            $resolvedLink = "item.php?type=found&id={$foundTargetId}" . ($matchTargetId > 0 ? "&match_id={$matchTargetId}" : "");
+                        }
+                    }
+                }
+
+                if (empty($resolvedLink) && $repId > 0) {
+                    $resolvedLink = "item.php?type={$rType}&id={$repId}";
+                }
+                if (empty($resolvedLink)) {
+                    $resolvedLink = 'search.php';
+                }
             }
 
             $notifications[] = [

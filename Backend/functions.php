@@ -1244,8 +1244,8 @@ function runRealtimeMatchmaking($insertedId, $reportType, $category, $title, $de
             if ($lostUserId > 0) {
                 $nTitle = "Potential Match: " . substr($foundTitle, 0, 40);
                 $nMsg = "A found item '" . $foundTitle . "' matches your lost report '" . $lostTitle . "' with {$scoreDisplay} similarity.";
-                $nLink = "item.php?match_id=" . ($matchId ?: 1);
-                insertSystemNotification($lostUserId, $nTitle, $nMsg, $nLink, 'LOST', $lostId, 'match');
+                $nLink = "item.php?type=found&id=" . $foundId . ($matchId ? "&match_id=" . $matchId : "");
+                insertSystemNotification($lostUserId, $nTitle, $nMsg, $nLink, 'FOUND', $foundId, 'match');
 
                 // Email notification to lost report owner (non-blocking)
                 try {
@@ -1276,7 +1276,7 @@ function runRealtimeMatchmaking($insertedId, $reportType, $category, $title, $de
             if ($foundUserId > 0) {
                 $nTitle = "Potential Match: " . substr($lostTitle, 0, 40);
                 $nMsg = "Your reported found item '" . $foundTitle . "' has a {$scoreDisplay} match with a lost item ('" . $lostTitle . "').";
-                $nLink = "item.php?match_id=" . ($matchId ?: 1);
+                $nLink = "item.php?type=found&id=" . $foundId . ($matchId ? "&match_id=" . $matchId : "");
                 insertSystemNotification($foundUserId, $nTitle, $nMsg, $nLink, 'FOUND', $foundId, 'match');
 
                 // Email notification to found report owner (non-blocking)

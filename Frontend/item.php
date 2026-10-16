@@ -397,10 +397,10 @@ if ($conn && $numericId > 0) {
     if ($activeMatchRow) {
         $hasAiMatch = true;
         $currentMatchId = (int)($activeMatchRow[$pkCol] ?? 0);
-        $rawScore = $activeMatchRow[$scoreCol] ?? 95;
-        $matchScore = min(99, max(50, round((float)$rawScore)));
-        $visualScore = min(99, round($matchScore * 1.01));
-        $textScore = min(99, round($matchScore * 0.98));
+        $rawScore = (float)($activeMatchRow[$scoreCol] ?? 95);
+        $matchScore = min(100, max(1, round($rawScore)));
+        $visualScore = min(100, max(1, round($matchScore * 1.01)));
+        $textScore = min(100, max(1, round($matchScore * 0.98)));
 
         // Fetch opposite matched report details
         $oppId = ($reportType === 'found')
