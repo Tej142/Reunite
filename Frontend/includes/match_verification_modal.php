@@ -1,6 +1,29 @@
 <!-- =========================================================
      GLOBAL MODAL OVERLAY (MATCH VERIFICATION)
      ========================================================= -->
+<style>
+#modalOverlay {
+  display: none !important;
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 99999 !important;
+  background: rgba(0, 0, 0, 0.78) !important;
+  backdrop-filter: blur(8px) !important;
+  -webkit-backdrop-filter: blur(8px) !important;
+  padding: 1rem !important;
+  overflow-y: auto !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+#modalOverlay.flex:not(.hidden),
+#modalOverlay[aria-hidden="false"]:not(.hidden) {
+  display: flex !important;
+}
+#modalOverlay.hidden,
+#modalOverlay .hidden {
+  display: none !important;
+}
+</style>
 <div
     id="modalOverlay"
     class="fixed inset-0 z-[100] hidden items-center justify-center

@@ -1,6 +1,49 @@
 <!-- =========================================================
      FOUNDER APPROVAL MODAL OVERLAY
      ========================================================= -->
+<style>
+#founderApprovalOverlay {
+  display: none !important;
+  position: fixed !important;
+  inset: 0 !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  z-index: 99999 !important;
+  background: rgba(0, 0, 0, 0.78) !important;
+  backdrop-filter: blur(8px) !important;
+  -webkit-backdrop-filter: blur(8px) !important;
+  padding: 1rem !important;
+  overflow-y: auto !important;
+  align-items: center !important;
+  justify-content: center !important;
+  box-sizing: border-box !important;
+}
+#founderApprovalOverlay.flex:not(.hidden),
+#founderApprovalOverlay[aria-hidden="false"]:not(.hidden) {
+  display: flex !important;
+}
+#founderApprovalOverlay.hidden,
+#founderApprovalOverlay .hidden {
+  display: none !important;
+}
+#founderApprovalModal {
+  position: relative !important;
+  width: 100% !important;
+  max-width: 520px !important;
+  background: var(--card-bg, #1a1511) !important;
+  color: var(--text, #ffffff) !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  border-radius: 18px !important;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.6) !important;
+  max-height: 90vh !important;
+  overflow-y: auto !important;
+  margin: auto !important;
+}
+</style>
 <div id="founderApprovalOverlay"
      class="fixed inset-0 z-[110] hidden items-center justify-center bg-black bg-opacity-70 backdrop-blur-sm px-4 py-6"
      aria-hidden="true">

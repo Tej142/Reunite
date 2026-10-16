@@ -2078,8 +2078,35 @@ mark {
   }
 }
 
+/* ── Global Utility Helpers ───────────────────────────────── */
+.hidden {
+  display: none !important;
+}
+
+#modalOverlay,
+#founderApprovalOverlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  padding: 1rem;
+  overflow-y: auto;
+  align-items: center;
+  justify-content: center;
+}
+
+#modalOverlay.flex,
+#founderApprovalOverlay.flex,
+#founderApprovalOverlay[aria-hidden="false"] {
+  display: flex !important;
+}
+
 /* ── Print reset ──────────────────────────────────────────── */
 @media print {
   nav, .btn, .mobile-nav-drawer { display: none !important; }
   body { background: white !important; color: black !important; }
 }
+

@@ -235,10 +235,6 @@ if (!empty($_GET['item']) || !empty($_GET['id']) || !empty($_GET['item_id']) || 
 <div id="itemDrawerOverlay" class="drawer-overlay" role="presentation"></div>
 <aside id="itemDrawer" class="item-slideover-drawer" role="dialog" aria-labelledby="modalItemTitle" aria-hidden="true" aria-modal="false"></aside>
 
-<!-- ── Global Modals (Match Verification & Founder Approval) ── -->
-<?php include_once __DIR__ . '/includes/match_verification_modal.php'; ?>
-<?php include_once __DIR__ . '/includes/founder_approval_modal.php'; ?>
-
 <!-- ── Scripts ── -->
 <script src="js/flask-ai-service.js?v=<?php echo time(); ?>"></script>
 <script src="js/search.js?v=<?php echo time(); ?>"></script>

@@ -1064,8 +1064,7 @@ if (empty($similarItems)) {
   </div>
 </div>
 
-<!-- ── Global Modals (Match Verification & Founder Approval) ── -->
-<?php include_once __DIR__ . '/includes/match_verification_modal.php'; ?>
+<!-- ── Global Modals (Founder Approval) ── -->
 <?php include_once __DIR__ . '/includes/founder_approval_modal.php'; ?>
 
 <script src="js/item.js?v=<?php echo time(); ?>"></script>
