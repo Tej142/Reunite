@@ -605,7 +605,7 @@ if (empty($similarItems)) {
   <?php else: ?>
 
     <!-- ── Top Navigation & Breadcrumbs ── -->
-    <nav class="item-topbar" aria-label="Breadcrumb">
+    <div class="item-topbar" role="navigation" aria-label="Breadcrumb">
       <div class="item-breadcrumb">
         <a href="home.php">Home</a>
         <span class="breadcrumb-sep">/</span>
@@ -621,7 +621,7 @@ if (empty($similarItems)) {
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
         <span>Back to results</span>
       </a>
-    </nav>
+    </div>
 
     <!-- ── Two-Column Main Area (60 / 40) ── -->
     <div class="item-stage-grid">

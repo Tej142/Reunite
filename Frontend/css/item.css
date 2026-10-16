@@ -19,9 +19,10 @@
   margin-bottom: 2rem;
   padding-bottom: 1rem;
   border-bottom: 1px solid var(--border);
-  position: relative;
-  z-index: 1;
-  background: transparent;
+  position: relative !important;
+  top: auto !important;
+  z-index: 2 !important;
+  background: transparent !important;
 }
 
 .item-breadcrumb {

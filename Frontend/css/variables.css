@@ -382,11 +382,10 @@ textarea:-webkit-autofill {
 }
 
 /* ── Nav ───────────────────────────────────────────── */
-nav.reunite-main-nav,
-nav:not(.admin-nav-bar):not(.maint-topnav) {
+nav.reunite-main-nav {
   position: sticky;
   top: 0;
-  z-index: 1000;
+  z-index: 5000;
   background: var(--bg);
   border-bottom: 1px solid var(--border);
   padding-top: var(--sat);
@@ -630,7 +629,7 @@ nav:not(.admin-nav-bar):not(.maint-topnav) {
   border: 1px solid var(--border);
   border-radius: 1rem;
   box-shadow: var(--shadow-lg);
-  z-index: 1100;
+  z-index: 5100;
   animation: notifDrop 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
   overflow: hidden;
 }
@@ -941,7 +940,7 @@ nav:not(.admin-nav-bar):not(.maint-topnav) {
   border-bottom: 1px solid var(--border);
   box-shadow: 0 16px 36px rgba(0, 0, 0, 0.1);
   padding: 0.85rem 1rem calc(1.25rem + var(--sab, 0px));
-  z-index: 1050;
+  z-index: 5050;
   animation: mobileDrawerSlide 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
@@ -2053,8 +2052,7 @@ mark {
 
 /* ── Short Landscape Viewports (e.g. 844x390, 640x360) ──────── */
 @media (max-height: 500px) and (orientation: landscape) {
-  nav.reunite-main-nav,
-  nav:not(.admin-nav-bar):not(.maint-topnav) {
+  nav.reunite-main-nav {
     position: relative !important;
   }
 
