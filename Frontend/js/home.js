@@ -238,10 +238,11 @@ async function fetchRealtimeHomeStats() {
     const elReunited = document.getElementById('stat-items-reunited');
     if (elReunited) {
       const newVal = parseInt(stats.items_reunited, 10) || 0;
-      const prevVal = currentStats.items_reunited !== null ? currentStats.items_reunited : (parseInt(elReunited.getAttribute('data-val'), 10) || 0);
-      if (currentStats.items_reunited === null || prevVal !== newVal) {
-        animateNumber(elReunited, prevVal, newVal);
-        if (currentStats.items_reunited !== null && prevVal !== newVal) flashStatUpdate(elReunited);
+      const isInitial = currentStats.items_reunited === null;
+      const prevVal = !isInitial ? currentStats.items_reunited : (parseInt(elReunited.getAttribute('data-val'), 10) || 0);
+      if (isInitial || prevVal !== newVal) {
+        animateNumber(elReunited, isInitial ? 0 : prevVal, newVal);
+        if (!isInitial && prevVal !== newVal) flashStatUpdate(elReunited);
       }
       currentStats.items_reunited = newVal;
       elReunited.setAttribute('data-val', newVal);
@@ -251,10 +252,11 @@ async function fetchRealtimeHomeStats() {
     const elActive = document.getElementById('stat-active-searches');
     if (elActive) {
       const newVal = parseInt(stats.active_searches, 10) || 0;
-      const prevVal = currentStats.active_searches !== null ? currentStats.active_searches : (parseInt(elActive.getAttribute('data-val'), 10) || 0);
-      if (currentStats.active_searches === null || prevVal !== newVal) {
-        animateNumber(elActive, prevVal, newVal);
-        if (currentStats.active_searches !== null && prevVal !== newVal) flashStatUpdate(elActive);
+      const isInitial = currentStats.active_searches === null;
+      const prevVal = !isInitial ? currentStats.active_searches : (parseInt(elActive.getAttribute('data-val'), 10) || 0);
+      if (isInitial || prevVal !== newVal) {
+        animateNumber(elActive, isInitial ? 0 : prevVal, newVal);
+        if (!isInitial && prevVal !== newVal) flashStatUpdate(elActive);
       }
       currentStats.active_searches = newVal;
       elActive.setAttribute('data-val', newVal);
@@ -264,10 +266,11 @@ async function fetchRealtimeHomeStats() {
     const elWeek = document.getElementById('stat-reported-this-week');
     if (elWeek) {
       const newVal = parseInt(stats.reported_this_week, 10) || 0;
-      const prevVal = currentStats.reported_this_week !== null ? currentStats.reported_this_week : (parseInt(elWeek.getAttribute('data-val'), 10) || 0);
-      if (currentStats.reported_this_week === null || prevVal !== newVal) {
-        animateNumber(elWeek, prevVal, newVal);
-        if (currentStats.reported_this_week !== null && prevVal !== newVal) flashStatUpdate(elWeek);
+      const isInitial = currentStats.reported_this_week === null;
+      const prevVal = !isInitial ? currentStats.reported_this_week : (parseInt(elWeek.getAttribute('data-val'), 10) || 0);
+      if (isInitial || prevVal !== newVal) {
+        animateNumber(elWeek, isInitial ? 0 : prevVal, newVal);
+        if (!isInitial && prevVal !== newVal) flashStatUpdate(elWeek);
       }
       currentStats.reported_this_week = newVal;
       elWeek.setAttribute('data-val', newVal);
@@ -277,21 +280,23 @@ async function fetchRealtimeHomeStats() {
     const elAccuracy = document.getElementById('stat-match-accuracy');
     if (elAccuracy && stats.match_accuracy) {
       const strVal = String(stats.match_accuracy).trim();
-      const numVal = parseFloat(strVal.replace(/[^0-9.]/g, '')) || 99.4;
-      const prevVal = currentStats.match_accuracy !== null ? currentStats.match_accuracy : (parseFloat(String(elAccuracy.getAttribute('data-val') || '').replace(/[^0-9.]/g, '')) || 0);
-      if (currentStats.match_accuracy === null || prevVal !== numVal) {
+      const numVal = parseFloat(strVal.replace(/[^0-9.]/g, '')) || 98.0;
+      const isInitial = currentStats.match_accuracy === null;
+      const prevVal = !isInitial ? currentStats.match_accuracy : (parseFloat(String(elAccuracy.getAttribute('data-val') || '').replace(/[^0-9.]/g, '')) || 0);
+      if (isInitial || prevVal !== numVal) {
+        const startNum = isInitial ? Math.max(0, numVal - 25) : prevVal;
         const startTime = performance.now();
-        const duration = 650;
+        const duration = 700;
         function updateAcc(now) {
           const progress = Math.min((now - startTime) / duration, 1);
           const ease = 1 - Math.pow(1 - progress, 3);
-          const cur = (prevVal + (numVal - prevVal) * ease).toFixed(1);
+          const cur = (startNum + (numVal - startNum) * ease).toFixed(1);
           elAccuracy.textContent = cur + '%';
           if (progress < 1) requestAnimationFrame(updateAcc);
           else elAccuracy.textContent = numVal.toFixed(1) + '%';
         }
         requestAnimationFrame(updateAcc);
-        if (currentStats.match_accuracy !== null && prevVal !== numVal) flashStatUpdate(elAccuracy);
+        if (!isInitial && prevVal !== numVal) flashStatUpdate(elAccuracy);
       }
       currentStats.match_accuracy = numVal;
       elAccuracy.setAttribute('data-val', strVal);

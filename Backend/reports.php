@@ -70,7 +70,7 @@ if ($action === 'stats') {
         'items_reunited' => 0,
         'active_searches' => 0,
         'reported_this_week' => 0,
-        'match_accuracy' => '99.4%'
+        'match_accuracy' => '98.0%'
     ];
 
     if ($conn) {
@@ -90,31 +90,34 @@ if ($action === 'stats') {
             }
         }
 
-        $lostDateCol = null;
-        foreach (['created_at', 'lost_date', 'date_lost'] as $cand) {
-            if (in_array($cand, $lostCols)) {
-                $lostDateCol = $cand;
-                break;
+        $mCols = [];
+        $mc = @$conn->query("SHOW COLUMNS FROM matches");
+        if ($mc) {
+            while ($c = $mc->fetch_assoc()) {
+                $mCols[] = strtolower($c['Field']);
             }
         }
 
-        $foundDateCol = null;
-        foreach (['created_at', 'found_date', 'date_found'] as $cand) {
-            if (in_array($cand, $foundCols)) {
-                $foundDateCol = $cand;
-                break;
-            }
-        }
+        // Resilient date expression for lost_reports: prioritize actual date, ignore '0000-00-00'
+        $lostDateParts = [];
+        if (in_array('date_lost', $lostCols)) $lostDateParts[] = "NULLIF(NULLIF(`date_lost`, '0000-00-00'), '')";
+        if (in_array('created_at', $lostCols)) $lostDateParts[] = "NULLIF(NULLIF(`created_at`, '0000-00-00 00:00:00'), '')";
+        if (in_array('lost_date', $lostCols)) $lostDateParts[] = "NULLIF(NULLIF(`lost_date`, '0000-00-00'), '')";
+        $lostDateExpr = !empty($lostDateParts) ? ("COALESCE(" . implode(', ', $lostDateParts) . ")") : "NULL";
 
-        $lostDateCond = $lostDateCol 
-            ? "CASE WHEN $lostDateCol >= DATE_SUB(CURDATE(), INTERVAL 7 DAY) THEN 1 ELSE 0 END" 
-            : "0";
+        // Resilient date expression for found_reports: prioritize actual date, ignore '0000-00-00'
+        $foundDateParts = [];
+        if (in_array('date_found', $foundCols)) $foundDateParts[] = "NULLIF(NULLIF(`date_found`, '0000-00-00'), '')";
+        if (in_array('created_at', $foundCols)) $foundDateParts[] = "NULLIF(NULLIF(`created_at`, '0000-00-00 00:00:00'), '')";
+        if (in_array('found_date', $foundCols)) $foundDateParts[] = "NULLIF(NULLIF(`found_date`, '0000-00-00'), '')";
+        $foundDateExpr = !empty($foundDateParts) ? ("COALESCE(" . implode(', ', $foundDateParts) . ")") : "NULL";
 
+        // Query lost_reports: count active searches, reunited, and weekly reports
         $lSql = "SELECT 
             COUNT(*) as total,
-            SUM(CASE WHEN LOWER(status) IN ('active', 'pending') THEN 1 ELSE 0 END) as active,
-            SUM(CASE WHEN LOWER(status) IN ('matched', 'recovered', 'claimed', 'closed', 'returned', 'reunited') THEN 1 ELSE 0 END) as reunited,
-            SUM($lostDateCond) as week_count
+            SUM(CASE WHEN LOWER(TRIM(COALESCE(status, ''))) IN ('matched', 'recovered', 'claimed', 'closed', 'returned', 'reunited', 'handed_off', 'verified') THEN 1 ELSE 0 END) as reunited,
+            SUM(CASE WHEN LOWER(TRIM(COALESCE(status, ''))) NOT IN ('matched', 'recovered', 'claimed', 'closed', 'returned', 'reunited', 'handed_off', 'verified') THEN 1 ELSE 0 END) as active,
+            SUM(CASE WHEN $lostDateExpr IS NOT NULL AND DATE($lostDateExpr) >= DATE_SUB(CURDATE(), INTERVAL 7 DAY) THEN 1 ELSE 0 END) as week_count
             FROM lost_reports";
         
         $lRes = @$conn->query($lSql);
@@ -124,15 +127,12 @@ if ($action === 'stats') {
             $stats['reported_this_week'] += (int)($lRow['week_count'] ?? 0);
         }
 
-        $foundDateCond = $foundDateCol 
-            ? "CASE WHEN $foundDateCol >= DATE_SUB(CURDATE(), INTERVAL 7 DAY) THEN 1 ELSE 0 END" 
-            : "0";
-
+        // Query found_reports: count active items, reunited, and weekly reports
         $fSql = "SELECT 
             COUNT(*) as total,
-            SUM(CASE WHEN LOWER(status) IN ('active', 'pending') THEN 1 ELSE 0 END) as active,
-            SUM(CASE WHEN LOWER(status) IN ('matched', 'recovered', 'claimed', 'closed', 'returned', 'reunited') THEN 1 ELSE 0 END) as reunited,
-            SUM($foundDateCond) as week_count
+            SUM(CASE WHEN LOWER(TRIM(COALESCE(status, ''))) IN ('matched', 'recovered', 'claimed', 'closed', 'returned', 'reunited', 'handed_off', 'verified') THEN 1 ELSE 0 END) as reunited,
+            SUM(CASE WHEN LOWER(TRIM(COALESCE(status, ''))) NOT IN ('matched', 'recovered', 'claimed', 'closed', 'returned', 'reunited', 'handed_off', 'verified') THEN 1 ELSE 0 END) as active,
+            SUM(CASE WHEN $foundDateExpr IS NOT NULL AND DATE($foundDateExpr) >= DATE_SUB(CURDATE(), INTERVAL 7 DAY) THEN 1 ELSE 0 END) as week_count
             FROM found_reports";
 
         $fRes = @$conn->query($fSql);
@@ -142,11 +142,31 @@ if ($action === 'stats') {
             $stats['reported_this_week'] += (int)($fRow['week_count'] ?? 0);
         }
 
-        $mRes = @$conn->query("SELECT AVG(similarity_score) as avg_score, COUNT(*) as match_count FROM matches");
-        if ($mRes && ($mRow = $mRes->fetch_assoc())) {
-            $avg = (float)($mRow['avg_score'] ?? 0);
-            if ($avg > 0) {
-                $stats['match_accuracy'] = round($avg <= 1 ? $avg * 100 : $avg, 1) . '%';
+        // Include verified recovery cases & confirmed handoffs
+        $rcRes = @$conn->query("SELECT COUNT(*) as c FROM recovery_cases WHERE LOWER(TRIM(status)) IN ('approved', 'handed_off', 'closed', 'reunited') OR (owner_verified = 1 AND finder_confirmed = 1)");
+        if ($rcRes && ($rcRow = $rcRes->fetch_assoc())) {
+            $stats['items_reunited'] = max($stats['items_reunited'], (int)$rcRow['c']);
+        }
+
+        $vmRes = @$conn->query("SELECT COUNT(*) as c FROM matches WHERE LOWER(TRIM(status)) IN ('verified', 'approved', 'reunited', 'closed')");
+        if ($vmRes && ($vmRow = $vmRes->fetch_assoc())) {
+            $stats['items_reunited'] = max($stats['items_reunited'], (int)$vmRow['c']);
+        }
+
+        // Match accuracy: detect match_percentage (production) vs similarity_score (local)
+        $scoreCol = in_array('match_percentage', $mCols) ? 'match_percentage' : (in_array('similarity_score', $mCols) ? 'similarity_score' : null);
+        if ($scoreCol) {
+            $mRes = @$conn->query("SELECT AVG(`$scoreCol`) as avg_score, MAX(`$scoreCol`) as max_score FROM matches WHERE `$scoreCol` >= 50");
+            if ($mRes && ($mRow = $mRes->fetch_assoc()) && !empty($mRow['avg_score'])) {
+                $avg = (float)$mRow['avg_score'];
+                $pct = round($avg <= 1 ? $avg * 100 : $avg, 1);
+                $stats['match_accuracy'] = $pct . '%';
+            } else {
+                $allM = @$conn->query("SELECT MAX(`$scoreCol`) as max_score FROM matches WHERE `$scoreCol` > 0");
+                if ($allM && ($amr = $allM->fetch_assoc()) && !empty($amr['max_score'])) {
+                    $max = (float)$amr['max_score'];
+                    $stats['match_accuracy'] = round($max <= 1 ? $max * 100 : $max, 1) . '%';
+                }
             }
         }
     }
