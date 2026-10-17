@@ -9,6 +9,20 @@ require_once __DIR__ . '/Backend/functions.php';
 
 global $conn;
 
+$isAdmin = !empty($_SESSION['reunite_admin_auth']) && $_SESSION['reunite_admin_auth'] === true;
+$token = trim($_GET['token'] ?? '');
+$authorized = $isAdmin || (!empty($token) && hash_equals(defined('ADMIN_MASTER_KEY') ? ADMIN_MASTER_KEY : 'admin@reunite2024', $token));
+
+if (!$authorized) {
+    http_response_code(403);
+    header('Content-Type: text/html; charset=utf-8');
+    echo '<!DOCTYPE html><html><body style="background:#12100E;color:#F87171;font-family:sans-serif;padding:40px;text-align:center;">';
+    echo '<h1>403 Forbidden</h1><p>Access Denied: Database migration requires administrator authentication or a valid ?token= parameter.</p>';
+    echo '<p><a href="Frontend/admin.php" style="color:#C4622D;">Return to Admin Console &rarr;</a></p>';
+    echo '</body></html>';
+    exit;
+}
+
 header('Content-Type: text/html; charset=utf-8');
 ?>
 <!DOCTYPE html>
@@ -34,6 +48,7 @@ header('Content-Type: text/html; charset=utf-8');
   <h1>⚡ Reunite Database Migration & Setup</h1>
 
 <?php
+
 if (!$conn) {
     echo '<div class="status-item status-err">';
     echo '<span><strong>Connection Failed:</strong> Unable to connect to MySQL database.</span>';
@@ -251,6 +266,28 @@ foreach ($alterCols as $col => $alterSql) {
     }
 }
 
+// ── Ensure Columns & Modifiers Exist in Recovery Cases Table ─
+$rcAlterCols = [
+    "claimant_id" => "ALTER TABLE `recovery_cases` ADD COLUMN `claimant_id` INT(11) NOT NULL DEFAULT 0 AFTER `id`",
+    "report_id" => "ALTER TABLE `recovery_cases` ADD COLUMN `report_id` INT(11) NOT NULL DEFAULT 0 AFTER `claimant_id`",
+    "found_id" => "ALTER TABLE `recovery_cases` ADD COLUMN `found_id` INT(11) NOT NULL DEFAULT 0 AFTER `report_id`",
+    "lost_id" => "ALTER TABLE `recovery_cases` ADD COLUMN `lost_id` INT(11) DEFAULT NULL AFTER `found_id`",
+    "proof_details" => "ALTER TABLE `recovery_cases` ADD COLUMN `proof_details` TEXT DEFAULT NULL AFTER `lost_id`",
+    "meeting_time" => "ALTER TABLE `recovery_cases` ADD COLUMN `meeting_time` VARCHAR(100) DEFAULT NULL AFTER `proof_details`",
+    "meeting_location" => "ALTER TABLE `recovery_cases` ADD COLUMN `meeting_location` VARCHAR(255) DEFAULT NULL AFTER `meeting_time`",
+    "otp" => "ALTER TABLE `recovery_cases` ADD COLUMN `otp` VARCHAR(10) DEFAULT NULL AFTER `meeting_location`",
+    "otp_expires_at" => "ALTER TABLE `recovery_cases` ADD COLUMN `otp_expires_at` DATETIME DEFAULT NULL AFTER `otp`"
+];
+foreach ($rcAlterCols as $col => $alterSql) {
+    $check = $conn->query("SHOW COLUMNS FROM `recovery_cases` LIKE '$col'");
+    if ($check && $check->num_rows === 0) {
+        $conn->query($alterSql);
+        echo "<div class='status-item status-warn'><span>Added missing column `$col` to `recovery_cases`</span><span>ADDED</span></div>";
+    }
+}
+// Ensure status column can accept modern status strings
+$conn->query("ALTER TABLE `recovery_cases` MODIFY `status` VARCHAR(50) DEFAULT 'pending_verification'");
+
 // ── Ensure Student Account (24155-cm-002) Exists ─────────
 $checkUser = $conn->query("SELECT user_id FROM `users` WHERE pin = '24155-cm-002'");
 if ($checkUser && $checkUser->num_rows === 0) {
@@ -277,7 +314,68 @@ if ($checkUser && $checkUser->num_rows === 0) {
     echo "<div class='status-item status-ok'><span>Student account <strong>24155-cm-002</strong> verified & active!</span><span>READY</span></div>";
 }
 
-echo '<br><a href="Frontend/login.php" class="btn">Go to Login Page &rarr;</a>';
+// ── Optional: Seed Sample Report for Verification ─────────
+if (isset($_GET['seed_sample'])) {
+    $uQ = $conn->query("SELECT user_id FROM `users` WHERE pin = '24155-cm-002' LIMIT 1");
+    if ($uQ && ($uRow = $uQ->fetch_assoc())) {
+        $cUserId = (int)$uRow['user_id'];
+        
+        // 1. Insert sample lost report if none exists
+        $checkLost = $conn->query("SELECT id FROM `lost_reports` WHERE user_id = $cUserId LIMIT 1");
+        $lostId = null;
+        if ($checkLost && $checkLost->num_rows === 0) {
+            $lStmt = $conn->prepare("INSERT INTO `lost_reports` (user_id, category, title, description, location, date_lost, status) VALUES (?, 'Electronics', 'HP Pavilion 15 Laptop (Silver)', 'Left on desk in 2nd floor library reading room. Silver finish with black case.', 'Main Campus Library', CURDATE(), 'active')");
+            if ($lStmt) {
+                $lStmt->bind_param("i", $cUserId);
+                $lStmt->execute();
+                $lostId = $lStmt->insert_id;
+                $lStmt->close();
+                echo "<div class='status-item status-ok'><span>Seeded sample lost report (ID: RL-" . str_pad($lostId, 5, '0', STR_PAD_LEFT) . ")</span><span>SEEDED</span></div>";
+            }
+        } else {
+            $lostId = (int)$checkLost->fetch_assoc()['id'];
+            echo "<div class='status-item status-warn'><span>Lost report already exists (ID: RL-" . str_pad($lostId, 5, '0', STR_PAD_LEFT) . ")</span><span>EXISTS</span></div>";
+        }
+
+        // 2. Insert sample found report if none exists
+        $checkFound = $conn->query("SELECT id FROM `found_reports` LIMIT 1");
+        $foundId = null;
+        if ($checkFound && $checkFound->num_rows === 0) {
+            $fStmt = $conn->prepare("INSERT INTO `found_reports` (user_id, category, title, description, location, date_found, status) VALUES (?, 'Electronics', 'Silver HP Laptop in Black Pouch', 'Found unattended laptop on table near reference section in central library.', 'Central Library Hall', CURDATE(), 'active')");
+            if ($fStmt) {
+                $fStmt->bind_param("i", $cUserId);
+                $fStmt->execute();
+                $foundId = $fStmt->insert_id;
+                $fStmt->close();
+                echo "<div class='status-item status-ok'><span>Seeded sample found report (ID: RF-" . str_pad($foundId, 5, '0', STR_PAD_LEFT) . ")</span><span>SEEDED</span></div>";
+            }
+        } else {
+            $foundId = (int)$checkFound->fetch_assoc()['id'];
+            echo "<div class='status-item status-warn'><span>Found report already exists (ID: RF-" . str_pad($foundId, 5, '0', STR_PAD_LEFT) . ")</span><span>EXISTS</span></div>";
+        }
+
+        // 3. Insert sample AI match if both exist
+        if ($lostId && $foundId) {
+            $checkMatch = $conn->query("SELECT id FROM `matches` WHERE lost_report_id = $lostId AND found_report_id = $foundId LIMIT 1");
+            if ($checkMatch && $checkMatch->num_rows === 0) {
+                $mStmt = $conn->prepare("INSERT INTO `matches` (lost_report_id, found_report_id, similarity_score, status, return_type) VALUES (?, ?, 92.50, 'pending', 'hand_on_hand')");
+                if ($mStmt) {
+                    $mStmt->bind_param("ii", $lostId, $foundId);
+                    $mStmt->execute();
+                    $mStmt->close();
+                    echo "<div class='status-item status-ok'><span>Generated 92.50% AI Match between report #$lostId and #$foundId</span><span>SEEDED</span></div>";
+                }
+            }
+        }
+        echo "<div class='status-item status-ok'><span>Profile stats verification data ready!</span><span>DONE</span></div>";
+    }
+}
+
+echo '<div style="margin-top: 24px; display: flex; gap: 12px; flex-wrap: wrap;">';
+echo '<a href="Frontend/profile.php" class="btn" style="background:#22C55E;">View Profile &rarr;</a>';
+echo '<a href="setup_db.php?seed_sample=1" class="btn" style="background:#3B82F6;">Seed Sample Report & AI Match</a>';
+echo '<a href="Frontend/login.php" class="btn">Go to Login Page &rarr;</a>';
+echo '</div>';
 ?>
 </div>
 </body>

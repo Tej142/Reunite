@@ -14,7 +14,7 @@ $isAdmin = !empty($_SESSION['reunite_admin_auth']) && $_SESSION['reunite_admin_a
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="robots" content="noindex, nofollow">
   <title>System Administration &amp; Site Maintenance — Reunite</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -22,41 +22,128 @@ $isAdmin = !empty($_SESSION['reunite_admin_auth']) && $_SESSION['reunite_admin_a
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/style.css?v=<?php echo time(); ?>">
   <link rel="stylesheet" href="css/admin.css?v=<?php echo time(); ?>">
+  <script>
+    (function(){
+      var t = localStorage.getItem('reunite_admin_theme');
+      if (t === 'dark') {
+        document.documentElement.setAttribute('data-admin-theme', 'dark');
+      } else {
+        document.documentElement.setAttribute('data-admin-theme', 'light');
+      }
+    })();
+  </script>
 </head>
-<body class="admin-body">
+<body class="admin-body admin-light">
 
   <!-- ───────────────────────────────────────────────────────────── -->
   <!-- 1. SECURITY CLEARANCE TERMINAL AUTH SCREEN -->
   <!-- ───────────────────────────────────────────────────────────── -->
-  <?php if (!$isAdmin): ?>
-  <div class="admin-auth-screen" id="adminAuthScreen">
-    <div style="position: absolute; top: 1.5rem; right: 1.5rem; z-index: 10;">
+  <div class="admin-auth-screen" id="adminAuthScreen" style="<?php echo $isAdmin ? 'display:none;' : 'display:flex;'; ?>">
+    <!-- Ambient Lighting & Futuristic Grid Background -->
+    <div class="admin-auth-glow admin-auth-glow-1" aria-hidden="true"></div>
+    <div class="admin-auth-glow admin-auth-glow-2" aria-hidden="true"></div>
+    <div class="admin-auth-grid-pattern" aria-hidden="true"></div>
+
+    <div class="admin-auth-top-actions">
+      <a href="index.php" class="btn-admin-back" title="Back to Reunite Main Site" aria-label="Back to home">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+        <span>Exit to Site</span>
+      </a>
       <button type="button" class="btn-admin-theme" id="btnAdminThemeToggleAuth" title="Toggle Light/Dark Theme" aria-label="Toggle theme">
         <svg class="sun-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
         <svg class="moon-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
       </button>
     </div>
+
     <div class="admin-auth-card">
-      <div class="admin-auth-icon">
-        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+      <div class="admin-auth-top-border"></div>
+
+      <div class="admin-auth-badge">
+        <span class="auth-badge-dot"></span>
+        <span class="auth-badge-text">Terminal Clearance Required</span>
       </div>
-      <h1 class="admin-auth-title">System Admin Clearance</h1>
+
+      <div class="admin-auth-icon-wrap">
+        <div class="admin-auth-icon">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+            <path d="M9 12l2 2 4-4"/>
+          </svg>
+        </div>
+      </div>
+
+      <h1 class="admin-auth-title">System Administration</h1>
       <p class="admin-auth-sub">
-        Restricted Site Maintenance Console. Authorized system administrators only.
+        Restricted infrastructure console. Authorized clearance credentials required to proceed.
       </p>
 
+      <!-- Auth Mode Switcher -->
+      <div class="admin-auth-mode-switch" style="display:flex; gap:8px; margin-bottom:1.25rem; background:var(--admin-surface-2); padding:4px; border-radius:10px; border:1px solid var(--admin-border);">
+        <button type="button" class="btn-auth-mode active" id="btnAuthModePasscode" style="flex:1; padding:8px; font-size:0.8125rem; font-weight:600; border:none; border-radius:8px; cursor:pointer; background:var(--admin-accent); color:#ffffff; transition:all 0.2s;">Master Key</button>
+        <button type="button" class="btn-auth-mode" id="btnAuthModeAccount" style="flex:1; padding:8px; font-size:0.8125rem; font-weight:600; border:none; border-radius:8px; cursor:pointer; background:transparent; color:var(--admin-text-muted); transition:all 0.2s;">Staff Login</button>
+      </div>
+
       <form class="admin-auth-form" id="adminLoginForm">
-        <div class="admin-auth-field">
-          <label for="adminPasscode">Security Clearance Key / Passcode</label>
-          <input type="password" class="admin-input" id="adminPasscode" placeholder="Enter System Master Passcode..." required autofocus autocomplete="off" />
+        <!-- Master Key Mode -->
+        <div id="authModePasscodeGroup">
+          <div class="admin-auth-field">
+            <div class="admin-field-label-row">
+              <label for="adminPasscode">Security Clearance Key</label>
+              <span class="admin-field-hint">Master Key</span>
+            </div>
+            <div class="admin-input-wrap">
+              <svg class="admin-input-icon" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect width="18" height="11" x="3" y="11" rx="2" ry="2"/>
+                <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+              </svg>
+              <input type="password" class="admin-input" id="adminPasscode" placeholder="Enter System Master Passcode..." autofocus autocomplete="off" />
+            </div>
+          </div>
         </div>
-        <button type="submit" class="btn-admin admin-auth-btn">
-          Authenticate &amp; Access Terminal &rarr;
+
+        <!-- Staff Account Mode -->
+        <div id="authModeAccountGroup" style="display:none;">
+          <div class="admin-auth-field" style="margin-bottom:1rem;">
+            <div class="admin-field-label-row">
+              <label for="adminIdentifier">Admin / Moderator Username</label>
+            </div>
+            <div class="admin-input-wrap">
+              <svg class="admin-input-icon" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
+              </svg>
+              <input type="text" class="admin-input" id="adminIdentifier" placeholder="e.g. charan_admin or charan_moderator" autocomplete="off" />
+            </div>
+          </div>
+          <div class="admin-auth-field">
+            <div class="admin-field-label-row">
+              <label for="adminPassword">Password</label>
+            </div>
+            <div class="admin-input-wrap">
+              <svg class="admin-input-icon" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect width="18" height="11" x="3" y="11" rx="2" ry="2"/>
+                <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+              </svg>
+              <input type="password" class="admin-input" id="adminPassword" placeholder="Enter password..." autocomplete="off" />
+            </div>
+          </div>
+        </div>
+
+        <button type="submit" class="btn-admin admin-auth-btn" style="margin-top:1.25rem;">
+          <span id="adminSubmitBtnText">Authenticate &amp; Access Terminal</span>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="9 18 15 12 9 6"></polyline>
+          </svg>
         </button>
       </form>
+
+      <div class="admin-auth-footer">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>
+        </svg>
+        <span>All authentication attempts are cryptographically audited &amp; IP logged.</span>
+      </div>
     </div>
   </div>
-  <?php else: ?>
 
   <!-- ───────────────────────────────────────────────────────────── -->
   <!-- 2. AUTHENTICATED SITE MAINTENANCE DASHBOARD -->
@@ -65,14 +152,14 @@ $isAdmin = !empty($_SESSION['reunite_admin_auth']) && $_SESSION['reunite_admin_a
   // Admin maintenance banner — visible to admin when maintenance is ON
   $maint = getMaintenanceSettings();
   ?>
-  <?php if ($maint['enabled']): ?>
+  <?php if ($isAdmin && $maint['enabled']): ?>
   <div class="admin-maint-on-banner" role="alert">
     <span><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" stroke="none" style="vertical-align:-1px; margin-right:4px; color:var(--admin-warning);"><circle cx="12" cy="12" r="10"/></svg> Maintenance Mode is <strong>ON</strong> — non-admin users see the maintenance page.</span>
     <span style="font-size:0.8125rem; color: var(--admin-warning);">Turn it OFF in the Health &amp; HUD tab when ready.</span>
   </div>
   <?php endif; ?>
 
-  <div id="adminDashboard">
+  <div id="adminDashboard" style="<?php echo $isAdmin ? 'display:block;' : 'display:none;'; ?>">
     
     <!-- Top Header -->
     <header class="admin-header">
@@ -543,7 +630,6 @@ $isAdmin = !empty($_SESSION['reunite_admin_auth']) && $_SESSION['reunite_admin_a
       </div>
     </div>
   </div>
-  <?php endif; ?>
 
   <script src="js/admin.js?v=<?php echo time(); ?>"></script>
 </body>

@@ -83,6 +83,73 @@ $user_initial = !empty(trim($user_name)) ? strtoupper(substr(trim($user_name), 0
 // Fetch current user's real database reports & statistics
 $userId = $user['user_id'] ?? ($_SESSION['user_id'] ?? null);
 
+// Defensive fallback: resolve numeric userId directly from database using student PIN if not already in session
+if ((empty($userId) || !is_numeric($userId)) && !empty($user_pin) && isset($conn) && $conn) {
+    $uStmt = $conn->prepare("SELECT user_id FROM users WHERE pin = ? LIMIT 1");
+    if ($uStmt) {
+        $uStmt->bind_param("s", $user_pin);
+        $uStmt->execute();
+        $uRes = $uStmt->get_result();
+        if ($uRow = $uRes->fetch_assoc()) {
+            $userId = (int)$uRow['user_id'];
+            $_SESSION['user_id'] = $userId;
+            if (isset($_SESSION['user']) && is_array($_SESSION['user'])) {
+                $_SESSION['user']['user_id'] = $userId;
+            }
+        }
+        $uStmt->close();
+    }
+}
+
+// ── One-Click Test Data Seeder (via ?seed=1) ─────────────────
+if (isset($_GET['seed']) && $userId && isset($conn) && $conn) {
+    // 1. Insert sample lost report for this user if none exists
+    $chk = $conn->query("SELECT lost_id FROM lost_reports WHERE user_id = $userId LIMIT 1");
+    $lostId = null;
+    if ($chk && $chk->num_rows === 0) {
+        $sStmt = $conn->prepare("INSERT INTO lost_reports (user_id, category, title, description, location, date_lost, status) VALUES (?, 'Electronics', 'HP Pavilion 15 Laptop (Silver)', 'Left in 2nd floor library study area. Silver aluminum finish with black protective sleeve.', 'Campus Central Library', CURDATE(), 'Pending')");
+        if ($sStmt) {
+            $sStmt->bind_param("i", $userId);
+            $sStmt->execute();
+            $lostId = $sStmt->insert_id;
+            $sStmt->close();
+        }
+    } else {
+        $lostId = (int)$chk->fetch_assoc()['lost_id'];
+    }
+
+    // 2. Insert sample found report matching it if none exists
+    $fChk = $conn->query("SELECT found_id FROM found_reports LIMIT 1");
+    $foundId = null;
+    if ($fChk && $fChk->num_rows === 0) {
+        $fsStmt = $conn->prepare("INSERT INTO found_reports (finder_id, category, title, description, location, date_found, status) VALUES (?, 'Electronics', 'Silver HP Laptop in Black Pouch', 'Found unattended laptop on study desk in 2nd floor library hall.', 'Central Library Hall', CURDATE(), 'Pending')");
+        if ($fsStmt) {
+            $fsStmt->bind_param("i", $userId);
+            $fsStmt->execute();
+            $foundId = $fsStmt->insert_id;
+            $fsStmt->close();
+        }
+    } else {
+        $foundId = (int)$fChk->fetch_assoc()['found_id'];
+    }
+
+    // 3. Create AI Match
+    if ($lostId && $foundId) {
+        $mChk = @$conn->query("SELECT id FROM matches WHERE lost_report_id = $lostId AND found_report_id = $foundId LIMIT 1");
+        if ($mChk && $mChk->num_rows === 0) {
+            $mStmt = $conn->prepare("INSERT INTO matches (lost_report_id, found_report_id, similarity_score, status, return_type) VALUES (?, ?, 94.50, 'pending', 'hand_on_hand')");
+            if ($mStmt) {
+                $mStmt->bind_param("ii", $lostId, $foundId);
+                $mStmt->execute();
+                $mStmt->close();
+            }
+        }
+    }
+
+    header("Location: profile.php");
+    exit;
+}
+
 $userReports = [];
 $userStats = [
     'reports_filed' => 0,
@@ -95,7 +162,7 @@ $userStats = [
 
 if ($userId && isset($conn) && $conn) {
     // 1. Fetch lost reports
-    $lStmt = $conn->prepare("SELECT id, 'lost' as report_type, title, description, category, location, image_path, status, created_at FROM lost_reports WHERE user_id = ? ORDER BY created_at DESC");
+    $lStmt = $conn->prepare("SELECT lost_id AS id, 'lost' as report_type, title, description, category, location, image_path, status, date_lost AS created_at FROM lost_reports WHERE user_id = ? ORDER BY lost_id DESC");
     if ($lStmt) {
         $lStmt->bind_param("i", $userId);
         $lStmt->execute();
@@ -103,7 +170,7 @@ if ($userId && isset($conn) && $conn) {
         while ($row = $res->fetch_assoc()) {
             $userReports[] = $row;
             $userStats['lost_count']++;
-            if (in_array($row['status'], ['matched', 'claimed', 'closed'])) {
+            if (in_array(strtolower($row['status']), ['matched', 'recovered', 'claimed', 'closed', 'reunited', 'returned'])) {
                 $userStats['reunited_items']++;
             }
         }
@@ -111,7 +178,7 @@ if ($userId && isset($conn) && $conn) {
     }
 
     // 2. Fetch found reports
-    $fStmt = $conn->prepare("SELECT id, 'found' as report_type, title, description, category, location, image_path, status, created_at FROM found_reports WHERE user_id = ? ORDER BY created_at DESC");
+    $fStmt = $conn->prepare("SELECT found_id AS id, 'found' as report_type, title, description, category, location, image_path, status, date_found AS created_at FROM found_reports WHERE finder_id = ? ORDER BY found_id DESC");
     if ($fStmt) {
         $fStmt->bind_param("i", $userId);
         $fStmt->execute();
@@ -119,7 +186,7 @@ if ($userId && isset($conn) && $conn) {
         while ($row = $res->fetch_assoc()) {
             $userReports[] = $row;
             $userStats['found_count']++;
-            if (in_array($row['status'], ['matched', 'claimed', 'closed'])) {
+            if (in_array(strtolower($row['status']), ['matched', 'returned', 'claimed', 'closed', 'reunited'])) {
                 $userStats['reunited_items']++;
             }
         }
@@ -128,15 +195,15 @@ if ($userId && isset($conn) && $conn) {
 
     // Sort all combined reports by created_at DESC
     usort($userReports, function($a, $b) {
-        return strtotime($b['created_at']) - strtotime($a['created_at']);
+        return ($b['id'] ?? 0) - ($a['id'] ?? 0);
     });
 
     $userStats['reports_filed'] = count($userReports);
 
-    // 3. Count AI matches linked to user's lost reports
-    $mStmt = $conn->prepare("SELECT COUNT(*) as match_cnt FROM matches m JOIN lost_reports lr ON m.lost_report_id = lr.id WHERE lr.user_id = ?");
+    // 3. Count AI matches linked to user's reports (lost or found)
+    $mStmt = $conn->prepare("SELECT COUNT(DISTINCT m.id) as match_cnt FROM matches m LEFT JOIN lost_reports lr ON m.lost_report_id = lr.lost_id LEFT JOIN found_reports fr ON m.found_report_id = fr.found_id WHERE lr.user_id = ? OR fr.finder_id = ?");
     if ($mStmt) {
-        $mStmt->bind_param("i", $userId);
+        $mStmt->bind_param("ii", $userId, $userId);
         $mStmt->execute();
         $res = $mStmt->get_result();
         if ($mRow = $res->fetch_assoc()) {
@@ -146,7 +213,7 @@ if ($userId && isset($conn) && $conn) {
     }
 
     // 4. Count claims verified / recovery cases
-    $cStmt = $conn->prepare("SELECT COUNT(*) as claim_cnt FROM recovery_cases WHERE claimant_id = ? AND status IN ('approved', 'handed_off')");
+    $cStmt = $conn->prepare("SELECT COUNT(*) as claim_cnt FROM recovery_cases WHERE claimant_id = ? AND (status IN ('approved', 'handed_off') OR owner_verified = 1)");
     if ($cStmt) {
         $cStmt->bind_param("i", $userId);
         $cStmt->execute();
@@ -162,13 +229,13 @@ if ($userId && isset($conn) && $conn) {
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Student Profile — Reunite</title>
   <meta name="description" content="Manage your student profile, view your active lost &amp; found reports, and configure security settings." />
   <script>
     (function(){
       var t = localStorage.getItem('reunite_theme');
-      if (t === 'dark' || (!t && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+      if (t === 'dark') {
         document.documentElement.setAttribute('data-theme', 'dark');
       }
     })();
@@ -415,8 +482,8 @@ if ($userId && isset($conn) && $conn) {
             <?php endforeach; ?>
           <?php else: ?>
             <div class="empty-user-reports" style="text-align: center; padding: 3rem 1.5rem; background: var(--surface); border: 1px dashed var(--border); border-radius: 1rem;">
-              <div style="display: flex; justify-content: center; margin-bottom: 0.5rem; color: var(--muted-2);">
-                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg>
+              <div style="display: flex; justify-content: center; margin-bottom: 0.75rem;">
+                <?php echo orbi('notfound', 84, 'No reports filed yet'); ?>
               </div>
               <h3 style="font-size: 1.1rem; color: var(--ink); margin-bottom: 0.35rem;">No Reports Filed Yet</h3>
               <p style="font-size: 0.85rem; color: var(--muted); max-width: 420px; margin: 0 auto 1.25rem;">
@@ -425,6 +492,7 @@ if ($userId && isset($conn) && $conn) {
               <div style="display: flex; gap: 0.75rem; justify-content: center; flex-wrap: wrap;">
                 <a href="report-lost-item.php" class="btn btn-primary" style="font-size: 0.8125rem; padding: 0.5rem 1rem;">Report Missing Item</a>
                 <a href="report-found-item.php" class="btn btn-ghost" style="font-size: 0.8125rem; padding: 0.5rem 1rem;">Upload Found Item</a>
+                <a href="profile.php?seed=1" class="btn btn-ghost" style="font-size: 0.8125rem; padding: 0.5rem 1rem; border-color: var(--brand); color: var(--brand);"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 4px; vertical-align: -2px;"><path d="M12 5v14M5 12h14"/></svg> Populate Sample Report &amp; Match</a>
               </div>
             </div>
           <?php endif; ?>

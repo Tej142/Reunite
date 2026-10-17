@@ -1,0 +1,8 @@
+# Reunite Backend Directory Security
+Options -Indexes
+
+# Block direct access to sensitive data files, database schemas, and documentation
+<FilesMatch "\.(sql|log|md|json)$">
+    Order Allow,Deny
+    Deny from all
+</FilesMatch>

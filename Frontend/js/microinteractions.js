@@ -51,8 +51,15 @@
       toast.className = `reunite-toast toast-${type}`;
       toast.setAttribute('role', 'status');
 
+      const orbiState = options.orbiState || null;
+      let orbiHtml = '';
+      if (orbiState && window.Orbi) {
+        const oEl = window.Orbi.create({ state: orbiState, size: 40, label: title || 'Notification' });
+        if (oEl) orbiHtml = `<div class="toast-orbi-wrap">${oEl.outerHTML}</div>`;
+      }
+
       toast.innerHTML = `
-        <div class="toast-icon-wrap" aria-hidden="true">${icons[type] || 'ℹ'}</div>
+        ${orbiHtml || `<div class="toast-icon-wrap" aria-hidden="true">${icons[type] || 'ℹ'}</div>`}
         <div class="toast-content">
           ${title ? `<div class="toast-title">${title}</div>` : ''}
           ${message ? `<div class="toast-msg">${message}</div>` : ''}
@@ -60,6 +67,13 @@
         <button type="button" class="toast-close-btn" aria-label="Dismiss notification">&times;</button>
         <div class="toast-progress-bar" style="animation-duration: ${duration}ms;"></div>
       `;
+
+      if (orbiState === 'happy' && window.Orbi) {
+        const tOrbi = toast.querySelector('.orbi');
+        if (tOrbi) {
+          window.Orbi.happy(tOrbi, 2500);
+        }
+      }
 
       const closeBtn = toast.querySelector('.toast-close-btn');
       let dismissTimeout = null;

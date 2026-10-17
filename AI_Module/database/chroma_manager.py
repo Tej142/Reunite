@@ -1,4 +1,5 @@
 import os
+import ast
 import chromadb
 from datetime import datetime
 
@@ -17,6 +18,20 @@ clip_collection = chroma_client.get_or_create_collection(
     name="clip_reports",
     metadata={"hnsw:space": "cosine"}
 )
+
+
+def get_image_vector(report_id):
+    """
+    Fetches the existing DINOv2 image vector for a given report_id.
+    """
+    try:
+        result = dinov2_collection.get(ids=[report_id], include=["embeddings"])
+        if result and result['embeddings'] and len(result['embeddings']) > 0:
+            return result['embeddings'][0]
+    except Exception as e:
+        print(f"Error fetching image vector: {e}")
+    return None
+
 
 def store_report_vectors(report_id: str, dinov2_vector: list = None, clip_vector: list = None, metadata: dict = None):
     """
@@ -97,12 +112,12 @@ def calculate_dynamic_weights(photo_date_str, lost_date_str, found_date_str):
         return 0.10, 0.90 # 10% Image, 90% Text if we are unsure
 
 
-        
-def search_vectors(dinov2_vector=None, clip_vector=None, candidate_ids=None, photo_date_str=None, found_date_str=None, top_k=5):
+def search_vectors(dinov2_vector=None, clip_vector=None, candidate_ids=None, photo_date_str=None, found_date_str=None, query_metadata=None, top_k=5):
     """
     1. Fetches raw cosine distances from ChromaDB.
     2. Calculates Dynamic Weights based on item lost/found dates.
     3. Applies Late Fusion to generate the final match percentage.
+    4. Generates Privacy-Preserving Explainable AI (XAI) reasons using Digital DNA.
     """
     results_dict = {}
     
@@ -114,19 +129,18 @@ def search_vectors(dinov2_vector=None, clip_vector=None, candidate_ids=None, pho
         else:
             where_filter = {"report_id": {"$in": candidate_ids}}
 
-    # Step 1: Get raw distances from ChromaDB for Image
+    # Step 1: Get raw distances from ChromaDB for Image (DINOv2)
     if dinov2_vector and len(dinov2_vector) == 384:
         dino_results = dinov2_collection.query(
             query_embeddings=[dinov2_vector], n_results=top_k, where=where_filter
         )
         if dino_results['ids'] and len(dino_results['ids'][0]) > 0:
             for i, doc_id in enumerate(dino_results['ids'][0]):
-                # Convert Distance to Similarity (0 to 1 scale)
                 similarity = 1.0 - dino_results['distances'][0][i] 
                 metadata = dino_results['metadatas'][0][i]
                 results_dict[doc_id] = {"metadata": metadata, "dino_sim": similarity, "clip_sim": 0}
 
-    # Step 2: Get raw distances from ChromaDB for Text
+    # Step 2: Get raw distances from ChromaDB for Text (CLIP)
     if clip_vector and len(clip_vector) == 512:
         clip_results = clip_collection.query(
             query_embeddings=[clip_vector], n_results=top_k, where=where_filter
@@ -139,19 +153,72 @@ def search_vectors(dinov2_vector=None, clip_vector=None, candidate_ids=None, pho
                     results_dict[doc_id] = {"metadata": metadata, "dino_sim": 0, "clip_sim": 0}
                 results_dict[doc_id]["clip_sim"] = similarity
 
-    # Step 3: Get Dynamic Weights from YOUR awesome logic
-    img_weight, txt_weight = 0, 1.0 # Default if no image
+    # Step 3: Get Dynamic Weights from Decay Logic
+    img_weight, txt_weight = 0, 1.0 
     if photo_date_str and found_date_str:
         img_weight, txt_weight = calculate_dynamic_weights(photo_date_str, photo_date_str, found_date_str)
     
-    # Step 4: Calculate Final Match Percentage (Late Fusion)
+    # Step 4: Final Calculations & XAI
     final_matches = []
+    
+    # Safe fallback
+    if query_metadata is None:
+        query_metadata = {}
+
     for doc_id, data in results_dict.items():
         d_sim = data["dino_sim"]
         c_sim = data["clip_sim"]
+        db_meta = data["metadata"]
         
+        # ==========================================
+        # ADVANCED DIGITAL DNA MATCHING (XAI)
+        # ==========================================
+        category_matched = False
+        location_matched = False
+        matched_attributes = []
+        
+        # 1. Object Type (Category) Match
+        q_obj = str(query_metadata.get('object_type', '')).strip().lower()
+        db_obj = str(db_meta.get('object_type', '')).strip().lower()
+        if q_obj and db_obj and q_obj == db_obj:
+            category_matched = True
+
+        # 2. Location Match
+        q_loc = str(query_metadata.get('location', '')).strip().lower()
+        db_loc = str(db_meta.get('location', '')).strip().lower()
+        if q_loc and db_loc and q_loc == db_loc:
+            location_matched = True
+
+        # 3. Dynamic Attributes Match (Brand, Color, Material, etc.)
+        try:
+            # Safely parse Query attributes
+            q_attrs = query_metadata.get('attributes', {})
+            if isinstance(q_attrs, str):
+                q_attrs = ast.literal_eval(q_attrs)
+            
+            # Safely parse DB attributes
+            db_attrs_str = db_meta.get('attributes', '{}')
+            db_attrs = ast.literal_eval(db_attrs_str) if isinstance(db_attrs_str, str) else db_attrs_str
+            
+            # Compare each attribute
+            if isinstance(q_attrs, dict) and isinstance(db_attrs, dict):
+                for key, q_val in q_attrs.items():
+                    db_val = db_attrs.get(key)
+                    if q_val and db_val and str(q_val).strip().lower() == str(db_val).strip().lower():
+                        # Exclude highly sensitive details from XAI output to prevent fraud
+                        if key.lower() not in ['condition', 'distinguishing marks', 'date / time']:
+                            matched_attributes.append(key)
+        except Exception as e:
+            # Ignore parsing errors and continue safely
+            pass
+
+        # Naming accurately based on architecture discussion
+        visible_similarity = round(d_sim * 100, 2) 
+        textual_and_private_similarity = round(c_sim * 100, 2) 
+        # ==========================================
+
+        # Apply Dynamic Weights (Late Fusion)
         if dinov2_vector and clip_vector:
-            # Apply dynamic weights here!
             final_score = (d_sim * img_weight) + (c_sim * txt_weight)
         elif clip_vector:
             final_score = c_sim
@@ -162,11 +229,18 @@ def search_vectors(dinov2_vector=None, clip_vector=None, candidate_ids=None, pho
             
         final_matches.append({
             "report_id": doc_id,
-            "match_score": round(final_score * 100, 2), # Convert to out of 100%
-            "metadata": data["metadata"],
+            "match_score": round(final_score * 100, 2), 
+            "ai_reasons": {
+                "category_matched": category_matched,
+                "location_matched": location_matched,
+                "matched_attributes": matched_attributes, 
+                "visual_match_confidence": f"{visible_similarity}%",       
+                "textual_and_private_match": f"{textual_and_private_similarity}%" 
+            },
+            "metadata": db_meta,
             "breakdown": {
-                "dino_score_raw": round(d_sim * 100, 2),
-                "clip_score_raw": round(c_sim * 100, 2),
+                "dino_score_raw": visible_similarity,
+                "clip_score_raw": textual_and_private_similarity,
                 "applied_image_weight": f"{img_weight*100}%",
                 "applied_text_weight": f"{txt_weight*100}%"
             }

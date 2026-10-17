@@ -63,13 +63,25 @@ try {
     $lostCol = in_array('lost_id', $mCols) ? 'lost_id' : 'lost_report_id';
     $foundCol = in_array('found_id', $mCols) ? 'found_id' : 'found_report_id';
 
+    $lCols = [];
+    $lc = @mysqli_query($conn, "SHOW COLUMNS FROM lost_reports");
+    if ($lc) while ($r = mysqli_fetch_assoc($lc)) $lCols[] = strtolower($r['Field']);
+    $lPk = in_array('lost_id', $lCols) ? 'lost_id' : 'id';
+
+    $fCols = [];
+    $fc = @mysqli_query($conn, "SHOW COLUMNS FROM found_reports");
+    if ($fc) while ($r = mysqli_fetch_assoc($fc)) $fCols[] = strtolower($r['Field']);
+    $fPk = in_array('found_id', $fCols) ? 'found_id' : 'id';
+    $fUserCol = in_array('finder_id', $fCols) ? 'finder_id' : (in_array('user_id', $fCols) ? 'user_id' : 'id');
+    $lUserCol = in_array('user_id', $lCols) ? 'user_id' : (in_array('claimant_id', $lCols) ? 'claimant_id' : (in_array('owner_id', $lCols) ? 'owner_id' : 'id'));
+
     // 1. Look up match and confirm user is the founder
     $stmt = mysqli_prepare($conn, "
         SELECT m.`$pkCol` AS id, m.status, m.`$lostCol` AS lost_report_id, m.`$foundCol` AS found_report_id,
-               lr.user_id as claimant_id, fr.user_id as founder_id
+               lr.`$lUserCol` as claimant_id, fr.`$fUserCol` as founder_id
         FROM matches m
-        LEFT JOIN lost_reports lr ON m.`$lostCol` = lr.id
-        LEFT JOIN found_reports fr ON m.`$foundCol` = fr.id
+        LEFT JOIN lost_reports lr ON m.`$lostCol` = lr.`$lPk`
+        LEFT JOIN found_reports fr ON m.`$foundCol` = fr.`$fPk`
         WHERE m.`$pkCol` = ?
         LIMIT 1
     ");
@@ -153,29 +165,85 @@ try {
         exit;
     }
 
-    if ($stored_otp !== $otp) {
-        http_response_code(400);
-        echo json_encode(['success' => false, 'message' => 'Incorrect OTP code. Please try again.']);
+    // 2. Lockout and Attempt Limiting Check
+    $lockKey = 'otp_lockout_' . $match_id;
+    if (isset($_SESSION[$lockKey]) && $_SESSION[$lockKey] > time()) {
+        $remainingSecs = $_SESSION[$lockKey] - time();
+        http_response_code(429);
+        echo json_encode([
+            'success' => false,
+            'message' => 'Too many incorrect attempts. Handover verification is temporarily locked for ' . ceil($remainingSecs / 60) . ' more minute(s).'
+        ]);
         exit;
     }
 
-    // 3. Mark Recovery Complete & Close Reports
+    $attemptKey = 'otp_attempts_' . $match_id;
+    $attempts = (int)($_SESSION[$attemptKey] ?? 0);
+
+    if ($stored_otp !== $otp) {
+        $attempts++;
+        $_SESSION[$attemptKey] = $attempts;
+        if (function_exists('logAccess')) {
+            logAccess($user_id, 'Handover OTP Failed', "Match ID: $match_id, Attempt: $attempts/5");
+        }
+
+        if ($attempts >= 5) {
+            $_SESSION[$lockKey] = time() + 900; // 15-minute lockout
+            unset($_SESSION[$attemptKey]);
+            http_response_code(429);
+            echo json_encode([
+                'success' => false,
+                'message' => 'Too many incorrect OTP attempts. Handover verification locked for 15 minutes.'
+            ]);
+            exit;
+        }
+
+        http_response_code(400);
+        echo json_encode([
+            'success' => false,
+            'message' => 'Incorrect OTP code. ' . (5 - $attempts) . ' attempt(s) remaining before temporary lockout.'
+        ]);
+        exit;
+    }
+
+    // Reset attempt counter on success
+    unset($_SESSION[$attemptKey]);
+    unset($_SESSION[$lockKey]);
+
+    // 3. Mark Recovery Complete, Invalidate OTP, & Close Reports
     mysqli_begin_transaction($conn);
 
-    // Update matches status
-    mysqli_query($conn, "UPDATE matches SET status = 'verified' WHERE `$pkCol` = " . (int)$match_id);
+    // Invalidate OTP immediately to prevent reuse and set status to verified
+    mysqli_query($conn, "UPDATE matches SET otp = NULL, otp_expires_at = NULL, status = 'verified' WHERE `$pkCol` = " . (int)$match_id);
 
     // Update reports to claimed / closed
-    mysqli_query($conn, "UPDATE found_reports SET status = 'claimed' WHERE id = " . $found_id);
+    mysqli_query($conn, "UPDATE found_reports SET status = 'claimed' WHERE `$fPk` = " . $found_id);
     if ($lost_id > 0) {
-        mysqli_query($conn, "UPDATE lost_reports SET status = 'claimed' WHERE id = " . $lost_id);
+        mysqli_query($conn, "UPDATE lost_reports SET status = 'claimed' WHERE `$lPk` = " . $lost_id);
     }
 
     // Update recovery_cases status
-    mysqli_query($conn, "UPDATE recovery_cases SET status = 'handed_off', owner_verified = 1, finder_confirmed = 1 WHERE report_id = " . $found_id);
+    $rcCols = [];
+    $rcc = @mysqli_query($conn, "SHOW COLUMNS FROM recovery_cases");
+    if ($rcc) while ($r = mysqli_fetch_assoc($rcc)) $rcCols[] = strtolower($r['Field']);
+    $rcRepCol = in_array('report_id', $rcCols) ? 'report_id' : (in_array('found_id', $rcCols) ? 'found_id' : 'report_id');
+    mysqli_query($conn, "UPDATE recovery_cases SET status = 'handed_off'" . (in_array('owner_verified', $rcCols) ? ", owner_verified = 1" : "") . (in_array('finder_confirmed', $rcCols) ? ", finder_confirmed = 1" : "") . " WHERE `$rcRepCol` = " . $found_id);
+
+    // Reward trust scores (+10 for finder, +5 for owner, max 150)
+    if (!empty($match['founder_id'])) {
+        mysqli_query($conn, "UPDATE users SET trust_score = LEAST(150, COALESCE(trust_score, 100) + 10) WHERE user_id = " . (int)$match['founder_id']);
+    }
+    if (!empty($match['claimant_id'])) {
+        mysqli_query($conn, "UPDATE users SET trust_score = LEAST(150, COALESCE(trust_score, 100) + 5) WHERE user_id = " . (int)$match['claimant_id']);
+    }
 
     // Clear session OTP
     unset($_SESSION['handover_otp_' . $match_id]);
+
+    // Audit Log
+    if (function_exists('logAccess')) {
+        logAccess($user_id, 'Handover Completed (OTP Verified)', "Match ID: $match_id, Found ID: $found_id, Lost ID: $lost_id");
+    }
 
     // Send Completion Notifications to Both Parties
     $notif_title = "Item Handover Completed!";

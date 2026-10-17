@@ -38,6 +38,19 @@ if (empty($identifier) || empty($password)) {
     }
 }
 
+if (function_exists('checkRateLimit')) {
+    $ip = $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1';
+    $rateKey = 'login_' . md5($identifier . '_' . $ip);
+    if (!checkRateLimit($rateKey, 5, 300)) {
+        if ($isApi) {
+            sendJsonResponse(false, "Too many login attempts. Please wait 5 minutes before trying again.", [], 429);
+        } else {
+            header("Location: " . FRONTEND_URL . "/login.php?error=" . urlencode("Too many login attempts. Please wait 5 minutes."));
+            exit();
+        }
+    }
+}
+
 if (!$conn) {
     if ($isApi) {
         sendJsonResponse(false, "Database connection error. Please verify MySQL server is running.", [], 500);
@@ -118,18 +131,18 @@ if ($result && $result->num_rows === 1) {
         }
     } else {
         if ($isApi) {
-            sendJsonResponse(false, "Incorrect password. Please try again.", [], 401);
+            sendJsonResponse(false, "Invalid College PIN/Email or password. Please try again.", [], 401);
         } else {
-            header("Location: " . FRONTEND_URL . "/login.php?error=" . urlencode("Incorrect password."));
+            header("Location: " . FRONTEND_URL . "/login.php?error=" . urlencode("Invalid credentials. Please try again."));
             exit();
         }
     }
 } else {
     $stmt->close();
     if ($isApi) {
-        sendJsonResponse(false, "No student account found with that College PIN or Email.", [], 404);
+        sendJsonResponse(false, "Invalid College PIN/Email or password. Please try again.", [], 401);
     } else {
-        header("Location: " . FRONTEND_URL . "/login.php?error=" . urlencode("User not found."));
+        header("Location: " . FRONTEND_URL . "/login.php?error=" . urlencode("Invalid credentials. Please try again."));
         exit();
     }
 }

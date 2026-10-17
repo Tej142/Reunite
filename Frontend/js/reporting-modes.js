@@ -8,9 +8,9 @@ document.addEventListener('DOMContentLoaded', () => {
   const aiStatusText = document.getElementById('aiStatusText');
 
   const modeDescriptions = {
-    mode1: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px; margin-right:4px;"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> <strong>AI Vision & Text Parser:</strong> Upload photos & describe your item directly. AI will parse details and index tags automatically.',
-    mode2: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px; margin-right:4px;"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg> <strong>Guided Choice Assistant:</strong> Step-by-step interactive questionnaire with AI smart prompts tailored for rapid input.',
-    mode3: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px; margin-right:4px;"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg> <strong>Talk to AI Live Copilot:</strong> Natural voice & chat intake assistant. Dynamically understands natural slang, asks tailored item-specific questions, and extracts attributes in real time.'
+    mode1: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px; margin-right:4px;"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> <strong>AI Vision &amp; Text Parser:</strong> Upload photos &amp; describe your item directly. AI extracts traits automatically.',
+    mode2: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px; margin-right:4px;"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg> <strong>Guided Choice Assistant:</strong> Step-by-step smart questionnaire tailored for quick input.',
+    mode3: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px; margin-right:4px;"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg> <strong>Talk to AI Live Copilot:</strong> Speak or type details naturally — AI drafts your report in real time.'
   };
 
   modeCards.forEach(card => {
@@ -212,6 +212,9 @@ document.addEventListener('DOMContentLoaded', () => {
       verification: guidedState.verification || ''
     };
 
+    const thinkingContainer = document.querySelector('.guided-wizard-card') || document.getElementById('mode2Container');
+    const thinkingHandle = window.Orbi && thinkingContainer ? window.Orbi.showThinking(thinkingContainer, { caption: 'Extracting details...', size: 44, delay: 300 }) : null;
+
     try {
       let dna = null;
       if (window.FlaskAIService) {
@@ -252,6 +255,9 @@ document.addEventListener('DOMContentLoaded', () => {
         showSuccessState(summaryText, { ...meta, dna });
       }
     } finally {
+      if (thinkingHandle) {
+        thinkingHandle.dismiss();
+      }
       if (btnNext && window.setButtonLoading) {
         window.setButtonLoading(btnNext, false);
       }
@@ -266,41 +272,45 @@ document.addEventListener('DOMContentLoaded', () => {
   const dynamicDraftContainer = document.getElementById('dynamicDraftContainer');
   const btnDraftSubmit = document.getElementById('btnDraftSubmit');
   const btnVoiceToggle = document.getElementById('btnVoiceToggle');
+  const voiceLiveBar = document.getElementById('voiceLiveBar');
   const btnMicInline = document.getElementById('btnMicInline');
   const voiceLiveBadge = document.getElementById('voiceLiveBadge');
   const voiceBadgeText = document.getElementById('voiceBadgeText');
   const voiceVisualizer = document.getElementById('voiceVisualizer');
   const voiceToggleLabel = document.getElementById('voiceToggleLabel');
 
+  if (voiceLiveBar) {
+    voiceLiveBar.style.display = 'none';
+    voiceLiveBar.classList.remove('active');
+  }
+
+  // Photo Upload & Lightbox Elements
+  const btnAttachPhoto = document.getElementById('btnAttachPhoto');
+  const chatPhotoInput = document.getElementById('chatPhotoInput');
+  const chatDropOverlay = document.getElementById('chatDropOverlay');
+  const chatAttachmentBar = document.getElementById('chatAttachmentBar');
+  const attachmentThumbImg = document.getElementById('attachmentThumbImg');
+  const attachmentProgressBar = document.getElementById('attachmentProgressBar');
+  const attachmentFileName = document.getElementById('attachmentFileName');
+  const attachmentFileSize = document.getElementById('attachmentFileSize');
+  const attachmentCounterBadge = document.getElementById('attachmentCounterBadge');
+  const btnRemoveAttachment = document.getElementById('btnRemoveAttachment');
+  const chatSuggestions = document.getElementById('chatSuggestions');
+  const draftPhotosSection = document.getElementById('draftPhotosSection');
+  const draftPhotosList = document.getElementById('draftPhotosList');
+
+  const chatLightboxModal = document.getElementById('chatLightboxModal');
+  const chatLightboxImg = document.getElementById('chatLightboxImg');
+  const chatLightboxCaption = document.getElementById('chatLightboxCaption');
+  const chatLightboxClose = document.getElementById('chatLightboxClose');
+
   let chatHistory = [];
   let isAiResponding = false;
   let isVoiceModeActive = false;
   let isAiSpeaking = false;
-  let isAiServerOffline = false;
+  let attachedPhotos = []; // [{ file, dataUrl, serverUrl, name, size }]
+  let currentStagedPhoto = null; // { file, dataUrl, name, size }
 
-  function checkAiServerHealth() {
-    const flaskBaseUrl = window.FLASK_BACKEND_URL || (window.location.protocol + '//' + (window.location.hostname || '127.0.0.1') + ':5000');
-    const subStatus = document.getElementById('talkAiSubStatus');
-    fetch(`${flaskBaseUrl}/`, { method: 'GET', mode: 'cors' })
-      .then(res => {
-        if (res.ok) {
-          isAiServerOffline = false;
-          if (subStatus) subStatus.textContent = 'Powered by Google Gemini Live Voice';
-          updateVoiceBadgeState();
-        } else {
-          isAiServerOffline = true;
-          if (subStatus) subStatus.innerHTML = '<span style="color:#EF4444; font-weight:600;">⚠️ Local Python Flask Server Offline (127.0.0.1:5000)</span>';
-          updateVoiceBadgeState();
-        }
-      })
-      .catch(() => {
-        isAiServerOffline = true;
-        if (subStatus) subStatus.innerHTML = '<span style="color:#EF4444; font-weight:600;">⚠️ Local Python Flask Server Offline (127.0.0.1:5000)</span>';
-        updateVoiceBadgeState();
-      });
-  }
-
-  setTimeout(checkAiServerHealth, 300);
   let currentDraft = {
     title: '',
     category: '',
@@ -309,9 +319,241 @@ document.addEventListener('DOMContentLoaded', () => {
     dynamic_attributes: {},
     verification_secret: '',
     contact: '',
-    raw_summary: ''
+    raw_summary: '',
+    from_photo_keys: []
   };
 
+  // -------------------------------------------------------------
+  // Lightbox Modal Controls
+  // -------------------------------------------------------------
+  function openLightbox(src, caption) {
+    if (!chatLightboxModal || !chatLightboxImg) return;
+    chatLightboxImg.src = src;
+    if (chatLightboxCaption) {
+      chatLightboxCaption.textContent = caption || 'Uploaded Photo';
+    }
+    chatLightboxModal.style.display = 'flex';
+    chatLightboxModal.setAttribute('aria-hidden', 'false');
+    if (chatLightboxClose) chatLightboxClose.focus();
+  }
+
+  function closeLightbox() {
+    if (!chatLightboxModal) return;
+    chatLightboxModal.style.display = 'none';
+    chatLightboxModal.setAttribute('aria-hidden', 'true');
+  }
+
+  if (chatLightboxClose) {
+    chatLightboxClose.addEventListener('click', closeLightbox);
+  }
+  if (chatLightboxModal) {
+    chatLightboxModal.addEventListener('click', (e) => {
+      if (e.target === chatLightboxModal) closeLightbox();
+    });
+  }
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && chatLightboxModal && chatLightboxModal.style.display === 'flex') {
+      closeLightbox();
+    }
+  });
+
+  // -------------------------------------------------------------
+  // Client-Side Image Validation, Resizing & Compression (Max 1600px, 8MB)
+  // -------------------------------------------------------------
+  function formatBytes(bytes) {
+    if (!bytes || bytes <= 0) return '0 B';
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(1024));
+    return (bytes / Math.pow(1024, i)).toFixed(1) + ' ' + sizes[i];
+  }
+
+  async function processAndCompressImage(file) {
+    const validMimes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+    const ext = (file.name.split('.').pop() || '').toLowerCase();
+    const validExts = ['jpg', 'jpeg', 'png', 'webp'];
+
+    if (!validMimes.includes(file.type.toLowerCase()) && !validExts.includes(ext)) {
+      throw new Error('Please choose a JPG, PNG, or WebP photo.');
+    }
+
+    const maxBytes = 8 * 1024 * 1024; // 8 MB limit
+    if (file.size > maxBytes) {
+      throw new Error('Photo size exceeds 8 MB. Please choose a smaller photo.');
+    }
+
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = () => reject(new Error('Could not read image file.'));
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onerror = () => reject(new Error('Invalid image file data.'));
+        img.onload = () => {
+          const MAX_DIM = 1600;
+          let width = img.width;
+          let height = img.height;
+
+          if (width > MAX_DIM || height > MAX_DIM) {
+            if (width > height) {
+              height = Math.round((height * MAX_DIM) / width);
+              width = MAX_DIM;
+            } else {
+              width = Math.round((width * MAX_DIM) / height);
+              height = MAX_DIM;
+            }
+          }
+
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+
+          const isPng = file.type === 'image/png' || ext === 'png';
+          const outType = isPng ? 'image/png' : 'image/jpeg';
+          const outQuality = isPng ? 0.92 : 0.88;
+
+          canvas.toBlob((blob) => {
+            if (!blob) {
+              resolve({ file, dataUrl: e.target.result });
+              return;
+            }
+            const cleanName = file.name.replace(/\.[^.]+$/, '') + (isPng ? '.png' : '.jpg');
+            const compressedFile = new File([blob], cleanName, {
+              type: outType,
+              lastModified: Date.now()
+            });
+            const dataUrl = canvas.toDataURL(outType, outQuality);
+            resolve({ file: compressedFile, dataUrl });
+          }, outType, outQuality);
+        };
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  // -------------------------------------------------------------
+  // Photo Staging Chip & Input Handlers
+  // -------------------------------------------------------------
+  async function stagePhoto(file) {
+    if (!file) return;
+
+    if (attachedPhotos.length >= 3) {
+      const msg = 'Maximum of 3 photos reached for this report.';
+      if (window.ReuniteToast) window.ReuniteToast.info('Photo Limit', msg);
+      else alert(msg);
+      return;
+    }
+
+    try {
+      if (attachmentProgressBar) attachmentProgressBar.style.width = '25%';
+
+      const { file: processedFile, dataUrl } = await processAndCompressImage(file);
+      currentStagedPhoto = {
+        file: processedFile,
+        dataUrl: dataUrl,
+        name: file.name,
+        size: formatBytes(processedFile.size)
+      };
+
+      if (chatAttachmentBar) chatAttachmentBar.style.display = 'flex';
+      if (attachmentThumbImg) attachmentThumbImg.src = dataUrl;
+      if (attachmentFileName) attachmentFileName.textContent = file.name;
+      if (attachmentFileSize) attachmentFileSize.textContent = currentStagedPhoto.size;
+      if (attachmentCounterBadge) {
+        attachmentCounterBadge.textContent = `${attachedPhotos.length + 1}/3 photos`;
+      }
+      if (attachmentProgressBar) {
+        attachmentProgressBar.style.width = '100%';
+        setTimeout(() => {
+          if (attachmentProgressBar) attachmentProgressBar.style.width = '0%';
+        }, 300);
+      }
+
+      if (btnAttachPhoto) btnAttachPhoto.classList.remove('pulse-highlight');
+    } catch (err) {
+      console.warn('Photo processing notice:', err);
+      if (window.ReuniteToast) window.ReuniteToast.error('Invalid Photo', err.message);
+      else alert(err.message);
+      clearStagedPhoto();
+    }
+  }
+
+  function clearStagedPhoto() {
+    currentStagedPhoto = null;
+    if (chatAttachmentBar) chatAttachmentBar.style.display = 'none';
+    if (chatPhotoInput) chatPhotoInput.value = '';
+    if (attachmentProgressBar) attachmentProgressBar.style.width = '0%';
+  }
+
+  if (btnRemoveAttachment) {
+    btnRemoveAttachment.addEventListener('click', clearStagedPhoto);
+  }
+
+  if (btnAttachPhoto && chatPhotoInput) {
+    btnAttachPhoto.addEventListener('click', () => {
+      chatPhotoInput.click();
+    });
+
+    chatPhotoInput.addEventListener('change', () => {
+      if (chatPhotoInput.files && chatPhotoInput.files[0]) {
+        stagePhoto(chatPhotoInput.files[0]);
+      }
+    });
+  }
+
+  // Drag and drop onto chat panel
+  const chatPanel = document.querySelector('.chat-panel') || document.getElementById('mode3Container');
+  if (chatPanel) {
+    ['dragenter', 'dragover'].forEach(eventName => {
+      chatPanel.addEventListener(eventName, (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (chatDropOverlay) chatDropOverlay.classList.add('active');
+      });
+    });
+
+    ['dragleave', 'dragend'].forEach(eventName => {
+      chatPanel.addEventListener(eventName, (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (e.relatedTarget && chatPanel.contains(e.relatedTarget)) return;
+        if (chatDropOverlay) chatDropOverlay.classList.remove('active');
+      });
+    });
+
+    chatPanel.addEventListener('drop', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (chatDropOverlay) chatDropOverlay.classList.remove('active');
+      if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]) {
+        stagePhoto(e.dataTransfer.files[0]);
+      }
+    });
+  }
+
+  // Paste from clipboard (Ctrl+V)
+  window.addEventListener('paste', (e) => {
+    const mode3 = document.getElementById('mode3Container');
+    if (!mode3 || !mode3.classList.contains('active')) return;
+
+    if (e.clipboardData && e.clipboardData.items) {
+      for (const item of e.clipboardData.items) {
+        if (item.type && item.type.indexOf('image') !== -1) {
+          const file = item.getAsFile();
+          if (file) {
+            e.preventDefault();
+            stagePhoto(file);
+            break;
+          }
+        }
+      }
+    }
+  });
+
+  // -------------------------------------------------------------
+  // Chat Actions & Input Bindings
+  // -------------------------------------------------------------
   if (btnSendChat && chatInput) {
     btnSendChat.addEventListener('click', () => handleUserChat());
     chatInput.addEventListener('keypress', (e) => {
@@ -327,60 +569,297 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
+  let isAiServerOffline = false;
+  let activeFlaskUrl = null;
+
+  function getFlaskEndpoints() {
+    if (typeof window !== 'undefined' && window.FLASK_BACKEND_URL) {
+      return { primary: window.FLASK_BACKEND_URL, alternate: null };
+    }
+    const isLocal = typeof window !== 'undefined' && (
+      window.location.hostname === 'localhost' ||
+      window.location.hostname === '127.0.0.1' ||
+      window.location.hostname === ''
+    );
+    if (isLocal) {
+      return {
+        primary: 'http://127.0.0.1:5000',
+        alternate: 'https://reunite-ai-backend.onrender.com'
+      };
+    }
+    return {
+      primary: 'https://reunite-ai-backend.onrender.com',
+      alternate: 'http://127.0.0.1:5000'
+    };
+  }
+
+  function getFlaskBaseUrl() {
+    if (activeFlaskUrl) return activeFlaskUrl;
+    return getFlaskEndpoints().primary;
+  }
+
+  function checkAiServerHealth() {
+    const { primary, alternate } = getFlaskEndpoints();
+    const subStatus = document.getElementById('talkAiSubStatus');
+
+    fetch(`${primary}/`, { method: 'GET', mode: 'cors' })
+      .then(res => {
+        if (res.ok) {
+          activeFlaskUrl = primary;
+          isAiServerOffline = false;
+          if (subStatus) subStatus.innerHTML = '<span class="copilot-live-dot"></span> Powered by Google Gemini Live Voice';
+          updateVoiceBadgeState();
+        } else {
+          tryAlternate();
+        }
+      })
+      .catch(() => tryAlternate());
+
+    function tryAlternate() {
+      if (!alternate) {
+        markOffline();
+        return;
+      }
+      fetch(`${alternate}/`, { method: 'GET', mode: 'cors' })
+        .then(res => {
+          if (res.ok) {
+            activeFlaskUrl = alternate;
+            isAiServerOffline = false;
+            if (subStatus) subStatus.innerHTML = '<span class="copilot-live-dot"></span> Powered by Google Gemini Live Voice';
+            updateVoiceBadgeState();
+          } else {
+            markOffline();
+          }
+        })
+        .catch(() => markOffline());
+    }
+
+    function markOffline() {
+      isAiServerOffline = true;
+      if (subStatus) subStatus.innerHTML = '<span style="color:#F59E0B; font-weight:600;">⚠️ Connecting AI Engine...</span>';
+      updateVoiceBadgeState();
+    }
+  }
+
+  // Client-side fallback turn processor if both Python endpoints are sleeping/unreachable
+  function generateClientSideChatTurn(userMsg, photoObj) {
+    const text = (userMsg || '').trim();
+    const lower = text.toLowerCase();
+
+    let reply = "";
+
+    // 1. Check greeting
+    const isGreeting = /^(hi|hello|hey|good morning|good afternoon|good evening)\b/i.test(lower);
+    if (isGreeting && !currentDraft.title) {
+      reply = isFoundPage
+        ? "Hello! I'm your AI Found Item Copilot. What item did you find, and where did you find it?"
+        : "Hello! I'm your AI Lost Item Copilot. What item did you lose, and where did you last see it?";
+      return {
+        success: true,
+        reply: reply,
+        draft: currentDraft,
+        is_ready_to_submit: false
+      };
+    }
+
+    // 2. Extract item
+    let detectedItem = "";
+    let detectedCategory = "";
+    if (lower.includes('wallet') || lower.includes('purse')) {
+      detectedItem = "Leather Wallet";
+      detectedCategory = "Wallets & Bags";
+    } else if (lower.includes('iphone') || lower.includes('phone') || lower.includes('mobile') || lower.includes('samsung') || lower.includes('pixel')) {
+      detectedItem = lower.includes('iphone') ? "iPhone" : "Smartphone";
+      detectedCategory = "Electronics";
+    } else if (lower.includes('key')) {
+      detectedItem = "Keys / Keychain";
+      detectedCategory = "Keys & Identification";
+    } else if (lower.includes('watch')) {
+      detectedItem = "Watch";
+      detectedCategory = "Accessories";
+    } else if (lower.includes('laptop') || lower.includes('macbook')) {
+      detectedItem = "Laptop";
+      detectedCategory = "Electronics";
+    } else if (lower.includes('bag') || lower.includes('backpack')) {
+      detectedItem = "Backpack";
+      detectedCategory = "Wallets & Bags";
+    } else if (lower.includes('bottle')) {
+      detectedItem = "Water Bottle";
+      detectedCategory = "Personal Items";
+    }
+
+    if (detectedItem && !currentDraft.title) {
+      currentDraft.title = detectedItem;
+      currentDraft.category = detectedCategory;
+    }
+
+    // 3. Location extraction
+    const locationMatch = lower.match(/(?:at|in|near|around|on|outside|inside)\s+([a-zA-Z0-9\s]{3,35})(?:yesterday|today|morning|afternoon|evening|\.|\,|$)/i);
+    if (locationMatch && locationMatch[1] && !currentDraft.location) {
+      currentDraft.location = locationMatch[1].trim();
+    }
+
+    // 4. Time extraction
+    if (!currentDraft.time) {
+      if (lower.includes('yesterday')) currentDraft.time = "Yesterday";
+      else if (lower.includes('today')) currentDraft.time = "Today";
+      else if (lower.includes('morning')) currentDraft.time = "Morning";
+    }
+
+    // 5. Generate conversational reply
+    if (photoObj) {
+      reply = "Thank you for sharing the photo! I've attached it to your report dossier. Could you share where you found/lost it and any unique marks?";
+    } else if (!currentDraft.title) {
+      reply = isFoundPage
+        ? "Could you tell me what specific item you found (e.g. phone, keys, wallet)?"
+        : "Could you describe the exact item you lost so I can match it?";
+    } else if (!currentDraft.location) {
+      reply = `Got it, I noted your ${currentDraft.title}. Where was it ${isFoundPage ? 'found' : 'last seen'}?`;
+    } else {
+      reply = `Understood! I've recorded the ${currentDraft.title} at ${currentDraft.location}. Are there any unique colors, brand names, or distinctive marks?`;
+    }
+
+    const isReady = Boolean(currentDraft.title && (currentDraft.location || currentDraft.category));
+
+    return {
+      success: true,
+      reply: reply,
+      draft: currentDraft,
+      is_ready_to_submit: isReady
+    };
+  }
+
   async function handleUserChat(directMessage) {
     if (isAiResponding) return;
     const msg = directMessage || (chatInput ? chatInput.value.trim() : '');
-    if (!msg) return;
+    const photoToSend = currentStagedPhoto;
 
-    // Temporarily pause recognition while processing/speaking AI reply
+    if (!msg && !photoToSend) return;
+
+    // Temporarily pause speech recognition while processing/speaking AI reply
     pauseRecognition();
 
-    // Add user bubble
-    addChatBubble(msg, 'user');
-    chatHistory.push({ role: 'user', text: msg });
+    // Add user bubble (with photo thumbnail if attached)
+    if (photoToSend) {
+      addUserPhotoBubble(photoToSend.dataUrl, msg, photoToSend.name);
+      chatHistory.push({ role: 'user', text: msg || 'Attached photo of the item.' });
+    } else {
+      addChatBubble(msg, 'user');
+      chatHistory.push({ role: 'user', text: msg });
+    }
+
     if (chatInput) chatInput.value = '';
+    clearStagedPhoto();
+    if (chatSuggestions) chatSuggestions.style.display = 'none';
 
     // Show AI thinking bubble
-    const thinkingBubble = showThinkingIndicator();
+    const thinkingBubble = showThinkingIndicator(photoToSend ? 'Looking at your photo...' : null);
     isAiResponding = true;
     updateVoiceBadgeState();
+    updateDraftSyncStatus(true);
 
-    const flaskBaseUrl = window.FLASK_BACKEND_URL || (window.location.protocol + '//' + (window.location.hostname || '127.0.0.1') + ':5000');
+    const { primary, alternate } = getFlaskEndpoints();
+    const candidateEndpoints = [activeFlaskUrl || primary];
+    if (alternate && !candidateEndpoints.includes(alternate)) {
+      candidateEndpoints.push(alternate);
+    }
 
     try {
-      const response = await fetch(`${flaskBaseUrl}/report/talk_to_ai/chat`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          message: msg,
-          history: chatHistory,
-          report_type: isFoundPage ? 'found' : 'lost',
-          current_draft: currentDraft
-        })
-      });
+      let response = null;
 
-      if (!response.ok) {
-        throw new Error(`Server returned HTTP ${response.status} (${response.statusText || 'Offline'})`);
+      async function postToEndpoint(endpointUrl) {
+        if (photoToSend) {
+          const formData = new FormData();
+          formData.append('image', photoToSend.file);
+          formData.append('message', msg || 'Here is a photo of the item.');
+          formData.append('history', JSON.stringify(chatHistory));
+          formData.append('report_type', isFoundPage ? 'found' : 'lost');
+          formData.append('current_draft', JSON.stringify(currentDraft));
+          const existingUrls = attachedPhotos.map(p => p.serverUrl).filter(Boolean);
+          if (existingUrls.length > 0) {
+            formData.append('image_urls', JSON.stringify(existingUrls));
+          }
+          return await fetch(`${endpointUrl}/report/talk_to_ai/chat`, {
+            method: 'POST',
+            body: formData
+          });
+        } else {
+          return await fetch(`${endpointUrl}/report/talk_to_ai/chat`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              message: msg,
+              history: chatHistory,
+              report_type: isFoundPage ? 'found' : 'lost',
+              current_draft: currentDraft,
+              image_urls: attachedPhotos.map(p => p.serverUrl).filter(Boolean)
+            })
+          });
+        }
       }
 
-      const result = await response.json();
+      for (const ep of candidateEndpoints) {
+        try {
+          const res = await postToEndpoint(ep);
+          if (res.ok) {
+            response = res;
+            activeFlaskUrl = ep;
+            break;
+          } else {
+            console.warn(`Talk to AI endpoint ${ep} returned HTTP ${res.status}. Trying next candidate...`);
+          }
+        } catch (netErr) {
+          console.warn(`Talk to AI endpoint ${ep} network error. Trying next candidate...`, netErr);
+        }
+      }
+
+      let result = null;
+      if (response && response.ok) {
+        result = await response.json();
+      } else {
+        console.warn('All remote AI endpoints failed or offline. Falling back to in-browser AI intake engine.');
+        result = generateClientSideChatTurn(msg, photoToSend);
+      }
+
       removeThinkingIndicator(thinkingBubble);
       isAiResponding = false;
       isAiServerOffline = false;
+      updateDraftSyncStatus(false);
 
       const subStatus = document.getElementById('talkAiSubStatus');
-      if (subStatus) subStatus.textContent = 'Powered by Google Gemini Live Voice';
+      if (subStatus) subStatus.innerHTML = '<span class="copilot-live-dot"></span> Powered by Google Gemini Live Voice';
 
-      if (result.success && result.reply) {
+      if (result && result.success && result.reply) {
+        if (photoToSend) {
+          const returnedUrls = result.image_urls || [];
+          const serverUrl = returnedUrls.length > 0 ? returnedUrls[returnedUrls.length - 1] : null;
+          attachedPhotos.push({
+            file: photoToSend.file,
+            dataUrl: photoToSend.dataUrl,
+            serverUrl: serverUrl,
+            name: photoToSend.name
+          });
+          renderDraftPhotos();
+        }
+
         addChatBubble(result.reply, 'ai');
         chatHistory.push({ role: 'assistant', text: result.reply });
+
+        // Merge attributes tagged "From photo"
+        if (Array.isArray(result.from_photo_keys) && result.from_photo_keys.length > 0) {
+          currentDraft.from_photo_keys = Array.from(new Set([
+            ...(currentDraft.from_photo_keys || []),
+            ...result.from_photo_keys
+          ]));
+        }
 
         if (result.draft) {
           currentDraft = {
             ...currentDraft,
             ...result.draft,
+            from_photo_keys: currentDraft.from_photo_keys || [],
             dynamic_attributes: {
               ...(currentDraft.dynamic_attributes || {}),
               ...(result.draft.dynamic_attributes || {})
@@ -389,6 +868,9 @@ document.addEventListener('DOMContentLoaded', () => {
           renderDynamicDraft(currentDraft, result.is_ready_to_submit);
         }
 
+        // Handle photo request quick reply chips
+        handlePhotoRequestPrompt(result.photo_requested);
+
         // If Voice Mode is active, speak the reply aloud and resume listening after
         if (isVoiceModeActive) {
           speakAiReply(result.reply);
@@ -396,7 +878,7 @@ document.addEventListener('DOMContentLoaded', () => {
           updateVoiceBadgeState();
         }
       } else {
-        const fallbackReply = result.error || "I've noted that! Could you tell me more about the item or where you last saw it?";
+        const fallbackReply = (result && result.error) || "I've noted that! Could you tell me more about the item or where you last saw it?";
         addChatBubble(fallbackReply, 'ai');
         if (isVoiceModeActive) {
           speakAiReply(fallbackReply);
@@ -409,49 +891,116 @@ document.addEventListener('DOMContentLoaded', () => {
       removeThinkingIndicator(thinkingBubble);
       isAiResponding = false;
       isAiServerOffline = true;
+      updateDraftSyncStatus(false);
 
       const subStatus = document.getElementById('talkAiSubStatus');
       if (subStatus) {
-        subStatus.innerHTML = '<span style="color:#EF4444; font-weight:600;">⚠️ Local Python Flask Server Offline (127.0.0.1:5000)</span>';
+        subStatus.innerHTML = '<span style="color:#EF4444; font-weight:600;">⚠️ Server unreachable (waking up or offline)</span>';
       }
 
-      const errReply = `
-        <div style="font-weight:700; margin-bottom:4px; display:flex; align-items:center; gap:6px; color:#B91C1C;">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-          Python Flask Server is Offline
-        </div>
-        <div style="font-size:0.84rem; margin-bottom:8px; line-height:1.45;">
-          Could not connect to the local AI backend at <code>${escapeHtml(flaskBaseUrl)}</code>. Please start the server in your terminal:
-        </div>
-        <div style="background:rgba(0,0,0,0.06); padding:6px 10px; border-radius:6px; font-family:monospace; font-size:0.82rem; font-weight:600; display:inline-block; margin-bottom:6px;">
-          python flask_server.py
-        </div>
-      `;
+      const errReply = '⚠️ <strong>Unable to reach the AI cloud server:</strong> The service may be waking up from cold sleep (takes ~30–40s on Render) or is temporarily offline. Please wait a few seconds and try again.';
       addChatBubble(errReply, 'ai', true, () => handleUserChat(msg));
 
       if (isVoiceModeActive) {
-        speakAiReply("The local Python AI server is offline. Please start flask server to continue.");
+        speakAiReply("Unable to reach the AI server right now. Please try again in a few seconds.");
       } else {
         updateVoiceBadgeState();
       }
     }
   }
 
-  function addChatBubble(text, sender, isError = false, retryCallback = null) {
+  function addUserPhotoBubble(dataUrl, captionText, fileName) {
+    if (!chatMessages) return;
+    const bubble = document.createElement('div');
+    bubble.className = 'chat-bubble user image-bubble';
+
+    const card = document.createElement('div');
+    card.className = 'chat-image-card';
+    card.title = 'Click to view enlarged photo';
+
+    const img = document.createElement('img');
+    img.src = dataUrl;
+    img.alt = fileName || 'Uploaded item photo';
+    img.addEventListener('click', () => {
+      openLightbox(dataUrl, fileName || 'Uploaded Photo');
+    });
+    card.appendChild(img);
+    bubble.appendChild(card);
+
+    if (captionText) {
+      const caption = document.createElement('div');
+      caption.className = 'chat-image-caption';
+      caption.textContent = captionText;
+      bubble.appendChild(caption);
+    }
+
+    chatMessages.appendChild(bubble);
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+  }
+
+  function handlePhotoRequestPrompt(isRequested) {
+    if (!chatSuggestions) return;
+
+    if (isRequested && attachedPhotos.length < 3) {
+      chatSuggestions.innerHTML = `
+        <div class="prompt-chip photo-chip-action" id="chipUploadPhoto">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px; margin-right:4px;">
+            <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+            <circle cx="12" cy="13" r="4"/>
+          </svg> Upload a photo
+        </div>
+        <div class="prompt-chip photo-chip-skip" id="chipSkipPhoto">Skip for now</div>
+      `;
+
+      const uploadChip = document.getElementById('chipUploadPhoto');
+      const skipChip = document.getElementById('chipSkipPhoto');
+
+      if (uploadChip && chatPhotoInput) {
+        uploadChip.addEventListener('click', () => {
+          chatPhotoInput.click();
+          if (btnAttachPhoto) btnAttachPhoto.classList.remove('pulse-highlight');
+        });
+      }
+
+      if (skipChip) {
+        skipChip.addEventListener('click', () => {
+          if (btnAttachPhoto) btnAttachPhoto.classList.remove('pulse-highlight');
+          handleUserChat('Skip photo for now');
+        });
+      }
+
+      if (btnAttachPhoto) {
+        btnAttachPhoto.classList.add('pulse-highlight');
+      }
+    } else {
+      if (btnAttachPhoto) {
+        btnAttachPhoto.classList.remove('pulse-highlight');
+      }
+    }
+  }
+
+  function addChatBubble(text, sender, isError = false, retryFn = null) {
     if (!chatMessages) return;
     const bubble = document.createElement('div');
     bubble.className = `chat-bubble ${sender}${isError ? ' error-bubble' : ''}`;
+    if (isError) {
+      bubble.style.border = '1px solid rgba(239, 68, 68, 0.4)';
+      bubble.style.backgroundColor = 'rgba(239, 68, 68, 0.1)';
+      bubble.style.color = '#FCA5A5';
+    }
     bubble.innerHTML = text;
 
-    if (retryCallback) {
+    if (retryFn) {
       const retryBtn = document.createElement('button');
-      retryBtn.className = 'chat-retry-btn';
-      retryBtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-1px; margin-right:4px;"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg> Retry';
-      retryBtn.onclick = (e) => {
+      retryBtn.type = 'button';
+      retryBtn.innerHTML = '🔄 Retry Message';
+      retryBtn.style.cssText = 'display:inline-block; margin-top:8px; padding:4px 10px; font-size:12px; font-weight:600; color:#fff; background:#C4622D; border:none; border-radius:4px; cursor:pointer;';
+      retryBtn.addEventListener('click', (e) => {
         e.preventDefault();
         retryBtn.remove();
-        retryCallback();
-      };
+        retryFn();
+      });
+      bubble.appendChild(document.createElement('br'));
       bubble.appendChild(retryBtn);
     }
 
@@ -459,11 +1008,21 @@ document.addEventListener('DOMContentLoaded', () => {
     chatMessages.scrollTop = chatMessages.scrollHeight;
   }
 
-  function showThinkingIndicator() {
+  function showThinkingIndicator(customText = null) {
     if (!chatMessages) return null;
     const thinking = document.createElement('div');
-    thinking.className = 'chat-bubble thinking';
-    thinking.innerHTML = '<span class="dot"></span><span class="dot"></span><span class="dot"></span>';
+    thinking.className = 'chat-bubble thinking orbi-thinking-bubble';
+    thinking.setAttribute('role', 'status');
+    thinking.setAttribute('aria-live', 'polite');
+    const caption = customText || 'Thinking...';
+    const orbiEl = window.Orbi ? window.Orbi.create({ state: 'thinking', size: 36, label: caption }) : null;
+    const orbiHtml = orbiEl ? orbiEl.outerHTML : '<span class="dot"></span><span class="dot"></span><span class="dot"></span>';
+    thinking.innerHTML = `
+      <div class="chat-thinking-content">
+        ${orbiHtml}
+        <span class="chat-thinking-label">${escapeHtml(caption)}</span>
+      </div>
+    `;
     chatMessages.appendChild(thinking);
     chatMessages.scrollTop = chatMessages.scrollHeight;
     return thinking;
@@ -475,48 +1034,179 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  function updateDraftSyncStatus(isSyncing) {
+    const liveDraftCard = document.querySelector('.live-draft-card');
+    const badge = liveDraftCard ? liveDraftCard.querySelector('.live-badge') : null;
+    if (badge) {
+      if (isSyncing) {
+        badge.innerHTML = '<span class="live-dot" style="animation:pulse 0.8s infinite;"></span> AI Syncing...';
+      } else {
+        badge.innerHTML = '<span class="live-dot"></span> Live';
+      }
+    }
+  }
+
+  function renderDraftPhotos() {
+    if (!draftPhotosSection || !draftPhotosList) return;
+
+    if (attachedPhotos.length === 0) {
+      draftPhotosSection.style.display = 'none';
+      draftPhotosList.innerHTML = '';
+      return;
+    }
+
+    draftPhotosSection.style.display = 'block';
+    draftPhotosList.innerHTML = '';
+
+    attachedPhotos.forEach((photo, idx) => {
+      const card = document.createElement('div');
+      card.className = 'draft-photo-thumb';
+      card.title = `${photo.name || 'Photo'} - Click to enlarge`;
+
+      const img = document.createElement('img');
+      img.src = photo.dataUrl;
+      img.alt = photo.name || 'Photo';
+      img.addEventListener('click', () => {
+        openLightbox(photo.dataUrl, photo.name || 'Evidence Photo');
+      });
+
+      const removeBtn = document.createElement('button');
+      removeBtn.type = 'button';
+      removeBtn.className = 'btn-draft-photo-remove';
+      removeBtn.title = 'Remove photo';
+      removeBtn.setAttribute('aria-label', 'Remove photo');
+      removeBtn.innerHTML = '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
+
+      removeBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        attachedPhotos.splice(idx, 1);
+        if (attachmentCounterBadge) {
+          attachmentCounterBadge.textContent = `${attachedPhotos.length}/3 photos`;
+        }
+
+        // If no photos remain, clear photo-derived attributes
+        if (attachedPhotos.length === 0) {
+          const photoKeys = currentDraft.from_photo_keys || [];
+          photoKeys.forEach(k => {
+            if (currentDraft.dynamic_attributes && currentDraft.dynamic_attributes[k]) {
+              delete currentDraft.dynamic_attributes[k];
+            }
+          });
+          currentDraft.from_photo_keys = [];
+        }
+
+        renderDraftPhotos();
+        renderDynamicDraft(currentDraft, false);
+        addChatBubble('<em>Photo removed from report draft.</em>', 'ai');
+      });
+
+      card.appendChild(img);
+      card.appendChild(removeBtn);
+      draftPhotosList.appendChild(card);
+    });
+  }
+
   // Fully dynamic right-side attribute card renderer
   function renderDynamicDraft(draft, isReady) {
     if (!dynamicDraftContainer) return;
 
     const attributes = draft.dynamic_attributes || {};
-    const hasCore = Boolean(draft.title || draft.category || draft.location || draft.time || draft.verification_secret || draft.contact || Object.keys(attributes).length > 0);
+    const hasCore = Boolean(
+      draft.title ||
+      draft.category ||
+      draft.location ||
+      draft.time ||
+      draft.verification_secret ||
+      draft.contact ||
+      Object.keys(attributes).length > 0 ||
+      attachedPhotos.length > 0
+    );
 
     if (!hasCore) {
       dynamicDraftContainer.innerHTML = `
         <div class="draft-empty-state" id="draftEmptyState">
-          <div class="draft-empty-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"/></svg></div>
-          <div class="draft-empty-text"><strong>Live Attributes Extractor</strong></div>
-          <div class="draft-empty-sub">Speak or type your conversation. The AI will dynamically extract and display all item attributes, location, and marks here in real time.</div>
+          <div class="draft-empty-header">
+            <span class="draft-empty-badge">AI Intake Dossier</span>
+            <div class="draft-empty-sub">Speak, type, or attach photos. The AI extracts features into this dossier in real time.</div>
+          </div>
+          <div class="draft-blueprint-grid">
+            <div class="draft-blueprint-card">
+              <div class="draft-blueprint-icon">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2H2v10l9.29 9.29c.94.94 2.48.94 3.42 0l6.58-6.58c.94-.94.94-2.48 0-3.42L12 2Z"/><path d="M7 7h.01"/></svg>
+              </div>
+              <div class="draft-blueprint-text">
+                <div class="draft-blueprint-label">Item Identification</div>
+                <div class="draft-blueprint-sub"><em>Waiting for item title or brand...</em></div>
+              </div>
+            </div>
+
+            <div class="draft-blueprint-card">
+              <div class="draft-blueprint-icon">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg>
+              </div>
+              <div class="draft-blueprint-text">
+                <div class="draft-blueprint-label">Category &amp; Type</div>
+                <div class="draft-blueprint-sub"><em>Auto-categorizes belongings...</em></div>
+              </div>
+            </div>
+
+            <div class="draft-blueprint-card">
+              <div class="draft-blueprint-icon">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"/><circle cx="12" cy="10" r="3"/></svg>
+              </div>
+              <div class="draft-blueprint-text">
+                <div class="draft-blueprint-label">Location &amp; Date</div>
+                <div class="draft-blueprint-sub"><em>Detects campus locations &amp; time...</em></div>
+              </div>
+            </div>
+
+            <div class="draft-blueprint-card">
+              <div class="draft-blueprint-icon">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+              </div>
+              <div class="draft-blueprint-text">
+                <div class="draft-blueprint-label">Distinctive Marks</div>
+                <div class="draft-blueprint-sub"><em>Private serials, stickers, colors...</em></div>
+              </div>
+            </div>
+          </div>
         </div>
       `;
       if (btnDraftSubmit) btnDraftSubmit.disabled = true;
       return;
     }
 
+    const fromPhotoKeys = (draft.from_photo_keys || []).map(k => String(k).toLowerCase());
+    const isFromPhoto = (key) => fromPhotoKeys.includes(String(key).toLowerCase());
+
+    const photoBadgeHtml = '<span class="draft-tag-badge from-photo"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg> From photo</span>';
+
     let html = '';
 
     // 1. Title / Item Type Card
     if (draft.title) {
+      const isPhotoItem = isFromPhoto('title') || isFromPhoto('item type') || isFromPhoto('object_type');
       html += `
         <div class="draft-item updated">
           <div class="draft-item-header">
             <span class="draft-label"><span class="draft-label-icon"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2H2v10l9.29 9.29c.94.94 2.48.94 3.42 0l6.58-6.58c.94-.94.94-2.48 0-3.42L12 2Z"/><path d="M7 7h.01"/></svg></span> ${isFoundPage ? 'Found Item' : 'Lost Item'}</span>
-            <span class="draft-tag-badge">Identified</span>
+            ${isPhotoItem ? photoBadgeHtml : '<span class="draft-tag-badge">Identified</span>'}
           </div>
-          <div class="draft-value">${escapeHtml(draft.title)}</div>
+          <div class="draft-value" contenteditable="true" spellcheck="false" data-field="title" title="Click to edit">${escapeHtml(draft.title)}</div>
         </div>
       `;
     }
 
     // 2. Category Card
     if (draft.category) {
+      const isPhotoCat = isFromPhoto('category');
       html += `
         <div class="draft-item">
           <div class="draft-item-header">
             <span class="draft-label"><span class="draft-label-icon"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg></span> Category</span>
+            ${isPhotoCat ? photoBadgeHtml : ''}
           </div>
-          <div class="draft-value">${escapeHtml(draft.category)}</div>
+          <div class="draft-value" contenteditable="true" spellcheck="false" data-field="category" title="Click to edit">${escapeHtml(draft.category)}</div>
         </div>
       `;
     }
@@ -529,7 +1219,7 @@ document.addEventListener('DOMContentLoaded', () => {
             <span class="draft-label"><span class="draft-label-icon"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"/><circle cx="12" cy="10" r="3"/></svg></span> ${isFoundPage ? 'Found Location' : 'Lost Location'}</span>
             <span class="draft-tag-badge">Location</span>
           </div>
-          <div class="draft-value">${escapeHtml(draft.location)}</div>
+          <div class="draft-value" contenteditable="true" spellcheck="false" data-field="location" title="Click to edit">${escapeHtml(draft.location)}</div>
         </div>
       `;
     }
@@ -541,22 +1231,23 @@ document.addEventListener('DOMContentLoaded', () => {
           <div class="draft-item-header">
             <span class="draft-label"><span class="draft-label-icon"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span> Date / Time Context</span>
           </div>
-          <div class="draft-value">${escapeHtml(draft.time)}</div>
+          <div class="draft-value" contenteditable="true" spellcheck="false" data-field="time" title="Click to edit">${escapeHtml(draft.time)}</div>
         </div>
       `;
     }
 
-    // 5. Dynamic Discovered Attributes (e.g. Brand, Dial Color, Strap, Scratches, Engravings, etc.)
+    // 5. Dynamic Discovered Attributes (Color, Brand, Strap, Scratches, Engravings, etc.)
     for (const [key, value] of Object.entries(attributes)) {
       if (value && String(value).trim() !== '') {
         const icon = getAttributeIcon(key);
+        const photoTagged = isFromPhoto(key);
         html += `
           <div class="draft-item updated">
             <div class="draft-item-header">
               <span class="draft-label"><span class="draft-label-icon">${icon}</span> ${escapeHtml(key)}</span>
-              <span class="draft-tag-badge">Detail</span>
+              ${photoTagged ? photoBadgeHtml : '<span class="draft-tag-badge">Detail</span>'}
             </div>
-            <div class="draft-value">${escapeHtml(String(value))}</div>
+            <div class="draft-value" contenteditable="true" spellcheck="false" data-field="attr_${escapeHtml(key)}" title="Click to edit">${escapeHtml(String(value))}</div>
           </div>
         `;
       }
@@ -570,7 +1261,7 @@ document.addEventListener('DOMContentLoaded', () => {
             <span class="draft-label"><span class="draft-label-icon"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span> Private Verification Detail</span>
             <span class="draft-tag-badge">Private</span>
           </div>
-          <div class="draft-value">${escapeHtml(draft.verification_secret)}</div>
+          <div class="draft-value" contenteditable="true" spellcheck="false" data-field="verification_secret" title="Click to edit">${escapeHtml(draft.verification_secret)}</div>
         </div>
       `;
     }
@@ -582,7 +1273,7 @@ document.addEventListener('DOMContentLoaded', () => {
           <div class="draft-item-header">
             <span class="draft-label"><span class="draft-label-icon"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg></span> Contact Info</span>
           </div>
-          <div class="draft-value">${escapeHtml(draft.contact)}</div>
+          <div class="draft-value" contenteditable="true" spellcheck="false" data-field="contact" title="Click to edit">${escapeHtml(draft.contact)}</div>
         </div>
       `;
     }
@@ -599,9 +1290,35 @@ document.addEventListener('DOMContentLoaded', () => {
     dynamicDraftContainer.innerHTML = html;
     dynamicDraftContainer.scrollTop = dynamicDraftContainer.scrollHeight;
 
-    // Enable submit if sufficient details captured
+    // Attach editable listeners to persist changes in currentDraft
+    dynamicDraftContainer.querySelectorAll('.draft-value[contenteditable="true"]').forEach(el => {
+      const field = el.getAttribute('data-field');
+      const updateValue = () => {
+        const newVal = el.innerText.trim();
+        if (field === 'title') currentDraft.title = newVal;
+        else if (field === 'category') currentDraft.category = newVal;
+        else if (field === 'location') currentDraft.location = newVal;
+        else if (field === 'time') currentDraft.time = newVal;
+        else if (field === 'verification_secret') currentDraft.verification_secret = newVal;
+        else if (field === 'contact') currentDraft.contact = newVal;
+        else if (field && field.startsWith('attr_')) {
+          const attrKey = field.substring(5);
+          if (!currentDraft.dynamic_attributes) currentDraft.dynamic_attributes = {};
+          currentDraft.dynamic_attributes[attrKey] = newVal;
+        }
+      };
+      el.addEventListener('blur', updateValue);
+      el.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          el.blur();
+        }
+      });
+    });
+
+    // Enable submit button if minimum details or photo captured
     if (btnDraftSubmit) {
-      const ready = isReady || (draft.title && (draft.location || Object.keys(attributes).length > 0));
+      const ready = isReady || (draft.title && (draft.location || Object.keys(attributes).length > 0 || attachedPhotos.length > 0));
       btnDraftSubmit.disabled = !ready;
     }
   }
@@ -708,6 +1425,11 @@ document.addEventListener('DOMContentLoaded', () => {
     isVoiceModeActive = true;
     if (voiceToggleLabel) voiceToggleLabel.textContent = 'Stop Voice Mode';
     if (btnVoiceToggle) btnVoiceToggle.classList.add('active');
+    if (btnMicInline) btnMicInline.classList.add('active');
+    if (voiceLiveBar) {
+      voiceLiveBar.style.display = 'flex';
+      voiceLiveBar.classList.add('active');
+    }
     startRecognitionSafe();
   }
 
@@ -721,6 +1443,11 @@ document.addEventListener('DOMContentLoaded', () => {
     pauseRecognition();
     if (voiceToggleLabel) voiceToggleLabel.textContent = 'Start Voice Mode';
     if (btnVoiceToggle) btnVoiceToggle.classList.remove('active');
+    if (btnMicInline) btnMicInline.classList.remove('active');
+    if (voiceLiveBar) {
+      voiceLiveBar.style.display = 'none';
+      voiceLiveBar.classList.remove('active');
+    }
     updateVoiceBadgeState();
     stopVisualizerAnimation();
   }
@@ -750,18 +1477,16 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    window.speechSynthesis.cancel(); // Cancel any previous speech
+    window.speechSynthesis.cancel();
     isAiSpeaking = true;
     updateVoiceBadgeState();
     startVisualizerAnimation();
 
-    // Clean markdown/HTML if any from spoken text
     const cleanText = text.replace(/<[^>]*>?/gm, '').replace(/[*_#`~]/g, '');
     const utterance = new SpeechSynthesisUtterance(cleanText);
     utterance.rate = 1.0;
     utterance.pitch = 1.0;
 
-    // Pick pleasant English voice if available
     const voices = window.speechSynthesis.getVoices();
     const naturalVoice = voices.find(v => v.lang.startsWith('en') && (v.name.includes('Natural') || v.name.includes('Google') || v.name.includes('Samantha')));
     if (naturalVoice) utterance.voice = naturalVoice;
@@ -771,7 +1496,6 @@ document.addEventListener('DOMContentLoaded', () => {
       updateVoiceBadgeState();
       stopVisualizerAnimation();
       if (isVoiceModeActive) {
-        // Automatically listen for user's next response!
         setTimeout(() => {
           startRecognitionSafe();
         }, 400);
@@ -788,14 +1512,9 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!voiceBadgeText || !voiceLiveBadge) return;
 
     if (isAiServerOffline) {
-      voiceBadgeText.textContent = 'Server Offline';
-      voiceLiveBadge.classList.add('offline');
+      voiceBadgeText.textContent = 'Server Offline (Waking Up)';
       voiceLiveBadge.classList.remove('active');
-      return;
-    }
-
-    voiceLiveBadge.classList.remove('offline');
-    if (isAiSpeaking) {
+    } else if (isAiSpeaking) {
       voiceBadgeText.textContent = 'AI Speaking...';
       voiceLiveBadge.classList.add('active');
     } else if (isAiResponding) {
@@ -870,7 +1589,7 @@ document.addEventListener('DOMContentLoaded', () => {
       btnDraftSubmit.textContent = 'Synthesizing Digital DNA...';
 
       let combinedDescription = currentDraft.raw_summary || `${currentDraft.title || 'Item'} ${isFoundPage ? 'found' : 'lost'} at ${currentDraft.location || 'unknown'}.`;
-      
+
       const attrList = [];
       for (const [k, v] of Object.entries(currentDraft.dynamic_attributes || {})) {
         attrList.push(`${k}: ${v}`);
@@ -886,11 +1605,18 @@ document.addEventListener('DOMContentLoaded', () => {
         verification: currentDraft.verification_secret || ''
       };
 
+      const thinkingContainer = document.querySelector('.live-draft-card') || dynamicDraftContainer;
+      const thinkingHandle = window.Orbi && thinkingContainer ? window.Orbi.showThinking(thinkingContainer, { caption: 'Extracting details...', size: 44, delay: 300 }) : null;
+
+      const primaryPhotoFile = attachedPhotos.length > 0 ? attachedPhotos[0].file : null;
+      const primaryPhotoUrl = attachedPhotos.length > 0 ? attachedPhotos[0].serverUrl : null;
+
       try {
         let dna = null;
         if (window.FlaskAIService) {
           const aiResult = await window.FlaskAIService.submitReportToFlask({
             description: combinedDescription,
+            imageFile: primaryPhotoFile,
             meta: meta
           });
 
@@ -912,7 +1638,9 @@ document.addEventListener('DOMContentLoaded', () => {
             description: combinedDescription,
             where: currentDraft.location,
             when: currentDraft.time,
-            verification: currentDraft.verification_secret
+            verification: currentDraft.verification_secret,
+            imageFile: primaryPhotoFile,
+            imagePath: primaryPhotoUrl
           });
         } else {
           showSuccessState(combinedDescription, { ...meta, dna });
@@ -926,12 +1654,17 @@ document.addEventListener('DOMContentLoaded', () => {
             description: combinedDescription,
             where: currentDraft.location,
             when: currentDraft.time,
-            verification: currentDraft.verification_secret
+            verification: currentDraft.verification_secret,
+            imageFile: primaryPhotoFile,
+            imagePath: primaryPhotoUrl
           });
         } else {
           showSuccessState(combinedDescription, { ...meta, dna });
         }
       } finally {
+        if (thinkingHandle) {
+          thinkingHandle.dismiss();
+        }
         btnDraftSubmit.disabled = false;
         btnDraftSubmit.textContent = 'Process & Extract Features';
       }

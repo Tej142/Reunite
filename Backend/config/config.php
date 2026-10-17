@@ -4,6 +4,9 @@
  * Database: lost_connect_db
  */
 
+// Ensure consistent campus timezone (Tirupati, AP, GMT+5:30)
+date_default_timezone_set('Asia/Kolkata');
+
 // Start session if not already active
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
@@ -58,6 +61,7 @@ define('DB_PORT', (int)get_config_val('DB_PORT', 3306));
 define('ENCRYPTION_KEY', get_config_val('APP_ENC_KEY', 'reunite_secret_encryption_key_2024'));
 define('ENCRYPTION_IV', substr(hash('sha256', 'reunite_iv_2024'), 0, 16));
 define('ADMIN_MASTER_KEY', get_config_val('ADMIN_MASTER_KEY', 'admin@reunite2024'));
+define('AI_SECRET_KEY', get_config_val('AI_SECRET_KEY', 'reunite_ai_secret_token_2026_kolkata'));
 
 // ── Email API Provider Configuration (Read from root .env) ──
 // 1. Brevo (Sendinblue) API

@@ -31,34 +31,10 @@ if ($action === 'ping') {
         'cookie_auth' => isset($_COOKIE['reunite_auth_token']) ? 'PRESENT' : 'NOT_SET',
     ];
 
-    // Quick write test
+    // Read-only DB check (no destructive writes)
     if ($conn) {
-        $firstUser = $conn->query("SELECT user_id FROM users WHERE status = 'active' ORDER BY user_id ASC LIMIT 1");
-        $testUid = $firstUser ? ($firstUser->fetch_assoc()['user_id'] ?? null) : null;
-        $pingResult['test_user_id'] = $testUid;
-
-        if ($testUid) {
-            $ts = $conn->prepare("INSERT INTO lost_reports (user_id, category, title, description, location, date_lost, lost_time, status) VALUES (?, 'PING', 'PING_TEST', 'auto-diagnostic', 'N/A', CURDATE(), CURTIME(), 'Pending')");
-            if ($ts) {
-                $ts->bind_param("i", $testUid);
-                if ($ts->execute()) {
-                    $newId = $ts->insert_id;
-                    $pingResult['write_test'] = 'SUCCESS';
-                    $pingResult['inserted_id'] = $newId;
-                    // Cleanup
-                    $conn->query("DELETE FROM lost_reports WHERE lost_id = $newId AND title = 'PING_TEST'");
-                    $pingResult['cleanup'] = 'DELETED';
-                } else {
-                    $pingResult['write_test'] = 'FAILED';
-                    $pingResult['write_error'] = $ts->error;
-                    $pingResult['write_errno'] = $ts->errno;
-                }
-                $ts->close();
-            } else {
-                $pingResult['write_test'] = 'PREPARE_FAILED';
-                $pingResult['prepare_error'] = $conn->error;
-            }
-        }
+        $check = @$conn->query("SELECT 1");
+        $pingResult['db_query'] = ($check !== false) ? 'OK' : 'FAILED';
     }
 
     sendJsonResponse(true, 'Ping OK', $pingResult);
@@ -98,17 +74,17 @@ if ($action === 'stats') {
             }
         }
 
-        // Resilient date expression for lost_reports: prioritize actual date, ignore '0000-00-00'
+        // Resilient date expression for lost_reports: prioritize submission timestamp (within last 7 days)
         $lostDateParts = [];
-        if (in_array('date_lost', $lostCols)) $lostDateParts[] = "NULLIF(NULLIF(`date_lost`, '0000-00-00'), '')";
         if (in_array('created_at', $lostCols)) $lostDateParts[] = "NULLIF(NULLIF(`created_at`, '0000-00-00 00:00:00'), '')";
+        if (in_array('date_lost', $lostCols)) $lostDateParts[] = "NULLIF(NULLIF(`date_lost`, '0000-00-00'), '')";
         if (in_array('lost_date', $lostCols)) $lostDateParts[] = "NULLIF(NULLIF(`lost_date`, '0000-00-00'), '')";
         $lostDateExpr = !empty($lostDateParts) ? ("COALESCE(" . implode(', ', $lostDateParts) . ")") : "NULL";
 
-        // Resilient date expression for found_reports: prioritize actual date, ignore '0000-00-00'
+        // Resilient date expression for found_reports: prioritize submission timestamp (within last 7 days)
         $foundDateParts = [];
-        if (in_array('date_found', $foundCols)) $foundDateParts[] = "NULLIF(NULLIF(`date_found`, '0000-00-00'), '')";
         if (in_array('created_at', $foundCols)) $foundDateParts[] = "NULLIF(NULLIF(`created_at`, '0000-00-00 00:00:00'), '')";
+        if (in_array('date_found', $foundCols)) $foundDateParts[] = "NULLIF(NULLIF(`date_found`, '0000-00-00'), '')";
         if (in_array('found_date', $foundCols)) $foundDateParts[] = "NULLIF(NULLIF(`found_date`, '0000-00-00'), '')";
         $foundDateExpr = !empty($foundDateParts) ? ("COALESCE(" . implode(', ', $foundDateParts) . ")") : "NULL";
 
@@ -226,11 +202,10 @@ if (isset($conn) && $conn) {
         }
     }
     if (!$validUser) {
-        // Fallback to primary student account or first active user in the database
+        // Fallback to primary student account or first active user in the database for the insert statement
         $fb = $conn->query("SELECT user_id FROM users WHERE pin = '24155-cm-002' OR status = 'active' ORDER BY user_id ASC LIMIT 1");
         if ($fb && ($fRow = $fb->fetch_assoc())) {
             $userId = (int)$fRow['user_id'];
-            $_SESSION['user_id'] = $userId;
         }
     }
 }
@@ -371,7 +346,9 @@ if ($action === 'create' || ($method === 'POST' && ($action === '' || $action ==
     $formattedReportId = ($reportType === 'found' ? 'RF-' : 'RL-') . str_pad($insertedId, 5, '0', STR_PAD_LEFT);
 
     // ChromaDB Multimodal Embedding & Storage
+    $aiProcessed = 0;
     try {
+        if (function_exists('ensureReportsAiSchema')) ensureReportsAiSchema();
         $flaskUrl = (defined('FLASK_AI_URL') ? FLASK_AI_URL : 'https://reunite-ai-backend.onrender.com') . '/report/embed-and-store';
         $embedPayload = [
             'report_id' => $formattedReportId,
@@ -386,16 +363,36 @@ if ($action === 'create' || ($method === 'POST' && ($action === '' || $action ==
             'digital_dna' => !empty($dnaJson) ? json_decode($dnaJson, true) : null
         ];
 
+        // Attach base64 image data for remote neural visual embedding (DINOv2)
+        if (!empty($imageWebPath)) {
+            $localFile = dirname(__DIR__) . '/' . ltrim($imageWebPath, '/');
+            if (file_exists($localFile) && filesize($localFile) < 2 * 1024 * 1024) {
+                $embedPayload['image_base64'] = base64_encode(file_get_contents($localFile));
+            }
+        }
+
         $ch = curl_init($flaskUrl);
         if ($ch) {
             curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
             curl_setopt($ch, CURLOPT_POST, true);
             curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($embedPayload));
-            curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
-            curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
-            curl_setopt($ch, CURLOPT_TIMEOUT, 12);
-            curl_exec($ch);
+            curl_setopt($ch, CURLOPT_HTTPHEADER, [
+                'Content-Type: application/json',
+                'X-AI-Secret-Key: ' . (defined('AI_SECRET_KEY') ? AI_SECRET_KEY : 'reunite_ai_secret_token_2026_kolkata')
+            ]);
+            curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 3);
+            curl_setopt($ch, CURLOPT_TIMEOUT, 6);
+            $cResp = curl_exec($ch);
+            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
             curl_close($ch);
+            if ($httpCode === 200) {
+                $aiProcessed = 1;
+            }
+        }
+
+        if ($conn) {
+            $idColName = ($reportType === 'found') ? (in_array('found_id', $foundCols) ? 'found_id' : 'id') : (in_array('lost_id', $lostCols) ? 'lost_id' : 'id');
+            @$conn->query("UPDATE `{$table}` SET ai_processed = {$aiProcessed} WHERE `{$idColName}` = {$insertedId}");
         }
     } catch (Exception $embedErr) {
         error_log("[ChromaDB] Embed error notice: " . $embedErr->getMessage());
@@ -422,7 +419,7 @@ if ($action === 'create' || ($method === 'POST' && ($action === '' || $action ==
 
     logAccess($userId, "Report Created ($reportType)", "Category: $category, ID: $formattedReportId");
 
-    sendJsonResponse(true, ucfirst($reportType) . " report saved to database and ChromaDB successfully!", [
+    sendJsonResponse(true, ucfirst($reportType) . " report saved! " . ($aiProcessed ? "Multimodal AI indexing complete." : "AI matching is queued in background."), [
         'id' => $insertedId,
         'db_id' => $insertedId,
         'report_id' => $formattedReportId,
@@ -432,6 +429,7 @@ if ($action === 'create' || ($method === 'POST' && ($action === '' || $action ==
         'title' => $title,
         'location' => $location,
         'image_url' => $imageWebPath,
+        'ai_processed' => $aiProcessed,
         'matches_found' => count($realtimeMatches),
         'matches' => $realtimeMatches
     ]);
@@ -439,6 +437,9 @@ if ($action === 'create' || ($method === 'POST' && ($action === '' || $action ==
 
 // ── 2. List Reports from Database ────────────────────────
 if ($action === 'list' || $method === 'GET') {
+    if (function_exists('processPendingAiReports')) {
+        @processPendingAiReports(2);
+    }
     $type = strtolower(trim($_GET['type'] ?? 'all'));
     $limit = min((int)($_GET['limit'] ?? 50), 100);
     $reports = [];

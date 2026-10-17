@@ -30,7 +30,7 @@ $etaHuman = $maintEta ? date('M j, Y · H:i T', strtotime($maintEta)) : null;
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="robots" content="noindex, nofollow, noarchive">
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <title>Scheduled Maintenance — Reunite</title>
@@ -627,7 +627,7 @@ $etaHuman = $maintEta ? date('M j, Y · H:i T', strtotime($maintEta)) : null;
   <script>
     (function(){
       var t = localStorage.getItem('reunite_theme');
-      if (t === 'dark' || (!t && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+      if (t === 'dark') {
         document.documentElement.setAttribute('data-theme','dark');
       }
     })();

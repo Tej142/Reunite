@@ -35,21 +35,44 @@ from TALKAI.live_session import LiveSessionConfig
 from TALKAI.dynamic_chat import DynamicTalkAIService
 from normalizers.normalizer import normalize_report
 from AI_Module.utils.time_parser import parse_temporal_expression
+from analyzers.image_analyzer import analyze_image
 
+import uuid
+import time
+import base64
+import functools
+from PIL import Image, ImageOps
 import pymysql
 
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
+
+AI_SECRET_KEY = os.getenv("AI_SECRET_KEY", "reunite_ai_secret_token_2026_kolkata")
+
+def require_ai_auth(f):
+    @functools.wraps(f)
+    def decorated(*args, **kwargs):
+        token = request.headers.get("X-AI-Secret-Key")
+        if not token:
+            auth_header = request.headers.get("Authorization", "")
+            if auth_header.startswith("Bearer "):
+                token = auth_header.split(" ", 1)[1].strip()
+        if not token:
+            token = request.args.get("secret_key")
+        if not token or token != AI_SECRET_KEY:
+            return jsonify({"success": False, "error": "Unauthorized: Invalid or missing X-AI-Secret-Key"}), 401
+        return f(*args, **kwargs)
+    return decorated
 
 def db_log_event(action: str, details: str = "", user_id: int = None, ip: str = None):
     """
     Directly writes AI Engine activity & system events into MySQL `access_logs` table.
     """
     try:
-        db_host = os.getenv("DB_HOST", "localhost")
-        db_user = os.getenv("DB_USER", "root")
-        db_pass = os.getenv("DB_PASS", "")
-        db_name = os.getenv("DB_NAME", "lost_connect_db")
+        db_host = os.getenv("DB_HOST", "sql306.infinityfree.com")
+        db_user = os.getenv("DB_USER", "if0_42705202")
+        db_pass = os.getenv("DB_PASS", "reunitePVBVC123")
+        db_name = os.getenv("DB_NAME", "if0_42705202_lost_connect_db")
         db_port = int(os.getenv("DB_PORT", 3306))
 
         conn = pymysql.connect(
@@ -232,30 +255,190 @@ def start_report():
 # TALK TO AI CONVERSATIONAL CHAT & DYNAMIC EXTRACTION
 # =========================================================
 
+ALLOWED_IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
+MAX_FILE_SIZE_BYTES = 8 * 1024 * 1024  # 8 MB
+
+def save_and_strip_exif_image(file_storage, report_type: str = "lost"):
+    """
+    Validates file extension and size, strips all EXIF metadata using PIL,
+    saves into media_vault/{lost_reports|found_reports}/, and returns
+    (web_relative_path, abs_system_path).
+    """
+    orig_name = file_storage.filename or "upload.jpg"
+    ext = Path(orig_name).suffix.lower()
+    if ext not in ALLOWED_IMAGE_EXTENSIONS:
+        raise ValueError(f"Unsupported file format '{ext}'. Allowed: JPG, PNG, WebP.")
+
+    subfolder = "found_reports" if report_type.lower() == "found" else "lost_reports"
+    target_dir = VAULT_DIR / subfolder
+    target_dir.mkdir(parents=True, exist_ok=True)
+
+    safe_filename = f"upload_{int(time.time())}_{uuid.uuid4().hex[:8]}{ext}"
+    target_abs = target_dir / safe_filename
+    web_rel = f"media_vault/{subfolder}/{safe_filename}"
+
+    img = Image.open(file_storage.stream)
+    try:
+        img = ImageOps.exif_transpose(img)
+    except Exception:
+        pass
+
+    # Save cleanly without EXIF metadata
+    if ext == ".png" and img.mode in ("RGBA", "LA"):
+        img.save(target_abs, format="PNG")
+    elif ext == ".webp":
+        if img.mode not in ("RGB", "RGBA"):
+            img = img.convert("RGBA" if "A" in img.mode else "RGB")
+        img.save(target_abs, format="WEBP", quality=90)
+    else:
+        if img.mode != "RGB":
+            img = img.convert("RGB")
+        img.save(target_abs, format="JPEG", quality=88)
+
+    return web_rel, str(target_abs)
+
+
+@app.route("/report/talk_to_ai/upload-image", methods=["POST"])
+def talk_to_ai_upload_image():
+    """
+    Direct image upload & vision analysis endpoint for Talk to AI copilot.
+    Validates file, strips EXIF metadata, saves to media_vault, and extracts visual attributes.
+    """
+    try:
+        report_type = request.form.get("report_type", "lost").strip().lower()
+        file = request.files.get("image")
+        if not file or not file.filename:
+            return jsonify({"success": False, "error": "No image file provided."}), 400
+
+        file.seek(0, os.SEEK_END)
+        size = file.tell()
+        file.seek(0)
+        if size > MAX_FILE_SIZE_BYTES:
+            return jsonify({"success": False, "error": "Image exceeds 8MB maximum size limit."}), 400
+
+        web_rel, abs_path = save_and_strip_exif_image(file, report_type)
+
+        analysis_result = analyze_image(abs_path)
+        if not analysis_result or analysis_result.get("success") is False:
+            analysis_result = {
+                "object_type": "",
+                "attributes": {},
+                "visible_features": [],
+                "location": ""
+            }
+
+        return jsonify({
+            "success": True,
+            "image_url": web_rel,
+            "image_analysis": analysis_result
+        }), 200
+
+    except ValueError as ve:
+        return jsonify({"success": False, "error": str(ve)}), 400
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
 @app.route("/report/talk_to_ai/chat", methods=["POST"])
 def talk_to_ai_chat():
+    """
+    Multi-turn conversational chat & dynamic intake endpoint.
+    Supports both JSON payloads (text) and multipart/form-data (text + image attachments).
+    """
     try:
-        data = request.get_json() or {}
-        user_message = data.get("message", "").strip()
-        history = data.get("history", [])
-        report_type = data.get("report_type", "lost").strip().lower()
-        current_draft = data.get("current_draft", {})
+        user_message = ""
+        history = []
+        report_type = "lost"
+        current_draft = {}
+        image_analysis = None
+        image_urls = []
 
-        if not user_message:
+        if request.is_json:
+            data = request.get_json() or {}
+            user_message = data.get("message", "").strip()
+            history = data.get("history", [])
+            report_type = data.get("report_type", "lost").strip().lower()
+            current_draft = data.get("current_draft", {})
+            image_analysis = data.get("image_analysis")
+            image_urls = data.get("image_urls", [])
+        else:
+            # Handle multipart/form-data
+            user_message = request.form.get("message", "").strip()
+            report_type = request.form.get("report_type", "lost").strip().lower()
+            try:
+                history = json.loads(request.form.get("history") or "[]")
+            except Exception:
+                history = []
+            try:
+                current_draft = json.loads(request.form.get("current_draft") or "{}")
+            except Exception:
+                current_draft = {}
+
+            # Handle existing image URLs passed in form
+            raw_img_urls = request.form.get("image_urls")
+            if raw_img_urls:
+                try:
+                    image_urls = json.loads(raw_img_urls)
+                except Exception:
+                    pass
+
+            raw_analysis = request.form.get("image_analysis")
+            if raw_analysis:
+                try:
+                    image_analysis = json.loads(raw_analysis)
+                except Exception:
+                    pass
+
+            # Handle uploaded image files if attached directly
+            files = request.files.getlist("image") or ([request.files.get("image")] if request.files.get("image") else [])
+            for file in files:
+                if file and file.filename:
+                    file.seek(0, os.SEEK_END)
+                    size = file.tell()
+                    file.seek(0)
+                    if size > MAX_FILE_SIZE_BYTES:
+                        return jsonify({"success": False, "error": "Attached photo exceeds 8MB maximum size limit."}), 400
+
+                    web_rel, abs_path = save_and_strip_exif_image(file, report_type)
+                    image_urls.append(web_rel)
+
+                    try:
+                        analysis_res = analyze_image(abs_path)
+                        if analysis_res and analysis_res.get("success") is not False:
+                            if not image_analysis:
+                                image_analysis = analysis_res
+                            else:
+                                for k, v in analysis_res.get("attributes", {}).items():
+                                    image_analysis.setdefault("attributes", {})[k] = v
+                                if analysis_res.get("visible_features"):
+                                    image_analysis.setdefault("visible_features", []).extend(analysis_res["visible_features"])
+                    except Exception as img_err:
+                        print(f"[TalkToAI] Image analysis error notice: {img_err}")
+
+        # If user uploaded photo without text, provide helpful default text
+        if not user_message and (image_urls or image_analysis):
+            user_message = "I've shared a photo of the item."
+
+        if not user_message and not image_urls:
             return jsonify({
                 "success": False,
-                "error": "Message cannot be empty."
+                "error": "Message or photo cannot be empty."
             }), 400
 
         result = DynamicTalkAIService.handle_turn(
             user_message=user_message,
             history=history,
             report_type=report_type,
-            current_draft=current_draft
+            current_draft=current_draft,
+            image_analysis=image_analysis,
+            image_urls=image_urls
         )
 
         return jsonify(result), 200
 
+    except ValueError as ve:
+        return jsonify({"success": False, "error": str(ve)}), 400
     except Exception as e:
         traceback.print_exc()
         return jsonify({
@@ -431,6 +614,7 @@ except Exception as chroma_import_err:
 
 
 @app.route("/report/embed-and-store", methods=["POST"])
+@require_ai_auth
 def embed_and_store_report():
     """
     Extracts multimodal vector embeddings (DINOv2 for image + CLIP for text)
@@ -446,11 +630,35 @@ def embed_and_store_report():
         location = str(data.get("location") or "")
         report_date = str(data.get("date") or "")
         image_path_val = data.get("image_path")
+        image_base64_val = data.get("image_base64")
         digital_dna = data.get("digital_dna") or {}
 
         # 1. Extract Visual Vector (DINOv2 - 384 dimensions)
         dinov2_vector = None
-        if image_path_val:
+        temp_img_path = None
+        if image_base64_val and CHROMA_AVAILABLE:
+            try:
+                b64_str = image_base64_val
+                if "," in b64_str:
+                    b64_str = b64_str.split(",", 1)[1]
+                img_bytes = base64.b64decode(b64_str)
+                temp_filename = f"temp_embed_{uuid.uuid4().hex[:8]}.jpg"
+                temp_img_path = Path(__file__).parent / "media_vault" / "uploads" / temp_filename
+                temp_img_path.parent.mkdir(parents=True, exist_ok=True)
+                with open(temp_img_path, "wb") as f_out:
+                    f_out.write(img_bytes)
+                dino_res = analyze_dinov2(str(temp_img_path))
+                if dino_res.get("success"):
+                    dinov2_vector = dino_res.get("vector")
+            except Exception as b64_err:
+                print(f"[WARN] Error decoding image_base64 in embed-and-store: {b64_err}")
+            finally:
+                if temp_img_path and temp_img_path.exists():
+                    try:
+                        temp_img_path.unlink()
+                    except Exception:
+                        pass
+        elif image_path_val:
             cand = Path(image_path_val)
             actual_img_path = None
             if cand.is_absolute() and cand.exists():
@@ -556,11 +764,17 @@ def search_matches_vector():
 
         matches = []
         if CHROMA_AVAILABLE and (dinov2_vector or clip_vector):
+            query_metadata = data.get("query_metadata") or data.get("metadata") or {
+                "object_type": data.get("category"),
+                "location": data.get("location"),
+                "attributes": data.get("attributes", {})
+            }
             matches = search_vectors(
                 dinov2_vector=dinov2_vector,
                 clip_vector=clip_vector,
                 photo_date_str=photo_date,
                 found_date_str=found_date,
+                query_metadata=query_metadata,
                 top_k=top_k
             )
 
@@ -575,6 +789,7 @@ def search_matches_vector():
             formatted_matches.append({
                 "report_id": m.get("report_id"),
                 "match_percentage": m.get("match_score"),
+                "ai_reasons": m.get("ai_reasons", {}),
                 "metadata": m.get("metadata"),
                 "breakdown": {
                     "visual_score": m.get("breakdown", {}).get("dino_score_raw", 0),
@@ -653,6 +868,7 @@ def get_chroma_stats():
 
 
 @app.route("/report/delete-vector/<report_id>", methods=["DELETE", "POST"])
+@require_ai_auth
 def delete_report_vector(report_id):
     try:
         if not CHROMA_AVAILABLE:
@@ -684,6 +900,7 @@ def delete_report_vector(report_id):
 
 
 @app.route("/report/purge-all-vectors", methods=["POST"])
+@require_ai_auth
 def purge_all_vectors():
     try:
         if not CHROMA_AVAILABLE:
@@ -712,6 +929,104 @@ def purge_all_vectors():
             "purged_clip": c_count
         }), 200
     except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/report/batch-sync", methods=["POST"])
+@require_ai_auth
+def batch_sync_reports():
+    """
+    Bulk re-indexes an array of lost & found reports into ChromaDB.
+    Enables one-shot vector synchronization from PHP backend.
+    """
+    try:
+        data = request.get_json() or {}
+        reports = data.get("reports", [])
+        if not isinstance(reports, list):
+            return jsonify({"success": False, "error": "reports must be a list"}), 400
+
+        synced_count = 0
+        errors = []
+
+        for item in reports:
+            try:
+                rep_id = item.get("report_id") or f"R{synced_count+1:05d}"
+                rep_type = str(item.get("report_type") or "lost").lower()
+                cat = str(item.get("category") or "General")
+                ttl = str(item.get("title") or "")
+                desc = str(item.get("description") or "")
+                loc = str(item.get("location") or "")
+                dt = str(item.get("date") or "")
+                img_path = str(item.get("image_path") or "")
+
+                # Text vector (CLIP)
+                clip_vec = None
+                text_content = f"{cat}. {ttl}. {desc}. {loc}."
+                if CHROMA_AVAILABLE:
+                    c_res = analyze_clip_text(text_content)
+                    if c_res.get("success"):
+                        clip_vec = c_res.get("vector")
+
+                # Visual vector (DINOv2) if base64 provided
+                dino_vec = None
+                b64_img = item.get("image_base64")
+                if b64_img and CHROMA_AVAILABLE:
+                    t_path = None
+                    try:
+                        if "," in b64_img:
+                            b64_img = b64_img.split(",", 1)[1]
+                        i_bytes = base64.b64decode(b64_img)
+                        t_name = f"temp_sync_{uuid.uuid4().hex[:8]}.jpg"
+                        t_path = Path(__file__).parent / "media_vault" / "uploads" / t_name
+                        t_path.parent.mkdir(parents=True, exist_ok=True)
+                        with open(t_path, "wb") as f_o:
+                            f_o.write(i_bytes)
+                        d_res = analyze_dinov2(str(t_path))
+                        if d_res.get("success"):
+                            dino_vec = d_res.get("vector")
+                    except Exception:
+                        pass
+                    finally:
+                        if t_path and t_path.exists():
+                            try:
+                                t_path.unlink()
+                            except Exception:
+                                pass
+
+                metadata = {
+                    "report_id": rep_id,
+                    "db_id": int(item.get("db_id") or 0),
+                    "report_type": rep_type,
+                    "category": cat,
+                    "title": ttl,
+                    "description": desc[:300],
+                    "location": loc,
+                    "date": dt,
+                    "image_path": img_path
+                }
+
+                if CHROMA_AVAILABLE and (dino_vec or clip_vec):
+                    store_report_vectors(
+                        report_id=rep_id,
+                        dinov2_vector=dino_vec,
+                        clip_vector=clip_vec,
+                        metadata=metadata
+                    )
+                synced_count += 1
+            except Exception as single_err:
+                errors.append(f"{item.get('report_id')}: {str(single_err)}")
+
+        db_log_event("ChromaDB Batch Sync", f"Indexed {synced_count} reports with {len(errors)} errors", ip=request.remote_addr)
+
+        return jsonify({
+            "success": True,
+            "message": f"Successfully synced {synced_count} reports into ChromaDB.",
+            "synced": synced_count,
+            "errors": errors
+        }), 200
+
+    except Exception as e:
+        traceback.print_exc()
         return jsonify({"success": False, "error": str(e)}), 500
 
 

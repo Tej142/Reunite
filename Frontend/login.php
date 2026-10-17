@@ -1,13 +1,16 @@
+<?php
+require_once __DIR__ . '/includes/auth.php';
+?>
 <!doctype html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Student Login — Reunite</title>
   <script>
     (function(){
       var t = localStorage.getItem('reunite_theme');
-      if (t === 'dark' || (!t && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+      if (t === 'dark') {
         document.documentElement.setAttribute('data-theme', 'dark');
       }
     })();
@@ -37,11 +40,11 @@
         <span id="loginTopAlertText"></span>
       </div>
 
-      <!-- College PIN -->
+      <!-- College PIN or Email -->
       <div class="field">
-        <label for="pin">College PIN</label>
-        <?php $rememberedPin = htmlspecialchars($_GET['pin'] ?? ($_COOKIE['reunite_remembered_pin'] ?? '')); ?>
-        <input type="text" id="pin" placeholder="e.g. 24155-cm-002" value="<?php echo $rememberedPin; ?>" required <?php echo !empty($rememberedPin) ? '' : 'autofocus'; ?> />
+        <label for="pin">College PIN or Email</label>
+        <?php $rememberedIdentifier = htmlspecialchars($_GET['pin'] ?? $_GET['email'] ?? ($_COOKIE['reunite_remembered_pin'] ?? '')); ?>
+        <input type="text" id="pin" name="identifier" placeholder="e.g. 24155-cm-002 or name@example.com" value="<?php echo $rememberedIdentifier; ?>" autocomplete="username" required <?php echo !empty($rememberedIdentifier) ? '' : 'autofocus'; ?> />
         <span class="error-msg" id="pinError"></span>
       </div>
 

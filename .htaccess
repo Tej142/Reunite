@@ -1,0 +1,31 @@
+# Reunite Apache Security & Routing Configuration
+
+# 1. Disable Directory Indexing
+Options -Indexes
+
+# 2. Custom Error Handler
+ErrorDocument 404 /Frontend/404.php
+
+# 3. Block Access to Sensitive System Files & Data Dumps
+<FilesMatch "^(\.env|\.git|schema\.sql|.*\.sql|.*\.log|composer\.(json|lock)|package(-lock)?\.json|setup_db\.php|test_report_insert\.php)$">
+    Order Allow,Deny
+    Deny from all
+</FilesMatch>
+
+# 4. Security Headers
+<IfModule mod_headers.c>
+    Header set X-Content-Type-Options "nosniff"
+    Header set X-Frame-Options "SAMEORIGIN"
+    Header set X-XSS-Protection "1; mode=block"
+    Header set Referrer-Policy "strict-origin-when-cross-origin"
+</IfModule>
+
+# 5. HTTPS Redirection (Graceful on Proxies & Cloud Hosting)
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteCond %{HTTPS} off
+    RewriteCond %{HTTP:X-Forwarded-Proto} !https
+    RewriteCond %{HTTP_HOST} !^localhost [NC]
+    RewriteCond %{HTTP_HOST} !^127\.0\.0\.1 [NC]
+    RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+</IfModule>

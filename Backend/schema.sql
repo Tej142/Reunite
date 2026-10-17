@@ -84,6 +84,11 @@ CREATE TABLE IF NOT EXISTS `matches` (
   `found_report_id` INT(11) NOT NULL,
   `similarity_score` DECIMAL(5,2) NOT NULL,
   `status` ENUM('pending', 'verified', 'rejected') DEFAULT 'pending',
+  `return_type` ENUM('admin_office', 'hand_on_hand') DEFAULT 'hand_on_hand',
+  `meet_location` VARCHAR(255) DEFAULT NULL,
+  `meet_time` VARCHAR(100) DEFAULT NULL,
+  `otp` VARCHAR(6) DEFAULT NULL,
+  `otp_expires_at` DATETIME DEFAULT NULL,
   `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   KEY `idx_match_lost` (`lost_report_id`),
@@ -191,6 +196,18 @@ CREATE TABLE IF NOT EXISTS `question_sets` (
   `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   UNIQUE KEY `unique_question_set` (`category`, `report_type`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- 13. Access Logs Table (Real-Time Flask AI & PHP Activity Logger)
+CREATE TABLE IF NOT EXISTS `access_logs` (
+  `log_id` INT(11) NOT NULL AUTO_INCREMENT,
+  `user_id` INT(11) DEFAULT NULL,
+  `action` VARCHAR(150) NOT NULL,
+  `ip_address` VARCHAR(45) DEFAULT NULL,
+  `device_info` VARCHAR(255) DEFAULT NULL,
+  `log_time` DATETIME DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`log_id`),
+  KEY `idx_acc_user` (`user_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 SET FOREIGN_KEY_CHECKS = 1;

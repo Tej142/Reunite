@@ -42,17 +42,17 @@ if (!function_exists('get_reunite_home_stats')) {
             while ($c = $mc->fetch_assoc()) $mCols[] = strtolower($c['Field']);
         }
 
-        // Resilient date expression for lost_reports: prioritize actual date, ignore '0000-00-00'
+        // Resilient date expression for lost_reports: prioritize submission timestamp (within last 7 days)
         $lostDateParts = [];
-        if (in_array('date_lost', $lostCols)) $lostDateParts[] = "NULLIF(NULLIF(`date_lost`, '0000-00-00'), '')";
         if (in_array('created_at', $lostCols)) $lostDateParts[] = "NULLIF(NULLIF(`created_at`, '0000-00-00 00:00:00'), '')";
+        if (in_array('date_lost', $lostCols)) $lostDateParts[] = "NULLIF(NULLIF(`date_lost`, '0000-00-00'), '')";
         if (in_array('lost_date', $lostCols)) $lostDateParts[] = "NULLIF(NULLIF(`lost_date`, '0000-00-00'), '')";
         $lostDateExpr = !empty($lostDateParts) ? ("COALESCE(" . implode(', ', $lostDateParts) . ")") : "NULL";
 
-        // Resilient date expression for found_reports: prioritize actual date, ignore '0000-00-00'
+        // Resilient date expression for found_reports: prioritize submission timestamp (within last 7 days)
         $foundDateParts = [];
-        if (in_array('date_found', $foundCols)) $foundDateParts[] = "NULLIF(NULLIF(`date_found`, '0000-00-00'), '')";
         if (in_array('created_at', $foundCols)) $foundDateParts[] = "NULLIF(NULLIF(`created_at`, '0000-00-00 00:00:00'), '')";
+        if (in_array('date_found', $foundCols)) $foundDateParts[] = "NULLIF(NULLIF(`date_found`, '0000-00-00'), '')";
         if (in_array('found_date', $foundCols)) $foundDateParts[] = "NULLIF(NULLIF(`found_date`, '0000-00-00'), '')";
         $foundDateExpr = !empty($foundDateParts) ? ("COALESCE(" . implode(', ', $foundDateParts) . ")") : "NULL";
 

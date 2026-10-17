@@ -83,14 +83,27 @@
     // Toggle Dropdown on Bell Click
     notifBtn.addEventListener('click', function (e) {
       e.stopPropagation();
-      const drawer = document.getElementById('navDrawer');
+      const drawer = document.getElementById('mobileNavDrawer') || document.getElementById('navDrawer');
       const hamburgerBtn = document.getElementById('navHamburgerBtn');
       if (drawer && drawer.classList.contains('open')) {
         drawer.classList.remove('open');
-        if (hamburgerBtn) hamburgerBtn.classList.remove('active');
+        if (hamburgerBtn) {
+          hamburgerBtn.classList.remove('active');
+          hamburgerBtn.setAttribute('aria-expanded', 'false');
+        }
       }
       const isOpen = notifDropdown.classList.toggle('open');
       if (isOpen) {
+        if (notifList && (!notifList.children.length || notifList.querySelector('.notif-dropdown-empty'))) {
+          const orbiEl = window.Orbi ? window.Orbi.create({ state: 'loading', size: 40, label: 'Checking notifications' }) : null;
+          const orbiHtml = orbiEl ? orbiEl.outerHTML : '';
+          notifList.innerHTML = `
+            <div class="notif-dropdown-loading" role="status" aria-live="polite" style="padding: 1.5rem 1rem; text-align: center; color: var(--muted); font-size: 0.8125rem; display: flex; flex-direction: column; align-items: center; gap: 0.5rem;">
+              ${orbiHtml}
+              <span>Checking notifications...</span>
+            </div>
+          `;
+        }
         // Fetch fresh list on dropdown open
         fetchNotifications();
       }
@@ -184,10 +197,14 @@
           setTimeout(() => notifBtn.classList.remove('bell-ring'), 900);
 
           if (window.ReuniteToast) {
+            const titleLower = (newestAlertItem.title || '').toLowerCase();
+            const msgLower = (newestAlertItem.message || '').toLowerCase();
+            const isMatchAlert = titleLower.includes('match') || msgLower.includes('match');
             window.ReuniteToast.show({
               title: stripEmoji(newestAlertItem.title) || 'Match Alert!',
               message: stripEmoji(newestAlertItem.message),
-              type: 'info',
+              type: isMatchAlert ? 'success' : 'info',
+              orbiState: isMatchAlert ? 'happy' : null,
               duration: 7000
             });
           }
@@ -197,12 +214,15 @@
 
         // 4. Render Dropdown Items
         if (notifications.length === 0) {
+          const orbiEl = window.Orbi ? window.Orbi.create({ state: 'notfound', size: 44, label: 'No notifications' }) : null;
+          const orbiHtml = orbiEl
+            ? orbiEl.outerHTML
+            : `<div style="display: flex; justify-content: center; margin-bottom: 0.35rem; color: var(--muted-2);"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg></div>`;
+
           notifList.innerHTML = `
-            <div class="notif-dropdown-empty" style="padding: 1.5rem 1rem; text-align: center; color: var(--muted); font-size: 0.8125rem;">
-              <div style="display: flex; justify-content: center; margin-bottom: 0.35rem; color: var(--muted-2);">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
-              </div>
-              No notifications yet
+            <div class="notif-dropdown-empty" style="padding: 1.5rem 1rem; text-align: center; color: var(--muted); font-size: 0.8125rem; display: flex; flex-direction: column; align-items: center; gap: 0.5rem;">
+              ${orbiHtml}
+              <span>No notifications yet</span>
             </div>
           `;
         } else {
@@ -262,13 +282,21 @@
     // Start initial fetch
     fetchNotifications();
 
-    // Start Real-Time Polling every 3.5 seconds
-    pollInterval = setInterval(fetchNotifications, 3500);
+    // Responsive Polling with Tab Visibility Awareness:
+    // 15s when active tab, 60s when hidden to conserve hosting CPU and daily quota.
+    function startPolling(intervalMs) {
+      if (pollInterval) clearInterval(pollInterval);
+      pollInterval = setInterval(fetchNotifications, intervalMs);
+    }
 
-    // Fast poll when window regains visibility
+    startPolling(15000);
+
     document.addEventListener('visibilitychange', function () {
-      if (!document.hidden) {
-        fetchNotifications();
+      if (document.hidden) {
+        startPolling(60000); // Back off to 60s when user leaves tab
+      } else {
+        fetchNotifications(); // Immediate refresh on tab return
+        startPolling(15000); // Resume 15s poll
       }
     });
 

@@ -1,0 +1,2 @@
+# Reunite Frontend Apache Configuration
+ErrorDocument 404 404.php

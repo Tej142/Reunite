@@ -20,6 +20,11 @@ document.addEventListener('DOMContentLoaded', () => {
       tabBtns.forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
 
+      // Center active tab smoothly in scroll rail on mobile
+      if (typeof btn.scrollIntoView === 'function') {
+        btn.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+      }
+
       // Update tab panels
       Object.keys(tabPanels).forEach(key => {
         if (tabPanels[key]) {

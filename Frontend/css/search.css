@@ -211,18 +211,41 @@
   justify-content: center;
 }
 
+@media (max-width: 768px) {
+  .category-chips-bar {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    justify-content: flex-start;
+    padding: 0.75rem 0.5rem 1rem;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    scroll-snap-type: x proximity;
+  }
+  .category-chips-bar::-webkit-scrollbar {
+    display: none;
+  }
+}
+
 .cat-chip {
   background: var(--white);
   border: 1px solid var(--border);
   color: var(--ink-soft);
   font-size: 0.8125rem;
   font-weight: 500;
-  padding: 0.4rem 0.9rem;
+  padding: 0.45rem 1rem;
   border-radius: 999px;
   cursor: pointer;
   transition: all 0.15s ease;
   user-select: none;
   font-family: inherit;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
+  scroll-snap-align: start;
+  flex-shrink: 0;
+  box-sizing: border-box;
 }
 
 .cat-chip:hover {
@@ -416,9 +439,12 @@
   padding: 0.45rem;
   border-radius: 0.5rem;
   cursor: pointer;
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  box-sizing: border-box;
   transition: all 0.15s;
 }
 
@@ -432,7 +458,7 @@
 /* ── Item Cards Grid ─────────────────────────────────── */
 .search-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(270px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 270px), 1fr));
   gap: 1.25rem;
 }
 
@@ -1366,6 +1392,7 @@
   width: 500px;
   max-width: 100vw;
   height: 100vh;
+  height: 100dvh;
   background: var(--surface);
   border-left: 1px solid var(--border);
   box-shadow: -12px 0 40px rgba(0, 0, 0, 0.15);
@@ -1373,12 +1400,16 @@
   display: flex;
   flex-direction: column;
   transform: translateX(100%);
-  transition: transform 0.26s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.26s ease;
+  visibility: hidden;
+  pointer-events: none;
+  transition: transform 0.26s cubic-bezier(0.16, 1, 0.3, 1), visibility 0.26s, box-shadow 0.26s ease;
   overflow: hidden;
 }
 
 .item-slideover-drawer.open {
   transform: translateX(0);
+  visibility: visible;
+  pointer-events: auto;
 }
 
 .bottom-sheet-handle {

@@ -2,19 +2,20 @@
 form {
   background: var(--white);
   border: 1px solid var(--border);
-  border-radius: 1.5rem;
-  padding: 2.5rem;
+  border-radius: 1.6rem;
+  padding: 2.75rem 2.5rem;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.02);
 }
 
 @media (max-width: 640px) {
   form {
-    padding: 1.5rem;
+    padding: 1.75rem 1.25rem;
   }
 }
 
 @media (max-width: 480px) {
   form {
-    padding: 1.25rem 1rem;
+    padding: 1.35rem 1rem;
     border-radius: 1.25rem;
   }
   .form-footer {
@@ -29,7 +30,7 @@ form {
 }
 
 .field {
-  margin-bottom: 1.75rem;
+  margin-bottom: 2rem;
 }
 
 .field:last-of-type {
@@ -38,10 +39,10 @@ form {
 
 label {
   display: block;
-  font-size: .8125rem;
+  font-size: .85rem;
   font-weight: 600;
   color: var(--ink);
-  margin-bottom: .5rem;
+  margin-bottom: .65rem;
   letter-spacing: -0.01em;
 }
 
@@ -53,8 +54,8 @@ label .opt {
 .hint {
   font-size: .8125rem;
   color: var(--muted);
-  margin: .4rem 0 0;
-  line-height: 1.5;
+  margin: .55rem 0 0;
+  line-height: 1.6;
 }
 
 input[type=text],
@@ -63,14 +64,14 @@ textarea,
 select {
   width: 100%;
   font-family: inherit;
-  font-size: .9375rem;
+  font-size: .95rem;
   color: var(--ink);
   background: var(--bg);
   border: 1px solid var(--border);
-  border-radius: .75rem;
-  padding: .8rem 1rem;
+  border-radius: .85rem;
+  padding: .9rem 1.15rem;
   outline: none;
-  transition: border-color .15s, background .15s;
+  transition: border-color .15s, background .15s, box-shadow .15s;
 }
 
 input::placeholder,
@@ -83,18 +84,19 @@ textarea:focus,
 select:focus {
   border-color: var(--accent);
   background: var(--white);
+  box-shadow: 0 0 0 3px var(--accent-tint);
 }
 
 textarea {
   resize: vertical;
-  min-height: 6rem;
-  line-height: 1.5;
+  min-height: 7.5rem;
+  line-height: 1.6;
 }
 
 .row-2 {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 1.25rem;
+  gap: 1.5rem;
 }
 
 @media (max-width: 600px) {
@@ -106,9 +108,9 @@ textarea {
 /* ── Upload ────────────────────────────────────────── */
 .dropzone {
   border: 1.5px dashed var(--border);
-  border-radius: 1rem;
+  border-radius: 1.15rem;
   background: var(--bg);
-  padding: 2rem 1.5rem;
+  padding: 2.5rem 1.75rem;
   text-align: center;
   cursor: pointer;
   transition: border-color .15s, background .15s;
@@ -124,10 +126,10 @@ textarea {
 }
 
 .dz-icon {
-  width: 2.75rem;
-  height: 2.75rem;
-  border-radius: .85rem;
-  margin: 0 auto .9rem;
+  width: 3.1rem;
+  height: 3.1rem;
+  border-radius: .95rem;
+  margin: 0 auto 1.1rem;
   background: var(--accent-tint);
   display: flex;
   align-items: center;
@@ -135,10 +137,10 @@ textarea {
 }
 
 .dz-title {
-  font-size: .9375rem;
+  font-size: .975rem;
   font-weight: 600;
   color: var(--ink);
-  margin-bottom: .2rem;
+  margin-bottom: .35rem;
 }
 
 .dz-sub {
@@ -154,8 +156,8 @@ textarea {
 .preview-grid {
   display: flex;
   flex-wrap: wrap;
-  gap: .75rem;
-  margin-top: 1rem;
+  gap: 1rem;
+  margin-top: 1.25rem;
 }
 
 .thumb, .dz-thumb {
@@ -204,21 +206,22 @@ textarea {
 .secret-block {
   border: 1.5px dashed #D9C8B8;
   background: #FBF6F0;
-  border-radius: 1rem;
-  padding: 1.5rem;
+  border-radius: 1.15rem;
+  padding: 1.75rem;
+  margin-top: 0.5rem;
 }
 
 .secret-label-row {
   display: flex;
   align-items: center;
-  gap: .6rem;
-  margin-bottom: .3rem;
+  gap: .65rem;
+  margin-bottom: .4rem;
 }
 
 .lock-icon {
-  width: 1.9rem;
-  height: 1.9rem;
-  border-radius: .6rem;
+  width: 2rem;
+  height: 2rem;
+  border-radius: .65rem;
   background: var(--accent);
   display: flex;
   align-items: center;
@@ -227,17 +230,17 @@ textarea {
 }
 
 .secret-title {
-  font-size: .9375rem;
+  font-size: .95rem;
   font-weight: 600;
   color: var(--ink);
   margin: 0;
 }
 
 .secret-copy {
-  font-size: .8125rem;
+  font-size: .825rem;
   color: var(--muted);
-  line-height: 1.55;
-  margin: .35rem 0 1rem;
+  line-height: 1.6;
+  margin: .4rem 0 1.25rem;
 }
 
 .secret-copy strong {
@@ -252,9 +255,9 @@ textarea {
 .visibility-note {
   display: flex;
   align-items: center;
-  gap: .4rem;
-  margin-top: .6rem;
-  font-size: .75rem;
+  gap: .45rem;
+  margin-top: .75rem;
+  font-size: .78125rem;
   color: var(--accent);
   font-weight: 500;
 }
@@ -264,18 +267,18 @@ textarea {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 1rem;
-  margin-top: 2.25rem;
-  padding-top: 1.75rem;
+  gap: 1.5rem;
+  margin-top: 2.75rem;
+  padding-top: 2rem;
   border-top: 1px solid var(--border-soft);
   flex-wrap: wrap;
 }
 
 .footer-note {
-  font-size: .8125rem;
+  font-size: .835rem;
   color: var(--muted-2);
-  max-width: 32ch;
-  line-height: 1.5;
+  max-width: 36ch;
+  line-height: 1.55;
 }
 
 .btn-submit {
@@ -283,13 +286,18 @@ textarea {
   color: var(--bg);
   border: none;
   font-family: inherit;
-  font-size: .9375rem;
+  font-size: .95rem;
   font-weight: 600;
-  padding: .9rem 2rem;
+  padding: .95rem 2.25rem;
   border-radius: 999px;
   cursor: pointer;
-  transition: opacity .15s, transform .10s;
+  transition: opacity .15s, transform .10s, box-shadow .15s;
   flex-shrink: 0;
+  min-height: var(--touch-target-min, 44px);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
 }
 
 .btn-submit:hover {
@@ -303,6 +311,21 @@ textarea {
 .btn-submit:disabled {
   opacity: .5;
   cursor: not-allowed;
+}
+
+@media (max-width: 600px) {
+  .form-footer {
+    flex-direction: column-reverse;
+    align-items: stretch;
+    gap: 1.25rem;
+  }
+  .btn-submit {
+    width: 100%;
+  }
+  .footer-note {
+    max-width: 100%;
+    text-align: center;
+  }
 }
 
 /* ── Success State ─────────────────────────────────── */

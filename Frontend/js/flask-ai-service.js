@@ -1,6 +1,6 @@
 /**
  * Reunite Flask AI Backend Service Integration
- * Handles HTTP requests from Frontend to Flask AI Server (http://127.0.0.1:5000)
+ * Handles HTTP requests from Frontend to Flask AI Cloud Server (https://reunite-ai-backend.onrender.com)
  * and provides dynamic AI attribute extraction and form rendering.
  */
 
@@ -8,7 +8,12 @@ function getFlaskServerUrl() {
   if (typeof window !== 'undefined' && window.FLASK_BACKEND_URL) {
     return window.FLASK_BACKEND_URL;
   }
-  return 'http://127.0.0.1:5000';
+  const isLocal = typeof window !== 'undefined' && (
+    window.location.hostname === 'localhost' ||
+    window.location.hostname === '127.0.0.1' ||
+    window.location.hostname === ''
+  );
+  return isLocal ? 'http://127.0.0.1:5000' : 'https://reunite-ai-backend.onrender.com';
 }
 
 const FLASK_SERVER_URL = getFlaskServerUrl();
@@ -165,6 +170,18 @@ async function submitReportToFlask({ description, imageFile = null, meta = {} })
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s timeout for Multimodal AI Vision & NLP
 
+    // Cold-start status indicator for Render cloud free-tier wake up
+    let coldStartToast = null;
+    const coldStartTimer = setTimeout(() => {
+      if (window.ReuniteToast && typeof window.ReuniteToast.info === 'function') {
+        coldStartToast = window.ReuniteToast.info(
+          'Waking AI Microservice',
+          'Cloud AI server is spinning up from cold sleep (takes ~25s on first request)...',
+          18000
+        );
+      }
+    }, 3500);
+
     const baseUrl = getFlaskServerUrl();
     const response = await fetch(`${baseUrl}/new-report`, {
       method: 'POST',
@@ -172,7 +189,11 @@ async function submitReportToFlask({ description, imageFile = null, meta = {} })
       signal: controller.signal
     });
 
+    clearTimeout(coldStartTimer);
     clearTimeout(timeoutId);
+    if (coldStartToast && typeof coldStartToast.dismiss === 'function') {
+      coldStartToast.dismiss();
+    }
     const data = await response.json();
 
     if (!response.ok || !data.success) {
@@ -729,18 +750,63 @@ async function submitReportToBackend(payload = {}) {
 
   if (payload.imageFile) {
     formData.append('image', payload.imageFile);
+  } else if (payload.imagePath) {
+    formData.append('image_path', payload.imagePath);
   }
 
   if (payload.dna) {
     formData.append('digital_dna', JSON.stringify(payload.dna));
   }
 
+  // Attempt POST with credentials to ensure anti-bot cookies are sent
   const response = await fetch('../Backend/reports.php', {
     method: 'POST',
-    body: formData
+    body: formData,
+    credentials: 'same-origin'
   });
 
-  const result = await response.json();
+  // Read raw text first so we can diagnose anti-bot or HTML responses
+  const rawText = await response.text();
+  console.log('[submitReportToBackend] HTTP status:', response.status, 'Raw response length:', rawText.length);
+
+  // Detect InfinityFree anti-bot challenge page (returns HTML with AES decryption script)
+  if (rawText.includes('aes.js') || rawText.includes('slowAES') || rawText.includes('__test=')) {
+    console.error('[submitReportToBackend] ⚠️ InfinityFree anti-bot challenge detected! Response is HTML, not JSON.');
+    console.error('[submitReportToBackend] Raw HTML:', rawText.substring(0, 500));
+    throw new Error('Server security challenge intercepted the request. Please refresh the page and try again.');
+  }
+
+  // Detect any HTML response (not JSON)
+  const trimmed = rawText.trim();
+  if (trimmed.startsWith('<') || trimmed.startsWith('<!')) {
+    console.error('[submitReportToBackend] Received HTML instead of JSON:', trimmed.substring(0, 300));
+    throw new Error('Server returned an HTML page instead of JSON. The report was not saved. Please refresh and try again.');
+  }
+
+  if (!response.ok) {
+    let errText = `Server returned status ${response.status}`;
+    try {
+      const errJson = JSON.parse(rawText);
+      if (errJson && errJson.message) errText = errJson.message;
+    } catch (_) {
+      errText += ` — Raw: ${rawText.substring(0, 200)}`;
+    }
+    throw new Error(errText);
+  }
+
+  let result;
+  try {
+    result = JSON.parse(rawText);
+  } catch (parseErr) {
+    console.error('[submitReportToBackend] JSON parse error. Raw response:', rawText.substring(0, 500));
+    throw new Error('Server response is not valid JSON. Raw: ' + rawText.substring(0, 200));
+  }
+
+  if (!result || !result.success) {
+    console.error('[submitReportToBackend] Server returned failure:', result);
+    throw new Error((result && result.message) ? result.message : 'Database failed to store report.');
+  }
+  console.log('[submitReportToBackend] ✅ Report saved successfully:', result);
   return result;
 }
 

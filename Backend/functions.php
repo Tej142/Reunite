@@ -1056,7 +1056,10 @@ function runRealtimeMatchmaking($insertedId, $reportType, $category, $title, $de
             curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
             curl_setopt($ch, CURLOPT_POST, true);
             curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($searchPayload));
-            curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
+            curl_setopt($ch, CURLOPT_HTTPHEADER, [
+                'Content-Type: application/json',
+                'X-AI-Secret-Key: ' . (defined('AI_SECRET_KEY') ? AI_SECRET_KEY : 'reunite_ai_secret_token_2026_kolkata')
+            ]);
             curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 2);
             curl_setopt($ch, CURLOPT_TIMEOUT, 5);
             $res = curl_exec($ch);
@@ -1369,6 +1372,381 @@ function resolveReportDateTime($dateInput = '', $descInput = '') {
         'date' => $resolvedDate,
         'time' => $resolvedTime
     ];
+}
+
+/**
+ * ─────────────────────────────────────────────────────────────
+ * PRODUCTION SCHEMA SYNCHRONIZERS & ENGINE UTILITIES
+ * ─────────────────────────────────────────────────────────────
+ */
+
+function ensureAdminsTable() {
+    global $conn;
+    if (!$conn) return;
+
+    @$conn->query("CREATE TABLE IF NOT EXISTS `admins` (
+      `admin_id` INT(11) NOT NULL AUTO_INCREMENT,
+      `username` VARCHAR(50) NOT NULL,
+      `full_name` VARCHAR(100) NOT NULL DEFAULT 'System Administrator',
+      `email` VARCHAR(100) NOT NULL,
+      `password_hash` VARCHAR(255) NOT NULL,
+      `role` ENUM('superadmin', 'admin', 'moderator') DEFAULT 'admin',
+      `status` ENUM('active', 'suspended') DEFAULT 'active',
+      `last_login` DATETIME DEFAULT NULL,
+      `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      PRIMARY KEY (`admin_id`),
+      UNIQUE KEY `idx_admin_username` (`username`),
+      UNIQUE KEY `idx_admin_email` (`email`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;");
+
+    // Seed production admin accounts for Charan
+    $seedAccounts = [
+        [
+            'username' => 'charan_admin',
+            'full_name' => 'Charan Administrator',
+            'email' => 'charante153624@gmail.com',
+            'password' => 'Charan@Admin2026!',
+            'role' => 'admin'
+        ],
+        [
+            'username' => 'charan_moderator',
+            'full_name' => 'Charan Moderator',
+            'email' => 'charanpc1420091@gmail.com',
+            'password' => 'Charan@Mod2026!',
+            'role' => 'moderator'
+        ]
+    ];
+
+    foreach ($seedAccounts as $acc) {
+        $chk = $conn->prepare("SELECT admin_id FROM admins WHERE username = ? OR email = ? LIMIT 1");
+        if ($chk) {
+            $chk->bind_param("ss", $acc['username'], $acc['email']);
+            $chk->execute();
+            if ($chk->get_result()->num_rows === 0) {
+                $chk->close();
+                $hash = password_hash($acc['password'], PASSWORD_BCRYPT);
+                $ins = $conn->prepare("INSERT INTO admins (username, full_name, email, password_hash, role, status) VALUES (?, ?, ?, ?, ?, 'active')");
+                if ($ins) {
+                    $ins->bind_param("sssss", $acc['username'], $acc['full_name'], $acc['email'], $hash, $acc['role']);
+                    $ins->execute();
+                    $ins->close();
+                }
+            } else {
+                $chk->close();
+            }
+        }
+    }
+}
+
+function ensureQuestionSetsTable() {
+    global $conn;
+    if (!$conn) return;
+
+    @$conn->query("CREATE TABLE IF NOT EXISTS `question_sets` (
+      `id` INT(11) NOT NULL AUTO_INCREMENT,
+      `category` VARCHAR(100) NOT NULL,
+      `report_type` ENUM('LOST', 'FOUND') NOT NULL,
+      `questions_json` LONGTEXT NOT NULL,
+      `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (`id`),
+      UNIQUE KEY `unique_question_set` (`category`, `report_type`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;");
+
+    $cnt = $conn->query("SELECT COUNT(*) FROM question_sets");
+    $total = $cnt ? (int)$cnt->fetch_row()[0] : 0;
+    if ($total === 0) {
+        $defaultSets = [
+            'electronics' => [
+                'Brand and specific model name',
+                'Color of casing or protective cover',
+                'Screen lock type, wallpaper, or recent app open',
+                'Any distinct scratches, stickers, or cosmetic marks'
+            ],
+            'wallets & bags' => [
+                'Brand and material (e.g. leather, canvas, nylon)',
+                'Color and number of compartments / zippers',
+                'List of non-sensitive items or cards inside (no full card numbers)',
+                'Keychains, badges, or charms attached'
+            ],
+            'keys & keychains' => [
+                'Total count of keys on the ring',
+                'Description of keychain tag, mascot, or trinket',
+                'Key types (e.g. bike key, room lock, padlock, vehicle fob)',
+                'Any distinct markings or colored rubber caps'
+            ],
+            'id cards & documents' => [
+                'Full name printed on document / card',
+                'Card type (College ID, Govt License, Library Card)',
+                'Department, branch, or issue year',
+                'Any lanyard color or card holder pouch details'
+            ],
+            'books & stationery' => [
+                'Book title, subject, or author name',
+                'Name, roll number, or initials written on pages/cover',
+                'Color and condition of cover or pouch',
+                'Bookmarks, highlighted chapters, or notes inserted'
+            ],
+            'general' => [
+                'Brand, color, and approximate dimensions',
+                'Specific spot where you last saw or lost it',
+                'Any distinct damage, serial numbers, or unique characteristics'
+            ]
+        ];
+
+        foreach (['LOST', 'FOUND'] as $rtype) {
+            foreach ($defaultSets as $cat => $qList) {
+                $qJson = json_encode($qList, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+                $stmt = $conn->prepare("INSERT IGNORE INTO question_sets (category, report_type, questions_json) VALUES (?, ?, ?)");
+                if ($stmt) {
+                    $stmt->bind_param("sss", $cat, $rtype, $qJson);
+                    $stmt->execute();
+                    $stmt->close();
+                }
+            }
+        }
+    }
+}
+
+function ensureRecoveryCasesSchema() {
+    global $conn;
+    if (!$conn) return;
+
+    $cols = [];
+    $res = @$conn->query("SHOW COLUMNS FROM `recovery_cases`");
+    if ($res) {
+        while ($r = $res->fetch_assoc()) $cols[] = strtolower($r['Field']);
+    }
+
+    if (!empty($cols)) {
+        if (!in_array('return_type', $cols)) {
+            @$conn->query("ALTER TABLE `recovery_cases` ADD COLUMN `return_type` ENUM('hand_on_hand', 'admin_office') DEFAULT 'hand_on_hand' AFTER `status`");
+        }
+        if (!in_array('otp', $cols)) {
+            @$conn->query("ALTER TABLE `recovery_cases` ADD COLUMN `otp` VARCHAR(6) DEFAULT NULL AFTER `return_type`");
+        }
+        if (!in_array('otp_expires_at', $cols)) {
+            @$conn->query("ALTER TABLE `recovery_cases` ADD COLUMN `otp_expires_at` DATETIME DEFAULT NULL AFTER `otp`");
+        }
+        if (!in_array('otp_attempts', $cols)) {
+            @$conn->query("ALTER TABLE `recovery_cases` ADD COLUMN `otp_attempts` INT(11) DEFAULT 0 AFTER `otp_expires_at`");
+        }
+        if (!in_array('otp_locked_until', $cols)) {
+            @$conn->query("ALTER TABLE `recovery_cases` ADD COLUMN `otp_locked_until` DATETIME DEFAULT NULL AFTER `otp_attempts`");
+        }
+    }
+}
+
+function ensureReportsAiSchema() {
+    global $conn;
+    if (!$conn) return;
+
+    foreach (['lost_reports', 'found_reports'] as $t) {
+        $cols = [];
+        $res = @$conn->query("SHOW COLUMNS FROM `$t`");
+        if ($res) {
+            while ($r = $res->fetch_assoc()) $cols[] = strtolower($r['Field']);
+        }
+        if (!empty($cols) && !in_array('ai_processed', $cols)) {
+            @$conn->query("ALTER TABLE `$t` ADD COLUMN `ai_processed` TINYINT(1) DEFAULT 0 AFTER `status`");
+        }
+    }
+}
+
+function getCategoryVerificationQuestions($category = 'General') {
+    global $conn;
+    $cleanCat = strtolower(trim($category));
+    $mappedCat = 'general';
+    if (stripos($cleanCat, 'elect') !== false || stripos($cleanCat, 'phone') !== false || stripos($cleanCat, 'laptop') !== false) $mappedCat = 'electronics';
+    elseif (stripos($cleanCat, 'wallet') !== false || stripos($cleanCat, 'bag') !== false || stripos($cleanCat, 'purse') !== false) $mappedCat = 'wallets & bags';
+    elseif (stripos($cleanCat, 'key') !== false) $mappedCat = 'keys & keychains';
+    elseif (stripos($cleanCat, 'id') !== false || stripos($cleanCat, 'card') !== false || stripos($cleanCat, 'doc') !== false) $mappedCat = 'id cards & documents';
+    elseif (stripos($cleanCat, 'book') !== false || stripos($cleanCat, 'note') !== false || stripos($cleanCat, 'pen') !== false) $mappedCat = 'books & stationery';
+
+    if ($conn) {
+        ensureQuestionSetsTable();
+        $stmt = $conn->prepare("SELECT questions_json FROM question_sets WHERE category = ? LIMIT 1");
+        if ($stmt) {
+            $stmt->bind_param("s", $mappedCat);
+            $stmt->execute();
+            $res = $stmt->get_result();
+            if ($row = $res->fetch_assoc()) {
+                $decoded = json_decode($row['questions_json'], true);
+                if (!empty($decoded)) return $decoded;
+            }
+            $stmt->close();
+        }
+    }
+
+    return [
+        'Brand, color, and model',
+        'Visible scratches, damage, or defining markings',
+        'Specific items, serials, or private identifiers inside/on it'
+    ];
+}
+
+/**
+ * Lightweight Action Rate Limiter (Session-backed)
+ */
+function checkRateLimit($actionKey, $maxAttempts = 5, $decaySeconds = 300) {
+    if (session_status() === PHP_SESSION_NONE) session_start();
+
+    $ip = $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1';
+    $bucketKey = 'rl_' . md5($actionKey . '_' . $ip);
+    $now = time();
+
+    if (!isset($_SESSION[$bucketKey])) {
+        $_SESSION[$bucketKey] = [
+            'count' => 1,
+            'start' => $now
+        ];
+        return true;
+    }
+
+    $bucket = $_SESSION[$bucketKey];
+    if ($now - $bucket['start'] > $decaySeconds) {
+        $_SESSION[$bucketKey] = [
+            'count' => 1,
+            'start' => $now
+        ];
+        return true;
+    }
+
+    if ($bucket['count'] >= $maxAttempts) {
+        return false;
+    }
+
+    $_SESSION[$bucketKey]['count']++;
+    return true;
+}
+
+/**
+ * Lazy Background Processor for Pending AI Indexing
+ * Safely processes up to $limit unindexed reports during regular requests.
+ */
+function processPendingAiReports($limit = 2) {
+    global $conn;
+    if (!$conn) return 0;
+
+    ensureReportsAiSchema();
+
+    $processed = 0;
+    $flaskUrl = (defined('FLASK_AI_URL') ? FLASK_AI_URL : 'https://reunite-ai-backend.onrender.com') . '/report/embed-and-store';
+    $secret = defined('AI_SECRET_KEY') ? AI_SECRET_KEY : 'reunite_ai_secret_token_2026_kolkata';
+
+    // 1. Check lost_reports
+    $lCols = [];
+    $lc = @$conn->query("SHOW COLUMNS FROM lost_reports");
+    if ($lc) while ($r = $lc->fetch_assoc()) $lCols[] = strtolower($r['Field']);
+    $lIdCol = in_array('lost_id', $lCols) ? 'lost_id' : 'id';
+    $lTitleCol = in_array('item_name', $lCols) ? 'item_name' : (in_array('title', $lCols) ? 'title' : 'item_name');
+    $lDateCol = in_array('lost_date', $lCols) ? 'lost_date' : (in_array('date_lost', $lCols) ? 'date_lost' : 'created_at');
+
+    $resLost = @$conn->query("SELECT * FROM lost_reports WHERE ai_processed = 0 OR ai_processed IS NULL LIMIT $limit");
+    if ($resLost) {
+        while ($row = $resLost->fetch_assoc()) {
+            if ($processed >= $limit) break;
+            $dbId = (int)$row[$lIdCol];
+            $fId = 'RL-' . str_pad($dbId, 5, '0', STR_PAD_LEFT);
+            $payload = [
+                'report_id' => $fId,
+                'db_id' => $dbId,
+                'report_type' => 'lost',
+                'category' => $row['category'] ?? 'General',
+                'title' => $row[$lTitleCol] ?? '',
+                'description' => $row['description'] ?? '',
+                'location' => $row['location'] ?? '',
+                'date' => $row[$lDateCol] ?? date('Y-m-d')
+            ];
+
+            $img = $row['image_path'] ?? '';
+            if ($img) {
+                $fPath = dirname(__DIR__) . '/' . ltrim($img, '/');
+                if (file_exists($fPath) && filesize($fPath) < 2 * 1024 * 1024) {
+                    $payload['image_base64'] = base64_encode(file_get_contents($fPath));
+                }
+            }
+
+            $ch = curl_init($flaskUrl);
+            if ($ch) {
+                curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+                curl_setopt($ch, CURLOPT_POST, true);
+                curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload));
+                curl_setopt($ch, CURLOPT_HTTPHEADER, [
+                    'Content-Type: application/json',
+                    'X-AI-Secret-Key: ' . $secret
+                ]);
+                curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 2);
+                curl_setopt($ch, CURLOPT_TIMEOUT, 4);
+                $resp = curl_exec($ch);
+                $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+                curl_close($ch);
+                if ($code === 200) {
+                    @$conn->query("UPDATE lost_reports SET ai_processed = 1 WHERE `$lIdCol` = $dbId");
+                    $processed++;
+                }
+            }
+        }
+    }
+
+    // 2. Check found_reports if limit not reached
+    if ($processed < $limit) {
+        $remaining = $limit - $processed;
+        $fCols = [];
+        $fc = @$conn->query("SHOW COLUMNS FROM found_reports");
+        if ($fc) while ($r = $fc->fetch_assoc()) $fCols[] = strtolower($r['Field']);
+        $fIdCol = in_array('found_id', $fCols) ? 'found_id' : 'id';
+        $fTitleCol = in_array('item_name', $fCols) ? 'item_name' : (in_array('title', $fCols) ? 'title' : 'item_name');
+        $fDateCol = in_array('found_date', $fCols) ? 'found_date' : (in_array('date_found', $fCols) ? 'date_found' : 'created_at');
+
+        $resFound = @$conn->query("SELECT * FROM found_reports WHERE ai_processed = 0 OR ai_processed IS NULL LIMIT $remaining");
+        if ($resFound) {
+            while ($row = $resFound->fetch_assoc()) {
+                $dbId = (int)$row[$fIdCol];
+                $fId = 'RF-' . str_pad($dbId, 5, '0', STR_PAD_LEFT);
+                $payload = [
+                    'report_id' => $fId,
+                    'db_id' => $dbId,
+                    'report_type' => 'found',
+                    'category' => $row['category'] ?? 'General',
+                    'title' => $row[$fTitleCol] ?? '',
+                    'description' => $row['description'] ?? '',
+                    'location' => $row['location'] ?? '',
+                    'date' => $row[$fDateCol] ?? date('Y-m-d')
+                ];
+
+                $img = $row['image_path'] ?? '';
+                if ($img) {
+                    $fPath = dirname(__DIR__) . '/' . ltrim($img, '/');
+                    if (file_exists($fPath) && filesize($fPath) < 2 * 1024 * 1024) {
+                        $payload['image_base64'] = base64_encode(file_get_contents($fPath));
+                    }
+                }
+
+                $ch = curl_init($flaskUrl);
+                if ($ch) {
+                    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+                    curl_setopt($ch, CURLOPT_POST, true);
+                    curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload));
+                    curl_setopt($ch, CURLOPT_HTTPHEADER, [
+                        'Content-Type: application/json',
+                        'X-AI-Secret-Key: ' . $secret
+                    ]);
+                    curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 2);
+                    curl_setopt($ch, CURLOPT_TIMEOUT, 4);
+                    $resp = curl_exec($ch);
+                    $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+                    curl_close($ch);
+                    if ($code === 200) {
+                        @$conn->query("UPDATE found_reports SET ai_processed = 1 WHERE `$fIdCol` = $dbId");
+                        $processed++;
+                    }
+                }
+            }
+        }
+    }
+
+    return $processed;
 }
 
 // Automatically enforce maintenance mode across all including endpoints
