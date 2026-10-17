@@ -43,14 +43,37 @@ if (!$match_id || $match_id <= 0) {
 }
 
 try {
-    // Look up match and confirm user is the claimant
+    // Detect column names dynamically
+    $mCols = [];
+    $cRes = mysqli_query($conn, "SHOW COLUMNS FROM matches");
+    if ($cRes) {
+        while ($cRow = mysqli_fetch_assoc($cRes)) {
+            $mCols[] = strtolower($cRow['Field']);
+        }
+    }
+    $mPk = in_array('match_id', $mCols) ? 'match_id' : 'id';
+    $lostCol = in_array('lost_id', $mCols) ? 'lost_id' : 'lost_report_id';
+    $foundCol = in_array('found_id', $mCols) ? 'found_id' : 'found_report_id';
+
+    $lCols = [];
+    $lc = @mysqli_query($conn, "SHOW COLUMNS FROM lost_reports");
+    if ($lc) while ($r = mysqli_fetch_assoc($lc)) $lCols[] = strtolower($r['Field']);
+    $lPk = in_array('lost_id', $lCols) ? 'lost_id' : 'id';
+
+    $fCols = [];
+    $fc = @mysqli_query($conn, "SHOW COLUMNS FROM found_reports");
+    if ($fc) while ($r = mysqli_fetch_assoc($fc)) $fCols[] = strtolower($r['Field']);
+    $fPk = in_array('found_id', $fCols) ? 'found_id' : 'id';
+
+    // Look up match and confirm user is the claimant or founder
     $stmt = mysqli_prepare($conn, "
-        SELECT m.id, m.status, m.lost_report_id, m.found_report_id,
+        SELECT m.`$mPk` AS id, m.status, m.`$lostCol` AS lost_report_id, m.`$foundCol` AS found_report_id,
                lr.user_id as claimant_id, fr.user_id as founder_id
         FROM matches m
-        LEFT JOIN lost_reports lr ON m.lost_report_id = lr.id
-        LEFT JOIN found_reports fr ON m.found_report_id = fr.id
-        WHERE m.id = ?
+        LEFT JOIN lost_reports lr ON m.`$lostCol` = lr.`$lPk`
+        LEFT JOIN found_reports fr ON m.`$foundCol` = fr.`$fPk`
+        WHERE m.`$mPk` = ?
+        LIMIT 1
     ");
     if (!$stmt) {
         throw new Exception('Database error: ' . mysqli_error($conn));
@@ -86,7 +109,7 @@ try {
     // Store in matches table if columns exist
     $check_m = mysqli_query($conn, "SHOW COLUMNS FROM matches LIKE 'otp'");
     if ($check_m && mysqli_num_rows($check_m) > 0) {
-        $u_stmt = mysqli_prepare($conn, "UPDATE matches SET otp = ?, otp_expires_at = ? WHERE id = ?");
+        $u_stmt = mysqli_prepare($conn, "UPDATE matches SET otp = ?, otp_expires_at = ? WHERE `$mPk` = ?");
         if ($u_stmt) {
             mysqli_stmt_bind_param($u_stmt, 'ssi', $otp, $otp_expires_at, $match_id);
             mysqli_stmt_execute($u_stmt);

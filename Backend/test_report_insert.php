@@ -10,6 +10,12 @@ header('Content-Type: application/json');
 require_once __DIR__ . '/config/config.php';
 require_once __DIR__ . '/functions.php';
 
+if (empty($_SESSION['reunite_admin_auth']) || $_SESSION['reunite_admin_auth'] !== true) {
+    http_response_code(403);
+    echo json_encode(['success' => false, 'error' => 'Access Denied: Admin session required.']);
+    exit;
+}
+
 $diagnostics = [
     'timestamp' => date('Y-m-d H:i:s'),
     'php_version' => PHP_VERSION,

@@ -62,41 +62,55 @@ if ($conn && !$conn->connect_error) {
         $results['database']['missing_tables'] = array_values($missing);
         $results['database']['schema_healthy'] = empty($missing);
 
-        // Registered users inspection
-        $uList = [];
-        $uRes = $conn->query("SELECT user_id, full_name, pin, role, status FROM users LIMIT 10");
-        if ($uRes) {
-            while ($u = $uRes->fetch_assoc()) {
-                $uid = (int)$u['user_id'];
-                $lCnt = 0; $fCnt = 0; $mCnt = 0;
-                $lQ = $conn->query("SELECT COUNT(*) FROM lost_reports WHERE user_id = $uid");
-                if ($lQ) $lCnt = (int)$lQ->fetch_row()[0];
-                $fQ = $conn->query("SELECT COUNT(*) FROM found_reports WHERE user_id = $uid");
-                if ($fQ) $fCnt = (int)$fQ->fetch_row()[0];
-                $mQ = $conn->query("SELECT COUNT(DISTINCT m.id) FROM matches m LEFT JOIN lost_reports lr ON m.lost_report_id = lr.id LEFT JOIN found_reports fr ON m.found_report_id = fr.id WHERE lr.user_id = $uid OR fr.user_id = $uid");
-                if ($mQ) $mCnt = (int)$mQ->fetch_row()[0];
+        // Registered users inspection (RESTRICTED TO AUTHENTICATED ADMINS ONLY)
+        $isAdmin = !empty($_SESSION['reunite_admin_auth']) && $_SESSION['reunite_admin_auth'] === true;
+        if ($isAdmin) {
+            $uList = [];
+            $uRes = $conn->query("SELECT user_id, full_name, pin, role, status FROM users LIMIT 10");
+            if ($uRes) {
+                while ($u = $uRes->fetch_assoc()) {
+                    $uid = (int)$u['user_id'];
+                    $lCnt = 0; $fCnt = 0; $mCnt = 0;
+                    $lQ = $conn->query("SELECT COUNT(*) FROM lost_reports WHERE user_id = $uid");
+                    if ($lQ) $lCnt = (int)$lQ->fetch_row()[0];
+                    $fQ = $conn->query("SELECT COUNT(*) FROM found_reports WHERE user_id = $uid");
+                    if ($fQ) $fCnt = (int)$fQ->fetch_row()[0];
+                    $mQ = $conn->query("SELECT COUNT(DISTINCT m.id) FROM matches m LEFT JOIN lost_reports lr ON m.lost_report_id = lr.id LEFT JOIN found_reports fr ON m.found_report_id = fr.id WHERE lr.user_id = $uid OR fr.user_id = $uid");
+                    if ($mQ) $mCnt = (int)$mQ->fetch_row()[0];
 
-                $uList[] = [
-                    'user_id' => $uid,
-                    'full_name' => $u['full_name'],
-                    'pin' => $u['pin'],
-                    'role' => $u['role'],
-                    'status' => $u['status'],
-                    'profile_numbers' => [
-                        'reports_filed' => $lCnt + $fCnt,
-                        'lost_count' => $lCnt,
-                        'found_count' => $fCnt,
-                        'ai_matches' => $mCnt
-                    ]
-                ];
+                    $uList[] = [
+                        'user_id' => $uid,
+                        'full_name' => $u['full_name'],
+                        'pin' => $u['pin'],
+                        'role' => $u['role'],
+                        'status' => $u['status'],
+                        'profile_numbers' => [
+                            'reports_filed' => $lCnt + $fCnt,
+                            'lost_count' => $lCnt,
+                            'found_count' => $fCnt,
+                            'ai_matches' => $mCnt
+                        ]
+                    ];
+                }
             }
+            $results['database']['users_profile_verification'] = $uList;
         }
-        // Optional: Seed action if requested via ?seed=1 or ?action=seed
-        if (isset($_GET['seed']) || (isset($_GET['action']) && $_GET['action'] === 'seed')) {
-            $seedPin = $_GET['pin'] ?? '24155-cm-002';
-            $uQ = $conn->query("SELECT user_id FROM `users` WHERE pin = '$seedPin' LIMIT 1");
-            if ($uQ && ($uRow = $uQ->fetch_assoc())) {
-                $targetUid = (int)$uRow['user_id'];
+
+        // Optional: Seed action if requested via ?seed=1 or ?action=seed (ADMIN ONLY with parameterized query)
+        if ($isAdmin && (isset($_GET['seed']) || (isset($_GET['action']) && $_GET['action'] === 'seed'))) {
+            $seedPin = trim($_GET['pin'] ?? '24155-cm-002');
+            $uStmt = $conn->prepare("SELECT user_id FROM `users` WHERE pin = ? LIMIT 1");
+            $targetUid = null;
+            if ($uStmt) {
+                $uStmt->bind_param("s", $seedPin);
+                $uStmt->execute();
+                $uRes = $uStmt->get_result();
+                if ($uRow = $uRes->fetch_assoc()) {
+                    $targetUid = (int)$uRow['user_id'];
+                }
+                $uStmt->close();
+            }
+            if ($targetUid) {
                 
                 // 1. Insert lost report if none exists
                 $lCheck = $conn->query("SELECT id FROM `lost_reports` WHERE user_id = $targetUid LIMIT 1");

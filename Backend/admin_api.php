@@ -24,6 +24,9 @@ if (session_status() === PHP_SESSION_NONE) {
 $action = trim($_REQUEST['action'] ?? '');
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 
+// Ensure admins table is provisioned
+ensureAdminsTable();
+
 // Helper to check admin authorization
 function is_admin_authorized() {
     if (!empty($_SESSION['reunite_admin_auth']) && $_SESSION['reunite_admin_auth'] === true) {
@@ -32,8 +35,9 @@ function is_admin_authorized() {
     // Also check if logged in as user with role 'admin'
     if (!empty($_SESSION['user_id'])) {
         $user = get_current_user_data();
-        if ($user && ($user['role'] ?? '') === 'admin') {
+        if ($user && in_array(strtolower($user['role'] ?? ''), ['admin', 'superadmin', 'moderator'])) {
             $_SESSION['reunite_admin_auth'] = true;
+            $_SESSION['reunite_admin_role'] = strtolower($user['role']);
             return true;
         }
     }
@@ -43,39 +47,43 @@ function is_admin_authorized() {
 // ── 1. Admin Authentication: Login ────────────────────────
 if ($action === 'login') {
     $passcode = trim($_POST['passcode'] ?? '');
-    $email = trim($_POST['email'] ?? '');
+    $identifier = trim($_POST['identifier'] ?? $_POST['email'] ?? $_POST['username'] ?? '');
     $password = trim($_POST['password'] ?? '');
 
-    // Check Master Key / Admin Passcode
-    $adminPin = get_config_val('ADMIN_PIN', 'admin');
-    if (!empty($passcode) && ($passcode === 'admin' || hash_equals(ADMIN_MASTER_KEY, $passcode) || hash_equals($adminPin, $passcode))) {
+    // Check Master Key (Secure comparison only, no hardcoded bypass)
+    if (!empty($passcode) && hash_equals(ADMIN_MASTER_KEY, $passcode)) {
         $_SESSION['reunite_admin_auth'] = true;
         $_SESSION['reunite_admin_name'] = 'System Administrator';
-        $_SESSION['reunite_admin_role'] = 'SuperAdmin';
+        $_SESSION['reunite_admin_role'] = 'superadmin';
         
         logAccess(0, 'Admin Terminal Login (Master Key)', 'Authorization granted via Master Passcode');
-        echo json_encode(['success' => true, 'message' => 'Admin clearance granted. Welcome, System Administrator.']);
+        echo json_encode(['success' => true, 'message' => 'Admin clearance granted. Welcome, System Administrator.', 'role' => 'superadmin']);
         exit;
     }
 
-    // Check DB Admin User Credentials
-    if (!empty($email) && !empty($password) && $conn) {
-        $encEmail = encryptData($email);
-        $stmt = $conn->prepare("SELECT user_id, full_name, password_hash, role FROM users WHERE email = ? LIMIT 1");
+    // Check Dedicated `admins` Table (charan_admin / charan_moderator)
+    if (!empty($identifier) && !empty($password) && $conn) {
+        $stmt = $conn->prepare("SELECT admin_id, username, full_name, email, password_hash, role, status FROM admins WHERE (username = ? OR email = ?) AND status = 'active' LIMIT 1");
         if ($stmt) {
-            $stmt->bind_param("s", $encEmail);
+            $stmt->bind_param("ss", $identifier, $identifier);
             $stmt->execute();
             $res = $stmt->get_result();
-            if ($user = $res->fetch_assoc()) {
-                if ($user['role'] === 'admin' && verify_password_custom($password, $user['password_hash'])) {
+            if ($admin = $res->fetch_assoc()) {
+                if (password_verify($password, $admin['password_hash'])) {
                     $_SESSION['reunite_admin_auth'] = true;
-                    $_SESSION['reunite_admin_name'] = $user['full_name'];
-                    $_SESSION['reunite_admin_role'] = 'Admin';
-                    $_SESSION['user_id'] = $user['user_id'];
+                    $_SESSION['reunite_admin_name'] = $admin['full_name'];
+                    $_SESSION['reunite_admin_role'] = strtolower($admin['role']);
+                    $_SESSION['admin_id'] = $admin['admin_id'];
                     $stmt->close();
-                    
-                    logAccess($user['user_id'], 'Admin Terminal Login (User Credential)', 'Admin role verified');
-                    echo json_encode(['success' => true, 'message' => 'Admin clearance granted.']);
+
+                    @$conn->query("UPDATE admins SET last_login = NOW() WHERE admin_id = " . (int)$admin['admin_id']);
+                    logAccess($admin['admin_id'], 'Admin Login (' . ucfirst($admin['role']) . ')', 'User: ' . $admin['username']);
+                    echo json_encode([
+                        'success' => true,
+                        'message' => 'Admin clearance granted. Welcome, ' . $admin['full_name'],
+                        'admin_name' => $admin['full_name'],
+                        'role' => $admin['role']
+                    ]);
                     exit;
                 }
             }
@@ -83,7 +91,32 @@ if ($action === 'login') {
         }
     }
 
-    logAccess(0, 'Admin Clearance Attempt Failed', 'Invalid key or credentials provided');
+    // Check Users Table where role is admin
+    if (!empty($identifier) && !empty($password) && $conn) {
+        $encEmail = encryptData($identifier);
+        $stmt = $conn->prepare("SELECT user_id, full_name, password_hash, role FROM users WHERE (email = ? OR email = ? OR pin = ?) LIMIT 1");
+        if ($stmt) {
+            $stmt->bind_param("sss", $encEmail, $identifier, $identifier);
+            $stmt->execute();
+            $res = $stmt->get_result();
+            if ($user = $res->fetch_assoc()) {
+                if (in_array(strtolower($user['role']), ['admin', 'superadmin', 'moderator']) && password_verify($password, $user['password_hash'])) {
+                    $_SESSION['reunite_admin_auth'] = true;
+                    $_SESSION['reunite_admin_name'] = $user['full_name'];
+                    $_SESSION['reunite_admin_role'] = strtolower($user['role']);
+                    $_SESSION['user_id'] = $user['user_id'];
+                    $stmt->close();
+                    
+                    logAccess($user['user_id'], 'Admin Terminal Login (User Credential)', 'Role: ' . $user['role']);
+                    echo json_encode(['success' => true, 'message' => 'Admin clearance granted.', 'role' => $user['role']]);
+                    exit;
+                }
+            }
+            $stmt->close();
+        }
+    }
+
+    logAccess(0, 'Admin Clearance Attempt Failed', 'Invalid credentials provided for ' . $identifier);
     http_response_code(401);
     echo json_encode(['success' => false, 'error' => 'Invalid admin clearance passcode or credentials. Access denied.']);
     exit;
@@ -105,6 +138,7 @@ if ($action === 'logout') {
     unset($_SESSION['reunite_admin_auth']);
     unset($_SESSION['reunite_admin_name']);
     unset($_SESSION['reunite_admin_role']);
+    unset($_SESSION['admin_id']);
     echo json_encode(['success' => true, 'message' => 'Admin session terminated.']);
     exit;
 }
@@ -113,6 +147,27 @@ if ($action === 'logout') {
 if (!is_admin_authorized()) {
     http_response_code(403);
     echo json_encode(['success' => false, 'error' => 'Security clearance required. Please authenticate into Admin Terminal.']);
+    exit;
+}
+
+// Role-based permission gate for Moderator
+$currentAdminRole = strtolower($_SESSION['reunite_admin_role'] ?? 'admin');
+$restrictedModeratorActions = [
+    'toggle_maintenance',
+    'update_maintenance',
+    'purge_vectors',
+    'sync_vectors',
+    'block_user',
+    'update_trust_score',
+    'delete_report'
+];
+
+if ($currentAdminRole === 'moderator' && in_array($action, $restrictedModeratorActions)) {
+    http_response_code(403);
+    echo json_encode([
+        'success' => false,
+        'error' => 'Permission Denied: Moderator role cannot perform this privileged administrative action. Admin or SuperAdmin clearance required.'
+    ]);
     exit;
 }
 
@@ -442,6 +497,102 @@ if ($action === 'get_dna') {
     exit;
 }
 
+// ── 7B. List Recovery Cases (Claims) ──────────────────────
+if ($action === 'recovery_cases') {
+    if (!$conn) {
+        echo json_encode(['success' => false, 'error' => 'Database connection unavailable']);
+        exit;
+    }
+
+    if (function_exists('ensureRecoveryCasesSchema')) {
+        ensureRecoveryCasesSchema();
+    }
+
+    $rcCols = [];
+    $rcRes = @$conn->query("SHOW COLUMNS FROM recovery_cases");
+    if ($rcRes) while ($rc = $rcRes->fetch_assoc()) $rcCols[] = strtolower($rc['Field']);
+    $rcPk = in_array('id', $rcCols) ? 'id' : (in_array('case_id', $rcCols) ? 'case_id' : 'id');
+    $rcRepCol = in_array('report_id', $rcCols) ? 'report_id' : (in_array('found_id', $rcCols) ? 'found_id' : 'report_id');
+
+    $cases = [];
+    $sql = "SELECT r.*, u.full_name as claimant_name, u.email as claimant_email, u.phone as claimant_phone
+            FROM recovery_cases r
+            LEFT JOIN users u ON r.claimant_id = u.user_id
+            ORDER BY r.`$rcPk` DESC LIMIT 100";
+    $res = $conn->query($sql);
+    if ($res) {
+        while ($row = $res->fetch_assoc()) {
+            $cases[] = [
+                'id' => (int)$row[$rcPk],
+                'match_id' => $row['match_id'] ?? null,
+                'found_report_id' => $row[$rcRepCol] ?? null,
+                'claimant_name' => $row['claimant_name'] ?? 'Claimant',
+                'claimant_email' => !empty($row['claimant_email']) ? decryptData($row['claimant_email']) : '',
+                'claimant_phone' => !empty($row['claimant_phone']) ? decryptData($row['claimant_phone']) : '',
+                'proof_description' => $row['proof_details'] ?? '',
+                'proof_image_path' => $row['proof_image_path'] ?? null,
+                'status' => $row['status'] ?? 'pending_verification',
+                'return_type' => $row['return_type'] ?? 'in_person',
+                'created_at' => $row['created_at'] ?? date('Y-m-d')
+            ];
+        }
+    }
+
+    echo json_encode(['success' => true, 'cases' => $cases]);
+    exit;
+}
+
+// ── 7C. Update Recovery Case Status ───────────────────────
+if ($action === 'update_recovery_case') {
+    $req = getRequestData();
+    $caseId = (int)($req['id'] ?? $_POST['id'] ?? 0);
+    $newStatus = trim($req['status'] ?? $_POST['status'] ?? '');
+
+    if (!$conn || $caseId <= 0 || !in_array($newStatus, ['approved', 'handed_off', 'rejected', 'pending_verification'])) {
+        echo json_encode(['success' => false, 'error' => 'Invalid parameters for updating recovery case.']);
+        exit;
+    }
+
+    $rcCols = [];
+    $rcRes = @$conn->query("SHOW COLUMNS FROM recovery_cases");
+    if ($rcRes) while ($rc = $rcRes->fetch_assoc()) $rcCols[] = strtolower($rc['Field']);
+    $rcPk = in_array('id', $rcCols) ? 'id' : (in_array('case_id', $rcCols) ? 'case_id' : 'id');
+    $rcRepCol = in_array('report_id', $rcCols) ? 'report_id' : (in_array('found_id', $rcCols) ? 'found_id' : 'report_id');
+
+    $stmt = $conn->prepare("SELECT * FROM recovery_cases WHERE `$rcPk` = ? LIMIT 1");
+    $stmt->bind_param("i", $caseId);
+    $stmt->execute();
+    $cRow = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+
+    if (!$cRow) {
+        echo json_encode(['success' => false, 'error' => 'Recovery case not found.']);
+        exit;
+    }
+
+    $uStmt = $conn->prepare("UPDATE recovery_cases SET status = ? WHERE `$rcPk` = ?");
+    $uStmt->bind_param("si", $newStatus, $caseId);
+    $uStmt->execute();
+    $uStmt->close();
+
+    $foundId = (int)($cRow[$rcRepCol] ?? 0);
+
+    $fCols = [];
+    $fc = @$conn->query("SHOW COLUMNS FROM found_reports");
+    if ($fc) while ($r = $fc->fetch_assoc()) $fCols[] = strtolower($r['Field']);
+    $fPk = in_array('found_id', $fCols) ? 'found_id' : 'id';
+
+    if ($newStatus === 'approved' || $newStatus === 'handed_off') {
+        if ($foundId > 0) {
+            @$conn->query("UPDATE found_reports SET status = 'claimed' WHERE `$fPk` = $foundId");
+        }
+    }
+
+    logAccess(0, 'Recovery Case Status Updated', "Case ID: $caseId, Status: $newStatus");
+    echo json_encode(['success' => true, 'message' => "Recovery case #$caseId updated to $newStatus."]);
+    exit;
+}
+
 // ── 8. Delete Report (With Chroma & Media Cleanup) ─────────
 if ($action === 'delete_report') {
     $reportType = strtolower(trim($_POST['report_type'] ?? ''));
@@ -501,7 +652,10 @@ if ($action === 'delete_report') {
         if ($ch) {
             curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
             curl_setopt($ch, CURLOPT_POST, true);
-            curl_setopt($ch, CURLOPT_TIMEOUT, 2);
+            curl_setopt($ch, CURLOPT_HTTPHEADER, [
+                'X-AI-Secret-Key: ' . (defined('AI_SECRET_KEY') ? AI_SECRET_KEY : 'reunite_ai_secret_token_2026_kolkata')
+            ]);
+            curl_setopt($ch, CURLOPT_TIMEOUT, 3);
             curl_exec($ch);
             curl_close($ch);
         }
@@ -520,72 +674,102 @@ if ($action === 'sync_chroma') {
         exit;
     }
 
-    $flaskUrl = (defined('FLASK_AI_URL') ? FLASK_AI_URL : 'https://reunite-ai-backend.onrender.com') . '/report/embed-and-store';
-    $synced = 0;
-    $errors = 0;
+    $flaskUrl = (defined('FLASK_AI_URL') ? FLASK_AI_URL : 'https://reunite-ai-backend.onrender.com') . '/report/batch-sync';
+    $secret = defined('AI_SECRET_KEY') ? AI_SECRET_KEY : 'reunite_ai_secret_token_2026_kolkata';
 
-    // Sync Lost Reports
-    $resLost = $conn->query("SELECT l.*, d.encrypted_dna as dna_json FROM lost_reports l LEFT JOIN digital_dna d ON (d.report_id = l.id AND d.report_type = 'LOST')");
+    $lCols = [];
+    $lc = @$conn->query("SHOW COLUMNS FROM lost_reports");
+    if ($lc) while ($r = $lc->fetch_assoc()) $lCols[] = strtolower($r['Field']);
+    $lIdCol = in_array('lost_id', $lCols) ? 'lost_id' : 'id';
+    $lTitleCol = in_array('item_name', $lCols) ? 'item_name' : (in_array('title', $lCols) ? 'title' : 'item_name');
+    $lDateCol = in_array('lost_date', $lCols) ? 'lost_date' : (in_array('date_lost', $lCols) ? 'date_lost' : 'created_at');
+
+    $fCols = [];
+    $fc = @$conn->query("SHOW COLUMNS FROM found_reports");
+    if ($fc) while ($r = $fc->fetch_assoc()) $fCols[] = strtolower($r['Field']);
+    $fIdCol = in_array('found_id', $fCols) ? 'found_id' : 'id';
+    $fTitleCol = in_array('item_name', $fCols) ? 'item_name' : (in_array('title', $fCols) ? 'title' : 'item_name');
+    $fDateCol = in_array('found_date', $fCols) ? 'found_date' : (in_array('date_found', $fCols) ? 'date_found' : 'created_at');
+
+    $allReports = [];
+
+    // Fetch Lost Reports
+    $resLost = $conn->query("SELECT * FROM lost_reports");
     if ($resLost) {
         while ($row = $resLost->fetch_assoc()) {
-            $fId = 'RL-' . str_pad($row['id'], 5, '0', STR_PAD_LEFT);
-            $payload = [
-                'report_id' => $fId,
-                'db_id' => $row['id'],
+            $dbId = (int)$row[$lIdCol];
+            $item = [
+                'report_id' => 'RL-' . str_pad($dbId, 5, '0', STR_PAD_LEFT),
+                'db_id' => $dbId,
                 'report_type' => 'lost',
-                'category' => $row['category'],
-                'title' => $row['title'] ?? '',
+                'category' => $row['category'] ?? 'General',
+                'title' => $row[$lTitleCol] ?? '',
                 'description' => $row['description'] ?? '',
                 'location' => $row['location'] ?? '',
-                'date' => $row['date_lost'] ?? date('Y-m-d'),
-                'digital_dna' => !empty($row['dna_json']) ? json_decode($row['dna_json'], true) : null
+                'date' => $row[$lDateCol] ?? date('Y-m-d')
             ];
-
-            $ch = curl_init($flaskUrl);
-            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-            curl_setopt($ch, CURLOPT_POST, true);
-            curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload));
-            curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
-            curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 8);
-            curl_setopt($ch, CURLOPT_TIMEOUT, 20);
-            $out = curl_exec($ch);
-            $http = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-            curl_close($ch);
-
-            if ($http === 200) $synced++; else $errors++;
+            $img = $row['image_path'] ?? '';
+            if ($img) {
+                $fPath = dirname(__DIR__) . '/' . ltrim($img, '/');
+                if (file_exists($fPath) && filesize($fPath) < 2 * 1024 * 1024) {
+                    $item['image_base64'] = base64_encode(file_get_contents($fPath));
+                }
+            }
+            $allReports[] = $item;
         }
     }
 
-    // Sync Found Reports
-    $resFound = $conn->query("SELECT f.*, d.encrypted_dna as dna_json FROM found_reports f LEFT JOIN digital_dna d ON (d.report_id = f.id AND d.report_type = 'FOUND')");
+    // Fetch Found Reports
+    $resFound = $conn->query("SELECT * FROM found_reports");
     if ($resFound) {
         while ($row = $resFound->fetch_assoc()) {
-            $fId = 'RF-' . str_pad($row['id'], 5, '0', STR_PAD_LEFT);
-            $payload = [
-                'report_id' => $fId,
-                'db_id' => $row['id'],
+            $dbId = (int)$row[$fIdCol];
+            $item = [
+                'report_id' => 'RF-' . str_pad($dbId, 5, '0', STR_PAD_LEFT),
+                'db_id' => $dbId,
                 'report_type' => 'found',
-                'category' => $row['category'],
-                'title' => $row['title'] ?? '',
+                'category' => $row['category'] ?? 'General',
+                'title' => $row[$fTitleCol] ?? '',
                 'description' => $row['description'] ?? '',
                 'location' => $row['location'] ?? '',
-                'date' => $row['date_found'] ?? date('Y-m-d'),
-                'image_path' => $row['image_path'] ?? '',
-                'digital_dna' => !empty($row['dna_json']) ? json_decode($row['dna_json'], true) : null
+                'date' => $row[$fDateCol] ?? date('Y-m-d')
             ];
+            $img = $row['image_path'] ?? '';
+            if ($img) {
+                $fPath = dirname(__DIR__) . '/' . ltrim($img, '/');
+                if (file_exists($fPath) && filesize($fPath) < 2 * 1024 * 1024) {
+                    $item['image_base64'] = base64_encode(file_get_contents($fPath));
+                }
+            }
+            $allReports[] = $item;
+        }
+    }
 
-            $ch = curl_init($flaskUrl);
-            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-            curl_setopt($ch, CURLOPT_POST, true);
-            curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload));
-            curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
-            curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 8);
-            curl_setopt($ch, CURLOPT_TIMEOUT, 20);
-            $out = curl_exec($ch);
-            $http = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-            curl_close($ch);
+    $synced = 0;
+    $errors = 0;
 
-            if ($http === 200) $synced++; else $errors++;
+    // Send in batches of 20
+    $chunks = array_chunk($allReports, 20);
+    foreach ($chunks as $chunk) {
+        $ch = curl_init($flaskUrl);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode(['reports' => $chunk]));
+        curl_setopt($ch, CURLOPT_HTTPHEADER, [
+            'Content-Type: application/json',
+            'X-AI-Secret-Key: ' . $secret
+        ]);
+        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+        $out = curl_exec($ch);
+        $http = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        if ($http === 200) {
+            $dec = json_decode($out, true);
+            $synced += (int)($dec['synced'] ?? count($chunk));
+        } else {
+            $errors += count($chunk);
         }
     }
 
@@ -605,7 +789,10 @@ if ($action === 'purge_chroma') {
     $ch = curl_init($flaskUrl);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
     curl_setopt($ch, CURLOPT_POST, true);
-    curl_setopt($ch, CURLOPT_TIMEOUT, 4);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, [
+        'X-AI-Secret-Key: ' . (defined('AI_SECRET_KEY') ? AI_SECRET_KEY : 'reunite_ai_secret_token_2026_kolkata')
+    ]);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 6);
     $resp = curl_exec($ch);
     curl_close($ch);
 

@@ -211,3 +211,26 @@ function update_user_profile($updatedData) {
     }
     return true;
 }
+
+function is_admin() {
+    init_session();
+    if (!empty($_SESSION['reunite_admin_auth']) && $_SESSION['reunite_admin_auth'] === true) {
+        return true;
+    }
+    if (!empty($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true) {
+        return true;
+    }
+    if (!empty($_SESSION['role']) && in_array(strtolower($_SESSION['role']), ['admin', 'superadmin', 'moderator'])) {
+        return true;
+    }
+    return false;
+}
+
+function require_admin() {
+    init_session();
+    if (!is_admin()) {
+        header("Location: ../admin.php");
+        exit();
+    }
+}
+

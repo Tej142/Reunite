@@ -142,11 +142,27 @@ if ($action === 'submit') {
         $chkStmt->close();
     }
 
+    if (function_exists('ensureRecoveryCasesSchema')) {
+        ensureRecoveryCasesSchema();
+    }
+
+    $returnType = trim($data['return_type'] ?? 'in_person');
+    if (!in_array($returnType, ['in_person', 'admin_office', 'hand_on_hand'])) {
+        $returnType = 'in_person';
+    }
+
     // Build dynamic resilient INSERT statement
     $insCols = ['claimant_id', 'proof_details', 'status', 'created_at'];
     $insTypes = "iss";
     $insParams = [$userId, $proofDetails, 'pending_verification'];
     $insPlaceholders = ["?", "?", "?", "NOW()"];
+
+    if (in_array('return_type', $rcCols)) {
+        $insCols[] = '`return_type`';
+        $insTypes .= 's';
+        $insParams[] = $returnType;
+        $insPlaceholders[] = "?";
+    }
 
     if (in_array('report_id', $rcCols)) {
         $insCols[] = '`report_id`';

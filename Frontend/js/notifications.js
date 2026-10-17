@@ -282,13 +282,21 @@
     // Start initial fetch
     fetchNotifications();
 
-    // Start Real-Time Polling every 3.5 seconds
-    pollInterval = setInterval(fetchNotifications, 3500);
+    // Responsive Polling with Tab Visibility Awareness:
+    // 15s when active tab, 60s when hidden to conserve hosting CPU and daily quota.
+    function startPolling(intervalMs) {
+      if (pollInterval) clearInterval(pollInterval);
+      pollInterval = setInterval(fetchNotifications, intervalMs);
+    }
 
-    // Fast poll when window regains visibility
+    startPolling(15000);
+
     document.addEventListener('visibilitychange', function () {
-      if (!document.hidden) {
-        fetchNotifications();
+      if (document.hidden) {
+        startPolling(60000); // Back off to 60s when user leaves tab
+      } else {
+        fetchNotifications(); // Immediate refresh on tab return
+        startPolling(15000); // Resume 15s poll
       }
     });
 

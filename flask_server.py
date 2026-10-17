@@ -39,11 +39,30 @@ from analyzers.image_analyzer import analyze_image
 
 import uuid
 import time
+import base64
+import functools
 from PIL import Image, ImageOps
 import pymysql
 
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
+
+AI_SECRET_KEY = os.getenv("AI_SECRET_KEY", "reunite_ai_secret_token_2026_kolkata")
+
+def require_ai_auth(f):
+    @functools.wraps(f)
+    def decorated(*args, **kwargs):
+        token = request.headers.get("X-AI-Secret-Key")
+        if not token:
+            auth_header = request.headers.get("Authorization", "")
+            if auth_header.startswith("Bearer "):
+                token = auth_header.split(" ", 1)[1].strip()
+        if not token:
+            token = request.args.get("secret_key")
+        if not token or token != AI_SECRET_KEY:
+            return jsonify({"success": False, "error": "Unauthorized: Invalid or missing X-AI-Secret-Key"}), 401
+        return f(*args, **kwargs)
+    return decorated
 
 def db_log_event(action: str, details: str = "", user_id: int = None, ip: str = None):
     """
@@ -595,6 +614,7 @@ except Exception as chroma_import_err:
 
 
 @app.route("/report/embed-and-store", methods=["POST"])
+@require_ai_auth
 def embed_and_store_report():
     """
     Extracts multimodal vector embeddings (DINOv2 for image + CLIP for text)
@@ -610,11 +630,35 @@ def embed_and_store_report():
         location = str(data.get("location") or "")
         report_date = str(data.get("date") or "")
         image_path_val = data.get("image_path")
+        image_base64_val = data.get("image_base64")
         digital_dna = data.get("digital_dna") or {}
 
         # 1. Extract Visual Vector (DINOv2 - 384 dimensions)
         dinov2_vector = None
-        if image_path_val:
+        temp_img_path = None
+        if image_base64_val and CHROMA_AVAILABLE:
+            try:
+                b64_str = image_base64_val
+                if "," in b64_str:
+                    b64_str = b64_str.split(",", 1)[1]
+                img_bytes = base64.b64decode(b64_str)
+                temp_filename = f"temp_embed_{uuid.uuid4().hex[:8]}.jpg"
+                temp_img_path = Path(__file__).parent / "media_vault" / "uploads" / temp_filename
+                temp_img_path.parent.mkdir(parents=True, exist_ok=True)
+                with open(temp_img_path, "wb") as f_out:
+                    f_out.write(img_bytes)
+                dino_res = analyze_dinov2(str(temp_img_path))
+                if dino_res.get("success"):
+                    dinov2_vector = dino_res.get("vector")
+            except Exception as b64_err:
+                print(f"[WARN] Error decoding image_base64 in embed-and-store: {b64_err}")
+            finally:
+                if temp_img_path and temp_img_path.exists():
+                    try:
+                        temp_img_path.unlink()
+                    except Exception:
+                        pass
+        elif image_path_val:
             cand = Path(image_path_val)
             actual_img_path = None
             if cand.is_absolute() and cand.exists():
@@ -824,6 +868,7 @@ def get_chroma_stats():
 
 
 @app.route("/report/delete-vector/<report_id>", methods=["DELETE", "POST"])
+@require_ai_auth
 def delete_report_vector(report_id):
     try:
         if not CHROMA_AVAILABLE:
@@ -855,6 +900,7 @@ def delete_report_vector(report_id):
 
 
 @app.route("/report/purge-all-vectors", methods=["POST"])
+@require_ai_auth
 def purge_all_vectors():
     try:
         if not CHROMA_AVAILABLE:
@@ -883,6 +929,104 @@ def purge_all_vectors():
             "purged_clip": c_count
         }), 200
     except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/report/batch-sync", methods=["POST"])
+@require_ai_auth
+def batch_sync_reports():
+    """
+    Bulk re-indexes an array of lost & found reports into ChromaDB.
+    Enables one-shot vector synchronization from PHP backend.
+    """
+    try:
+        data = request.get_json() or {}
+        reports = data.get("reports", [])
+        if not isinstance(reports, list):
+            return jsonify({"success": False, "error": "reports must be a list"}), 400
+
+        synced_count = 0
+        errors = []
+
+        for item in reports:
+            try:
+                rep_id = item.get("report_id") or f"R{synced_count+1:05d}"
+                rep_type = str(item.get("report_type") or "lost").lower()
+                cat = str(item.get("category") or "General")
+                ttl = str(item.get("title") or "")
+                desc = str(item.get("description") or "")
+                loc = str(item.get("location") or "")
+                dt = str(item.get("date") or "")
+                img_path = str(item.get("image_path") or "")
+
+                # Text vector (CLIP)
+                clip_vec = None
+                text_content = f"{cat}. {ttl}. {desc}. {loc}."
+                if CHROMA_AVAILABLE:
+                    c_res = analyze_clip_text(text_content)
+                    if c_res.get("success"):
+                        clip_vec = c_res.get("vector")
+
+                # Visual vector (DINOv2) if base64 provided
+                dino_vec = None
+                b64_img = item.get("image_base64")
+                if b64_img and CHROMA_AVAILABLE:
+                    t_path = None
+                    try:
+                        if "," in b64_img:
+                            b64_img = b64_img.split(",", 1)[1]
+                        i_bytes = base64.b64decode(b64_img)
+                        t_name = f"temp_sync_{uuid.uuid4().hex[:8]}.jpg"
+                        t_path = Path(__file__).parent / "media_vault" / "uploads" / t_name
+                        t_path.parent.mkdir(parents=True, exist_ok=True)
+                        with open(t_path, "wb") as f_o:
+                            f_o.write(i_bytes)
+                        d_res = analyze_dinov2(str(t_path))
+                        if d_res.get("success"):
+                            dino_vec = d_res.get("vector")
+                    except Exception:
+                        pass
+                    finally:
+                        if t_path and t_path.exists():
+                            try:
+                                t_path.unlink()
+                            except Exception:
+                                pass
+
+                metadata = {
+                    "report_id": rep_id,
+                    "db_id": int(item.get("db_id") or 0),
+                    "report_type": rep_type,
+                    "category": cat,
+                    "title": ttl,
+                    "description": desc[:300],
+                    "location": loc,
+                    "date": dt,
+                    "image_path": img_path
+                }
+
+                if CHROMA_AVAILABLE and (dino_vec or clip_vec):
+                    store_report_vectors(
+                        report_id=rep_id,
+                        dinov2_vector=dino_vec,
+                        clip_vector=clip_vec,
+                        metadata=metadata
+                    )
+                synced_count += 1
+            except Exception as single_err:
+                errors.append(f"{item.get('report_id')}: {str(single_err)}")
+
+        db_log_event("ChromaDB Batch Sync", f"Indexed {synced_count} reports with {len(errors)} errors", ip=request.remote_addr)
+
+        return jsonify({
+            "success": True,
+            "message": f"Successfully synced {synced_count} reports into ChromaDB.",
+            "synced": synced_count,
+            "errors": errors
+        }), 200
+
+    except Exception as e:
+        traceback.print_exc()
         return jsonify({"success": False, "error": str(e)}), 500
 
 

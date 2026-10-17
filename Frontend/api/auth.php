@@ -22,6 +22,15 @@ if ($action === 'login') {
         exit;
     }
 
+    if (function_exists('checkRateLimit')) {
+        $ip = $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1';
+        $rateKey = 'auth_login_' . md5($identifier . '_' . $ip);
+        if (!checkRateLimit($rateKey, 5, 300)) {
+            echo json_encode(['success' => false, 'message' => 'Too many login attempts. Please wait 5 minutes before trying again.']);
+            exit;
+        }
+    }
+
     if ($conn) {
         $encrypted_id = encryptData($identifier);
         $sql = "SELECT user_id, full_name, pin, email, phone, password_hash, trust_score, role, status, college, branch FROM users WHERE pin = ? OR email = ? OR email = ? OR phone = ? OR phone = ? LIMIT 1";
@@ -55,12 +64,12 @@ if ($action === 'login') {
                     echo json_encode(['success' => true, 'redirect' => 'home.php', 'user' => get_current_user_data()]);
                     exit;
                 } else {
-                    echo json_encode(['success' => false, 'message' => 'Incorrect password. Please try again.']);
+                    echo json_encode(['success' => false, 'message' => 'Invalid College PIN/Email or password. Please try again.']);
                     exit;
                 }
             } else {
                 $stmt->close();
-                echo json_encode(['success' => false, 'message' => 'No account found with this College PIN or Email.']);
+                echo json_encode(['success' => false, 'message' => 'Invalid College PIN/Email or password. Please try again.']);
                 exit;
             }
         }
@@ -331,6 +340,15 @@ if ($action === 'send_reset_link') {
         exit;
     }
 
+    if (function_exists('checkRateLimit')) {
+        $ip = $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1';
+        $rateKey = 'pw_reset_' . md5($identifier . '_' . $ip);
+        if (!checkRateLimit($rateKey, 3, 600)) {
+            echo json_encode(['success' => false, 'message' => 'Too many reset requests. Please wait 10 minutes before requesting another link.']);
+            exit;
+        }
+    }
+
     $foundUser = null;
     if ($conn) {
         $encrypted_id = encryptData($identifier);
@@ -346,9 +364,12 @@ if ($action === 'send_reset_link') {
         }
     }
 
-    // If user not found in DB, return generic friendly message for privacy or prompt
+    // If user not found in DB, return generic friendly message to prevent enumeration
     if (!$foundUser) {
-        echo json_encode(['success' => false, 'message' => 'No student account was found with this College PIN or Email.']);
+        echo json_encode([
+            'success' => true,
+            'message' => 'If an account exists with this College PIN or Email, a password reset link has been dispatched.'
+        ]);
         exit;
     }
 
