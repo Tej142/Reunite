@@ -9,6 +9,20 @@ require_once __DIR__ . '/Backend/functions.php';
 
 global $conn;
 
+$isAdmin = !empty($_SESSION['reunite_admin_auth']) && $_SESSION['reunite_admin_auth'] === true;
+$token = trim($_GET['token'] ?? '');
+$authorized = $isAdmin || (!empty($token) && hash_equals(defined('ADMIN_MASTER_KEY') ? ADMIN_MASTER_KEY : 'admin@reunite2024', $token));
+
+if (!$authorized) {
+    http_response_code(403);
+    header('Content-Type: text/html; charset=utf-8');
+    echo '<!DOCTYPE html><html><body style="background:#12100E;color:#F87171;font-family:sans-serif;padding:40px;text-align:center;">';
+    echo '<h1>403 Forbidden</h1><p>Access Denied: Database migration requires administrator authentication or a valid ?token= parameter.</p>';
+    echo '<p><a href="Frontend/admin.php" style="color:#C4622D;">Return to Admin Console &rarr;</a></p>';
+    echo '</body></html>';
+    exit;
+}
+
 header('Content-Type: text/html; charset=utf-8');
 ?>
 <!DOCTYPE html>
@@ -34,17 +48,6 @@ header('Content-Type: text/html; charset=utf-8');
   <h1>⚡ Reunite Database Migration & Setup</h1>
 
 <?php
-$isAdmin = !empty($_SESSION['reunite_admin_auth']) && $_SESSION['reunite_admin_auth'] === true;
-$token = trim($_GET['token'] ?? '');
-$authorized = $isAdmin || (!empty($token) && hash_equals(defined('ADMIN_MASTER_KEY') ? ADMIN_MASTER_KEY : 'admin@reunite2024', $token));
-
-if (!$authorized) {
-    http_response_code(403);
-    echo '<div class="status-item status-err"><span><strong>Access Denied:</strong> Database migration requires administrator authentication or a valid ?token= parameter.</span><span>403 FORBIDDEN</span></div>';
-    echo '<p><a href="Frontend/admin.php" class="btn">Login to Admin Terminal &rarr;</a></p>';
-    echo '</div></body></html>';
-    exit;
-}
 
 if (!$conn) {
     echo '<div class="status-item status-err">';
