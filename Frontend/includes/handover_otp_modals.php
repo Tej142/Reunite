@@ -27,11 +27,11 @@
   position: relative;
   width: 100%;
   max-width: 480px;
-  background: var(--card-bg, #1a1511);
-  color: var(--text, #ffffff);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: #1c1815 !important;
+  color: #fbf7f4 !important;
+  border: 1px solid rgba(255, 138, 92, 0.3);
   border-radius: 20px;
-  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.85);
   padding: 1.75rem;
   margin: auto;
   box-sizing: border-box;

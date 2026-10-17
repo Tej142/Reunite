@@ -72,11 +72,13 @@ try {
     $fc = @mysqli_query($conn, "SHOW COLUMNS FROM found_reports");
     if ($fc) while ($r = mysqli_fetch_assoc($fc)) $fCols[] = strtolower($r['Field']);
     $fPk = in_array('found_id', $fCols) ? 'found_id' : 'id';
+    $fUserCol = in_array('finder_id', $fCols) ? 'finder_id' : (in_array('user_id', $fCols) ? 'user_id' : 'id');
+    $lUserCol = in_array('user_id', $lCols) ? 'user_id' : (in_array('claimant_id', $lCols) ? 'claimant_id' : (in_array('owner_id', $lCols) ? 'owner_id' : 'id'));
 
     // 1. Look up match and confirm user is the founder
     $stmt = mysqli_prepare($conn, "
         SELECT m.`$pkCol` AS id, m.status, m.`$lostCol` AS lost_report_id, m.`$foundCol` AS found_report_id,
-               lr.user_id as claimant_id, fr.user_id as founder_id
+               lr.`$lUserCol` as claimant_id, fr.`$fUserCol` as founder_id
         FROM matches m
         LEFT JOIN lost_reports lr ON m.`$lostCol` = lr.`$lPk`
         LEFT JOIN found_reports fr ON m.`$foundCol` = fr.`$fPk`

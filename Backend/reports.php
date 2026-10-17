@@ -202,11 +202,10 @@ if (isset($conn) && $conn) {
         }
     }
     if (!$validUser) {
-        // Fallback to primary student account or first active user in the database
+        // Fallback to primary student account or first active user in the database for the insert statement
         $fb = $conn->query("SELECT user_id FROM users WHERE pin = '24155-cm-002' OR status = 'active' ORDER BY user_id ASC LIMIT 1");
         if ($fb && ($fRow = $fb->fetch_assoc())) {
             $userId = (int)$fRow['user_id'];
-            $_SESSION['user_id'] = $userId;
         }
     }
 }
