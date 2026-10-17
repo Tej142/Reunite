@@ -81,12 +81,68 @@ document.addEventListener('DOMContentLoaded', () => {
     loadReportsTable();
   }
 
+  // Auth Mode Switching
+  let activeAuthMode = 'passcode';
+  const btnAuthModePasscode = document.getElementById('btnAuthModePasscode');
+  const btnAuthModeAccount = document.getElementById('btnAuthModeAccount');
+  const authModePasscodeGroup = document.getElementById('authModePasscodeGroup');
+  const authModeAccountGroup = document.getElementById('authModeAccountGroup');
+  const adminIdentifierInput = document.getElementById('adminIdentifier');
+  const adminPasswordInput = document.getElementById('adminPassword');
+
+  if (btnAuthModePasscode && btnAuthModeAccount) {
+    btnAuthModePasscode.addEventListener('click', () => {
+      activeAuthMode = 'passcode';
+      btnAuthModePasscode.classList.add('active');
+      btnAuthModePasscode.style.background = 'var(--admin-accent)';
+      btnAuthModePasscode.style.color = '#ffffff';
+      btnAuthModeAccount.classList.remove('active');
+      btnAuthModeAccount.style.background = 'transparent';
+      btnAuthModeAccount.style.color = 'var(--admin-text-muted)';
+      if (authModePasscodeGroup) authModePasscodeGroup.style.display = 'block';
+      if (authModeAccountGroup) authModeAccountGroup.style.display = 'none';
+      if (adminPasscodeInput) adminPasscodeInput.focus();
+    });
+
+    btnAuthModeAccount.addEventListener('click', () => {
+      activeAuthMode = 'account';
+      btnAuthModeAccount.classList.add('active');
+      btnAuthModeAccount.style.background = 'var(--admin-accent)';
+      btnAuthModeAccount.style.color = '#ffffff';
+      btnAuthModePasscode.classList.remove('active');
+      btnAuthModePasscode.style.background = 'transparent';
+      btnAuthModePasscode.style.color = 'var(--admin-text-muted)';
+      if (authModePasscodeGroup) authModePasscodeGroup.style.display = 'none';
+      if (authModeAccountGroup) authModeAccountGroup.style.display = 'block';
+      if (adminIdentifierInput) adminIdentifierInput.focus();
+    });
+  }
+
   // Login submission
   if (adminLoginForm) {
     adminLoginForm.addEventListener('submit', async (e) => {
       e.preventDefault();
-      const code = adminPasscodeInput ? adminPasscodeInput.value.trim() : '';
-      if (!code) return;
+
+      const formData = new FormData();
+      formData.append('action', 'login');
+
+      if (activeAuthMode === 'passcode') {
+        const code = adminPasscodeInput ? adminPasscodeInput.value.trim() : '';
+        if (!code) {
+          showToast('Missing Key', 'Please enter your Security Clearance Passcode.', 'error');
+          return;
+        }
+        formData.append('passcode', code);
+      } else {
+        const identifier = adminIdentifierInput ? adminIdentifierInput.value.trim() : '';
+        const password = adminPasswordInput ? adminPasswordInput.value.trim() : '';
+        if (!identifier || !password) {
+          showToast('Missing Credentials', 'Please enter your Admin/Moderator username and password.', 'error');
+          return;
+        }
+        formData.append('identifier', identifier);
+        formData.append('password', password);
+      }
 
       const submitBtn = adminLoginForm.querySelector('button[type="submit"]');
       const origText = submitBtn ? submitBtn.textContent : '';
@@ -96,10 +152,6 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       try {
-        const formData = new FormData();
-        formData.append('action', 'login');
-        formData.append('passcode', code);
-
         const res = await fetch('../Backend/admin_api.php', {
           method: 'POST',
           body: formData
@@ -107,13 +159,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const data = await res.json();
         if (data.success) {
-          showDashboard('System Administrator');
-          showToast('Clearance Granted', 'Welcome to Reunite System Maintenance Console.', 'success');
+          showDashboard(data.admin_name || 'System Administrator');
+          showToast('Clearance Granted', data.message || 'Welcome to Reunite System Maintenance Console.', 'success');
         } else {
-          showToast('Access Denied', data.error || 'Invalid Admin Clearance Key.', 'error');
-          if (adminPasscodeInput) {
+          showToast('Access Denied', data.error || 'Invalid Admin Clearance Credentials.', 'error');
+          if (activeAuthMode === 'passcode' && adminPasscodeInput) {
             adminPasscodeInput.value = '';
             adminPasscodeInput.focus();
+          } else if (adminPasswordInput) {
+            adminPasswordInput.value = '';
+            adminPasswordInput.focus();
           }
         }
       } catch (err) {
@@ -192,16 +247,17 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!isAiOnline && !isDbOnline) {
           if (outageBannerTitle) outageBannerTitle.textContent = 'CRITICAL: AI Engine & Database Server are BOTH OFFLINE';
           if (outageBannerDesc) outageBannerDesc.textContent = 'Both the Python Flask AI Server and MySQL database are unreachable. All site operations, vector searches, and data lookups are halted.';
-          if (outageBannerHint) outageBannerHint.innerHTML = '1. Start MySQL in XAMPP &nbsp;|&nbsp; 2. Start Flask: <span class="admin-code-snippet">python flask_server.py</span>';
+          if (outageBannerHint) outageBannerHint.innerHTML = 'Ensure MariaDB and Render AI microservice are running.';
           if (adminUserPillName) adminUserPillName.textContent = 'Dual Server Outage';
+        } else if (!isAiOnline) {
           if (outageBannerTitle) outageBannerTitle.textContent = 'Python Flask AI Cloud Server is OFFLINE';
           if (outageBannerDesc) outageBannerDesc.textContent = 'The cloud AI multi-modal engine (reunite-ai-backend.onrender.com) is waking up or unreachable. Visual ONNX vision parsing, DINOv2 & CLIP vector embeddings, and neural late-fusion matching are currently paused.';
-          if (outageBannerHint) outageBannerHint.innerHTML = 'Check Render.com dashboard or restart your AI backend web service.';
+          if (outageBannerHint) outageBannerHint.innerHTML = 'Check Render.com dashboard or allow 30s for the free-tier instance to wake up.';
           if (adminUserPillName) adminUserPillName.textContent = 'AI Server Offline';
-        } else {
+        } else if (!isDbOnline) {
           if (outageBannerTitle) outageBannerTitle.textContent = 'MySQL Database Connection Failed';
-          if (outageBannerDesc) outageBannerDesc.textContent = 'Could not establish connection with MySQL lost_connect_db.';
-          if (outageBannerHint) outageBannerHint.innerHTML = 'Ensure MySQL service is running in your XAMPP Control Panel.';
+          if (outageBannerDesc) outageBannerDesc.textContent = 'Could not establish connection with MySQL / MariaDB database.';
+          if (outageBannerHint) outageBannerHint.innerHTML = 'Ensure MySQL service is running and credentials in config/config.php are correct.';
           if (adminUserPillName) adminUserPillName.textContent = 'Database Offline';
         }
 
@@ -512,7 +568,25 @@ document.addEventListener('DOMContentLoaded', () => {
 
     try {
       const res = await fetch(`../Backend/admin_api.php?action=list_reports&type=${encodeURIComponent(type)}&search=${encodeURIComponent(search)}`);
-      const data = await res.json();
+      let data = await res.json();
+      if (!data.success || !data.reports || data.reports.length === 0) {
+        try {
+          const rFallback = await fetch(`../Backend/reports.php?action=list&type=${encodeURIComponent(type)}`);
+          const dFallback = await rFallback.json();
+          const list = dFallback.data?.reports || dFallback.reports || [];
+          if (list.length > 0) {
+            data = {
+              success: true,
+              count: list.length,
+              reports: list.map(r => ({
+                ...r,
+                formatted_id: (r.report_type === 'found' ? 'RF-' : 'RL-') + String(r.id).padStart(5, '0'),
+                has_dna: true
+              }))
+            };
+          }
+        } catch(fe) {}
+      }
       if (!data.success || !data.reports || data.reports.length === 0) {
         reportsTableBody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: var(--admin-text-muted); padding: 2rem;">No reports found matching criteria.</td></tr>`;
         return;

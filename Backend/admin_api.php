@@ -21,7 +21,8 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
-$action = trim($_REQUEST['action'] ?? '');
+$reqData = getRequestData();
+$action = trim($reqData['action'] ?? $_REQUEST['action'] ?? $_GET['action'] ?? '');
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 
 // Ensure admins table is provisioned
@@ -401,20 +402,34 @@ if ($action === 'list_reports') {
     $results = [];
 
     if ($conn) {
+        $lCols = [];
+        $lcRes = @$conn->query("SHOW COLUMNS FROM lost_reports");
+        if ($lcRes) while ($c = $lcRes->fetch_assoc()) $lCols[] = strtolower($c['Field']);
+        $lPk = in_array('lost_id', $lCols) ? 'lost_id' : 'id';
+        $lUserCol = in_array('user_id', $lCols) ? 'user_id' : (in_array('claimant_id', $lCols) ? 'claimant_id' : 'id');
+
+        $fCols = [];
+        $fcRes = @$conn->query("SHOW COLUMNS FROM found_reports");
+        if ($fcRes) while ($c = $fcRes->fetch_assoc()) $fCols[] = strtolower($c['Field']);
+        $fPk = in_array('found_id', $fCols) ? 'found_id' : 'id';
+        $fUserCol = in_array('finder_id', $fCols) ? 'finder_id' : (in_array('user_id', $fCols) ? 'user_id' : 'id');
+
         if ($type === 'all' || $type === 'lost') {
             $sql = "SELECT l.*, u.full_name as user_name, u.email as user_email, d.encrypted_dna as dna_json, d.dna_id 
                     FROM lost_reports l
-                    LEFT JOIN users u ON l.user_id = u.user_id
-                    LEFT JOIN digital_dna d ON (d.report_id = l.id AND d.report_type = 'LOST')
-                    ORDER BY l.id DESC LIMIT ?";
+                    LEFT JOIN users u ON l.`$lUserCol` = u.user_id
+                    LEFT JOIN digital_dna d ON (d.report_id = l.`$lPk` AND UPPER(d.report_type) = 'LOST')
+                    ORDER BY l.`$lPk` DESC LIMIT ?";
             $stmt = $conn->prepare($sql);
             if ($stmt) {
                 $stmt->bind_param("i", $limit);
                 $stmt->execute();
                 $res = $stmt->get_result();
                 while ($row = $res->fetch_assoc()) {
+                    $rowId = (int)($row[$lPk] ?? $row['id'] ?? 0);
+                    $row['id'] = $rowId;
                     $row['report_type'] = 'lost';
-                    $row['formatted_id'] = 'RL-' . str_pad($row['id'], 5, '0', STR_PAD_LEFT);
+                    $row['formatted_id'] = 'RL-' . str_pad($rowId, 5, '0', STR_PAD_LEFT);
                     $row['user_email_decrypted'] = !empty($row['user_email']) ? decryptData($row['user_email']) : 'N/A';
                     $row['has_dna'] = !empty($row['dna_json']);
                     $results[] = $row;
@@ -426,17 +441,19 @@ if ($action === 'list_reports') {
         if ($type === 'all' || $type === 'found') {
             $sql = "SELECT f.*, u.full_name as user_name, u.email as user_email, d.encrypted_dna as dna_json, d.dna_id 
                     FROM found_reports f
-                    LEFT JOIN users u ON f.user_id = u.user_id
-                    LEFT JOIN digital_dna d ON (d.report_id = f.id AND d.report_type = 'FOUND')
-                    ORDER BY f.id DESC LIMIT ?";
+                    LEFT JOIN users u ON f.`$fUserCol` = u.user_id
+                    LEFT JOIN digital_dna d ON (d.report_id = f.`$fPk` AND UPPER(d.report_type) = 'FOUND')
+                    ORDER BY f.`$fPk` DESC LIMIT ?";
             $stmt = $conn->prepare($sql);
             if ($stmt) {
                 $stmt->bind_param("i", $limit);
                 $stmt->execute();
                 $res = $stmt->get_result();
                 while ($row = $res->fetch_assoc()) {
+                    $rowId = (int)($row[$fPk] ?? $row['id'] ?? 0);
+                    $row['id'] = $rowId;
                     $row['report_type'] = 'found';
-                    $row['formatted_id'] = 'RF-' . str_pad($row['id'], 5, '0', STR_PAD_LEFT);
+                    $row['formatted_id'] = 'RF-' . str_pad($rowId, 5, '0', STR_PAD_LEFT);
                     $row['user_email_decrypted'] = !empty($row['user_email']) ? decryptData($row['user_email']) : 'N/A';
                     $row['has_dna'] = !empty($row['dna_json']);
                     $results[] = $row;

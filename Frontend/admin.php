@@ -77,23 +77,59 @@ $isAdmin = !empty($_SESSION['reunite_admin_auth']) && $_SESSION['reunite_admin_a
         Restricted infrastructure console. Authorized clearance credentials required to proceed.
       </p>
 
+      <!-- Auth Mode Switcher -->
+      <div class="admin-auth-mode-switch" style="display:flex; gap:8px; margin-bottom:1.25rem; background:var(--admin-surface-2); padding:4px; border-radius:10px; border:1px solid var(--admin-border);">
+        <button type="button" class="btn-auth-mode active" id="btnAuthModePasscode" style="flex:1; padding:8px; font-size:0.8125rem; font-weight:600; border:none; border-radius:8px; cursor:pointer; background:var(--admin-accent); color:#ffffff; transition:all 0.2s;">Master Key</button>
+        <button type="button" class="btn-auth-mode" id="btnAuthModeAccount" style="flex:1; padding:8px; font-size:0.8125rem; font-weight:600; border:none; border-radius:8px; cursor:pointer; background:transparent; color:var(--admin-text-muted); transition:all 0.2s;">Staff Login</button>
+      </div>
+
       <form class="admin-auth-form" id="adminLoginForm">
-        <div class="admin-auth-field">
-          <div class="admin-field-label-row">
-            <label for="adminPasscode">Security Clearance Key</label>
-            <span class="admin-field-hint">Master Key</span>
-          </div>
-          <div class="admin-input-wrap">
-            <svg class="admin-input-icon" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <rect width="18" height="11" x="3" y="11" rx="2" ry="2"/>
-              <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-            </svg>
-            <input type="password" class="admin-input" id="adminPasscode" placeholder="Enter System Master Passcode..." required autofocus autocomplete="off" />
+        <!-- Master Key Mode -->
+        <div id="authModePasscodeGroup">
+          <div class="admin-auth-field">
+            <div class="admin-field-label-row">
+              <label for="adminPasscode">Security Clearance Key</label>
+              <span class="admin-field-hint">Master Key</span>
+            </div>
+            <div class="admin-input-wrap">
+              <svg class="admin-input-icon" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect width="18" height="11" x="3" y="11" rx="2" ry="2"/>
+                <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+              </svg>
+              <input type="password" class="admin-input" id="adminPasscode" placeholder="Enter System Master Passcode..." autofocus autocomplete="off" />
+            </div>
           </div>
         </div>
 
-        <button type="submit" class="btn-admin admin-auth-btn">
-          <span>Authenticate &amp; Access Terminal</span>
+        <!-- Staff Account Mode -->
+        <div id="authModeAccountGroup" style="display:none;">
+          <div class="admin-auth-field" style="margin-bottom:1rem;">
+            <div class="admin-field-label-row">
+              <label for="adminIdentifier">Admin / Moderator Username</label>
+            </div>
+            <div class="admin-input-wrap">
+              <svg class="admin-input-icon" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
+              </svg>
+              <input type="text" class="admin-input" id="adminIdentifier" placeholder="e.g. charan_admin or charan_moderator" autocomplete="off" />
+            </div>
+          </div>
+          <div class="admin-auth-field">
+            <div class="admin-field-label-row">
+              <label for="adminPassword">Password</label>
+            </div>
+            <div class="admin-input-wrap">
+              <svg class="admin-input-icon" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect width="18" height="11" x="3" y="11" rx="2" ry="2"/>
+                <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+              </svg>
+              <input type="password" class="admin-input" id="adminPassword" placeholder="Enter password..." autocomplete="off" />
+            </div>
+          </div>
+        </div>
+
+        <button type="submit" class="btn-admin admin-auth-btn" style="margin-top:1.25rem;">
+          <span id="adminSubmitBtnText">Authenticate &amp; Access Terminal</span>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <polyline points="9 18 15 12 9 6"></polyline>
           </svg>
