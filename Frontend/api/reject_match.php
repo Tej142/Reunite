@@ -57,13 +57,25 @@ try {
     $lostCol = in_array('lost_id', $mCols) ? 'lost_id' : 'lost_report_id';
     $foundCol = in_array('found_id', $mCols) ? 'found_id' : 'found_report_id';
 
+    $fCols = [];
+    $fRes = @mysqli_query($conn, "SHOW COLUMNS FROM found_reports");
+    if ($fRes) while ($r = mysqli_fetch_assoc($fRes)) $fCols[] = strtolower($r['Field']);
+    $fPk = in_array('found_id', $fCols) ? 'found_id' : 'id';
+    $fUserCol = in_array('finder_id', $fCols) ? 'finder_id' : (in_array('user_id', $fCols) ? 'user_id' : 'finder_id');
+
+    $lCols = [];
+    $lRes = @mysqli_query($conn, "SHOW COLUMNS FROM lost_reports");
+    if ($lRes) while ($r = mysqli_fetch_assoc($lRes)) $lCols[] = strtolower($r['Field']);
+    $lPk = in_array('lost_id', $lCols) ? 'lost_id' : 'id';
+    $lUserCol = in_array('user_id', $lCols) ? 'user_id' : (in_array('claimant_id', $lCols) ? 'claimant_id' : 'user_id');
+
     // 4. Verification: Look up match with joined lost/found report owners
     $select_query = "
-        SELECT m.`$pkCol` as id, m.status, lr.user_id as lost_user_id, fr.user_id as found_user_id,
+        SELECT m.`$pkCol` as id, m.status, lr.`$lUserCol` as lost_user_id, fr.`$fUserCol` as found_user_id,
                m.`$lostCol` as lost_report_id, m.`$foundCol` as found_report_id
         FROM matches m
-        LEFT JOIN lost_reports lr ON m.`$lostCol` = lr.id
-        LEFT JOIN found_reports fr ON m.`$foundCol` = fr.id
+        LEFT JOIN lost_reports lr ON m.`$lostCol` = lr.`$lPk`
+        LEFT JOIN found_reports fr ON m.`$foundCol` = fr.`$fPk`
         WHERE m.`$pkCol` = ?
     ";
     $stmt = mysqli_prepare($conn, $select_query);

@@ -803,56 +803,21 @@ window.openItemDrawer = function(itemId, options = {}) {
         </div>
       ` : ''}
 
-      <!-- Expandable Claim Verification Form -->
-      <div class="claim-form-wrap" id="claimFormWrap" aria-live="polite">
-        <div class="claim-form-header">
-          <div class="claim-form-title">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-            Ownership Verification
-          </div>
-          <button type="button" class="btn-claim-close" onclick="toggleClaimForm('${item.id}')" aria-label="Cancel claim">&times;</button>
-        </div>
-        <p class="claim-form-sub">
-          To claim this item, please provide a private detail only the rightful owner would know (e.g. wallpaper description, unique scratch, serial number, or exact contents).
-        </p>
-        <form id="itemClaimForm" onsubmit="handleClaimSubmit(event, '${item.id}')">
-          <div class="claim-input-group">
-            <label for="claimName">Full Name / Student PIN</label>
-            <input type="text" id="claimName" class="claim-input" placeholder="e.g. Alex Rivera / 21CS042" required />
-          </div>
-          <div class="claim-input-group">
-            <label for="claimEmail">College Email Address</label>
-            <input type="email" id="claimEmail" class="claim-input" placeholder="e.g. alex.rivera@campus.edu" required />
-          </div>
-          <div class="claim-input-group">
-            <label for="claimProof">Private Proof of Ownership</label>
-            <textarea id="claimProof" class="claim-input" rows="3" placeholder="Describe lock-screen wallpaper, serial number, inner compartment contents, or unique scratches" required></textarea>
-          </div>
-          <button type="submit" id="btnClaimSubmitAction" class="btn-modal-claim" style="width: 100%;">
-            Submit Verification Proof &rarr;
-          </button>
-        </form>
-      </div>
-
     </div>
 
     <!-- ── 9. Sticky Footer (Never Scrolls Away) ── -->
     <footer class="drawer-sticky-footer">
       <div class="drawer-privacy-hint">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-        <span>Some details are hidden to verify the rightful owner.</span>
+        <span>Protected campus lost &amp; found record.</span>
       </div>
       <div class="drawer-footer-actions">
-        ${isFound && !isReunited ? `
-          <button type="button" class="btn-drawer-claim-pill" onclick="toggleClaimForm('${item.id}')">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-            <span>This is mine, claim it</span>
-          </button>
-        ` : `
-          <button type="button" class="btn-drawer-claim-pill secondary" onclick="closeItemDrawer()">
-            <span>Close Details</span>
-          </button>
-        `}
+        <a href="item.php?type=${encodeURIComponent(item.type || 'found')}&id=${encodeURIComponent(item.id)}" class="btn-drawer-claim-pill" style="text-decoration: none;">
+          <span>View Full Report &rarr;</span>
+        </a>
+        <button type="button" class="btn-drawer-claim-pill secondary" onclick="closeItemDrawer()">
+          <span>Close</span>
+        </button>
         <div class="drawer-icon-buttons">
           <button type="button" class="btn-drawer-icon" onclick="shareItem('${item.id}', '${smartTitle.replace(/'/g, "\\'")}')" aria-label="Share report" title="Share report">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
@@ -1014,112 +979,6 @@ window.flagItem = function(itemId) {
   }
 };
 
-/**
- * Toggle claim verification form inside drawer
- */
-window.toggleClaimForm = function(itemId) {
-  const formWrap = document.getElementById('claimFormWrap');
-  if (formWrap) {
-    formWrap.classList.toggle('active');
-    if (formWrap.classList.contains('active')) {
-      formWrap.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-      const input = formWrap.querySelector('input');
-      if (input) input.focus();
-    }
-  }
-};
-
-/**
- * Handle claim submission
- */
-window.handleClaimSubmit = async function(e, itemId) {
-  e.preventDefault();
-  const formWrap = document.getElementById('claimFormWrap');
-  const submitBtn = document.getElementById('btnClaimSubmitAction');
-  const proofText = document.getElementById('claimProof')?.value.trim();
-  const studentName = document.getElementById('claimName')?.value.trim();
-  const studentEmail = document.getElementById('claimEmail')?.value.trim();
-
-  if (!proofText) {
-    if (window.ReuniteToast) window.ReuniteToast.error('Missing Details', 'Please provide ownership details.');
-    return;
-  }
-
-  const rawId = parseInt(String(itemId).replace(/\D/g, ''), 10);
-  if (!rawId) {
-    if (window.ReuniteToast) window.ReuniteToast.error('Invalid Item', 'Could not determine report ID.');
-    return;
-  }
-
-  if (submitBtn && window.setButtonLoading) {
-    window.setButtonLoading(submitBtn, true, 'Verifying proof...');
-  } else if (submitBtn) {
-    submitBtn.disabled = true;
-  }
-
-  try {
-    const res = await fetch('../Backend/claims.php', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        action: 'submit',
-        report_id: rawId,
-        proof_details: proofText,
-        contact_info: studentName ? `${studentName} (${studentEmail || 'N/A'})` : studentEmail
-      })
-    });
-
-    const data = await res.json();
-    if (data.success) {
-      if (formWrap) {
-        formWrap.innerHTML = `
-          <div class="claim-success-box">
-            <div class="claim-checkmark-circle" aria-hidden="true">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
-                <polyline points="20 6 9 17 4 12"></polyline>
-              </svg>
-            </div>
-            <h4 style="font-size: 1.1rem; font-weight: 700; margin-bottom: 0.35rem; color: var(--ink);">Verification Submitted</h4>
-            <p style="font-size: 0.825rem; color: var(--muted); line-height: 1.5; margin-bottom: 1rem;">
-              Your ownership proof for <strong>#${itemId}</strong> has been logged. The finder or campus coordinator will review the hidden details and reach out to your registered college email.
-            </p>
-            <button type="button" class="btn-drawer-claim-pill" style="width: auto; padding: 0.55rem 1.5rem;" onclick="closeItemDrawer()">Done</button>
-          </div>
-        `;
-      }
-      if (window.ReuniteToast) {
-        window.ReuniteToast.success('Claim Logged', `Verification request for #${itemId} submitted successfully.`, 4000);
-      }
-    } else {
-      if (data.code === 'UNAUTHORIZED') {
-        if (window.ReuniteToast) {
-          window.ReuniteToast.error('Login Required', 'You must log in to submit an ownership claim.', 4000);
-        }
-        setTimeout(() => {
-          window.location.href = 'login.php';
-        }, 1500);
-      } else {
-        if (window.ReuniteToast) {
-          window.ReuniteToast.error('Claim Error', data.error || 'Failed to submit verification request.', 4000);
-        }
-        if (submitBtn && window.setButtonLoading) {
-          window.setButtonLoading(submitBtn, false, 'Submit Verification Proof &rarr;');
-        } else if (submitBtn) {
-          submitBtn.disabled = false;
-        }
-      }
-    }
-  } catch (err) {
-    if (window.ReuniteToast) {
-      window.ReuniteToast.error('Network Error', 'Could not reach server to submit claim.', 4000);
-    }
-    if (submitBtn && window.setButtonLoading) {
-      window.setButtonLoading(submitBtn, false, 'Submit Verification Proof &rarr;');
-    } else if (submitBtn) {
-      submitBtn.disabled = false;
-    }
-  }
-};
 
 // Check for deep link query parameters (?item=... or ?match_id=...) on page load
 window.addEventListener('load', () => {

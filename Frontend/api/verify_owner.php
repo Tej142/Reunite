@@ -1,7 +1,9 @@
 <?php
 /**
- * Reunite - Verify Owner API
- * Allows claimant to submit text proof and an optional proof image (receipt, bill, old photo).
+ * Reunite - Claim Lifecycle v2: Verify Owner API
+ * Endpoint: POST Frontend/api/verify_owner.php
+ * Allows claimant to submit text proof (20-1000 chars) and optional sanitized proof image.
+ * Implements anti-spam shield (24h ban check, max 2 active claims quota, credential filtering, row locks).
  */
 
 if (session_status() === PHP_SESSION_NONE) {
@@ -17,73 +19,90 @@ require_once __DIR__ . '/../../Backend/functions.php';
 // 1. Strict HTTP Method
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     http_response_code(405);
-    echo json_encode(['success' => false, 'message' => 'Method Not Allowed. POST required.']);
+    echo json_encode(['success' => false, 'code' => 'METHOD_NOT_ALLOWED', 'message' => 'Method Not Allowed. POST required.']);
     exit;
 }
 
 if (!isset($conn) || !$conn) {
     http_response_code(500);
-    echo json_encode(['success' => false, 'message' => 'Database connection unavailable.']);
+    echo json_encode(['success' => false, 'code' => 'DB_UNAVAILABLE', 'message' => 'Database connection unavailable.']);
     exit;
 }
 
-// 2. Validate User Login
-$user_id = filter_var($_SESSION['user_id'] ?? null, FILTER_VALIDATE_INT, ["options" => ["min_range" => 1]]);
-if (!$user_id) {
+// 2. Validate User Authentication
+$userId = filter_var($_SESSION['user_id'] ?? null, FILTER_VALIDATE_INT, ["options" => ["min_range" => 1]]);
+if (!$userId) {
     http_response_code(401);
-    echo json_encode(['success' => false, 'message' => 'Unauthorized. Please login.']);
+    echo json_encode(['success' => false, 'code' => 'UNAUTHORIZED', 'message' => 'You must be logged in to claim an item.']);
     exit;
 }
 
-// 3. Input Validation
-$match_id = filter_input(INPUT_POST, 'match_id', FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]])
-            ?: filter_var($_POST['match_id'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
-$proof_text = trim($_POST['proof_text'] ?? ''); 
+// 3. Feature Flag Enforcement
+if (!isClaimModuleActiveForUser($userId)) {
+    http_response_code(503);
+    echo json_encode(['success' => false, 'code' => 'MODULE_UPGRADE', 'message' => 'Claiming is currently being upgraded and will be available shortly.']);
+    exit;
+}
 
-if (!$match_id) {
+// 4. Anti-Spam Check 1: 24-Hour Ban Shield
+$banStatus = isClaimantBanned($userId);
+if ($banStatus['banned']) {
+    $remainingHours = ceil($banStatus['seconds_remaining'] / 3600);
+    http_response_code(403);
+    echo json_encode([
+        'success' => false,
+        'code' => 'USER_BANNED',
+        'message' => "You are temporarily banned from submitting claims. Ban lifts in approximately {$remainingHours} hour(s).",
+        'ban_until' => $banStatus['ban_until'],
+        'seconds_remaining' => $banStatus['seconds_remaining']
+    ]);
+    exit;
+}
+
+// 5. Input Validation
+$matchId = filter_input(INPUT_POST, 'match_id', FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]])
+           ?: filter_var($_POST['match_id'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+$proofText = trim($_POST['proof_text'] ?? '');
+
+if (!$matchId) {
     http_response_code(400);
-    echo json_encode(['success' => false, 'message' => 'Invalid or missing match ID.']);
+    echo json_encode(['success' => false, 'code' => 'INVALID_MATCH', 'message' => 'Valid match ID is required.']);
     exit;
 }
 
-$proof_length = mb_strlen($proof_text, 'UTF-8');
-if ($proof_length < 5 || $proof_length > 2000) {
+$proofLength = mb_strlen($proofText, 'UTF-8');
+if ($proofLength < 20 || $proofLength > 1000) {
     http_response_code(400);
-    echo json_encode(['success' => false, 'message' => 'Proof text must be at least 5 characters.']);
+    echo json_encode(['success' => false, 'code' => 'INVALID_LENGTH', 'message' => 'Ownership proof must be between 20 and 1000 characters.']);
     exit;
 }
 
-// Image Upload Handling (Saved in media_vault/proofs)
-$proof_image_web_path = null;
+// 6. Sensitive Credential Filter
+if (containsSensitiveCredentials($proofText)) {
+    http_response_code(400);
+    echo json_encode([
+        'success' => false,
+        'code' => 'SENSITIVE_CREDENTIALS',
+        'message' => 'Please remove sensitive credentials (such as passwords, plain text PINs, or card numbers) from your proof.'
+    ]);
+    exit;
+}
+
+// 7. Optional Proof Image Sanitization (Max 8MB, EXIF stripped)
+$proofImagePath = null;
 if (isset($_FILES['proof_image']) && $_FILES['proof_image']['error'] === UPLOAD_ERR_OK) {
-    $vault_dir = dirname(__DIR__, 2) . '/media_vault/proofs/';
-    if (!is_dir($vault_dir)) {
-        @mkdir($vault_dir, 0777, true);
-    }
-    
-    $file_ext = strtolower(pathinfo($_FILES['proof_image']['name'], PATHINFO_EXTENSION));
-    $allowed_exts = ['jpg', 'jpeg', 'png', 'webp'];
-    
-    if (in_array($file_ext, $allowed_exts)) {
-        $file_name = 'proof_' . $match_id . '_' . time() . '.' . $file_ext;
-        $target_file = $vault_dir . $file_name;
-        
-        if (move_uploaded_file($_FILES['proof_image']['tmp_name'], $target_file)) {
-            $proof_image_web_path = 'media_vault/proofs/' . $file_name;
-        }
-    } else {
+    $imgResult = sanitizeAndStoreProofImage($_FILES['proof_image'], $matchId);
+    if (!$imgResult['success']) {
         http_response_code(400);
-        echo json_encode(['success' => false, 'message' => 'Only JPG, JPEG, PNG, and WebP images are allowed.']);
+        echo json_encode(['success' => false, 'code' => 'IMAGE_ERROR', 'message' => $imgResult['error']]);
         exit;
     }
+    $proofImagePath = $imgResult['web_path'];
 }
 
-$transaction_started = false;
+$transactionStarted = false;
 
 try {
-    mysqli_begin_transaction($conn);
-    $transaction_started = true;
-
     // Detect column names on matches table
     $mCols = [];
     $cRes = mysqli_query($conn, "SHOW COLUMNS FROM matches");
@@ -96,101 +115,129 @@ try {
     $lostCol = in_array('lost_id', $mCols) ? 'lost_id' : 'lost_report_id';
     $foundCol = in_array('found_id', $mCols) ? 'found_id' : 'found_report_id';
 
-    // 4. Verify Authorization
-    $verify_query = "
+    // Detect column names on found_reports and lost_reports
+    $fCols = [];
+    $fRes = @mysqli_query($conn, "SHOW COLUMNS FROM found_reports");
+    if ($fRes) while ($r = mysqli_fetch_assoc($fRes)) $fCols[] = strtolower($r['Field']);
+    $fPk = in_array('found_id', $fCols) ? 'found_id' : 'id';
+    $fUserCol = in_array('finder_id', $fCols) ? 'finder_id' : (in_array('user_id', $fCols) ? 'user_id' : 'finder_id');
+
+    $lCols = [];
+    $lRes = @mysqli_query($conn, "SHOW COLUMNS FROM lost_reports");
+    if ($lRes) while ($r = mysqli_fetch_assoc($lRes)) $lCols[] = strtolower($r['Field']);
+    $lPk = in_array('lost_id', $lCols) ? 'lost_id' : 'id';
+    $lUserCol = in_array('user_id', $lCols) ? 'user_id' : (in_array('claimant_id', $lCols) ? 'claimant_id' : 'user_id');
+
+    mysqli_begin_transaction($conn);
+    $transactionStarted = true;
+
+    // 8. Row lock and match verification
+    $selectSql = "
         SELECT 
             m.`$pkCol` AS id,
             m.status, 
             m.`$lostCol` AS lost_report_id,
             m.`$foundCol` AS found_report_id,
-            r_lost.user_id AS claimant_user_id, 
-            r_found.user_id AS founder_user_id 
+            r_lost.`$lUserCol` AS claimant_user_id, 
+            r_found.`$fUserCol` AS founder_user_id 
         FROM matches m
-        LEFT JOIN lost_reports r_lost ON m.`$lostCol` = r_lost.id
-        LEFT JOIN found_reports r_found ON m.`$foundCol` = r_found.id
+        LEFT JOIN lost_reports r_lost ON m.`$lostCol` = r_lost.`$lPk`
+        LEFT JOIN found_reports r_found ON m.`$foundCol` = r_found.`$fPk`
         WHERE m.`$pkCol` = ? 
-        LIMIT 1
+        FOR UPDATE
     ";
     
-    $v_stmt = mysqli_prepare($conn, $verify_query);
-    if (!$v_stmt) {
-        throw new Exception("Database prepare failed for SELECT: " . mysqli_error($conn));
+    $vStmt = mysqli_prepare($conn, $selectSql);
+    if (!$vStmt) {
+        throw new Exception("Database prepare failed: " . mysqli_error($conn));
     }
     
-    mysqli_stmt_bind_param($v_stmt, "i", $match_id);
-    if (!mysqli_stmt_execute($v_stmt)) {
-        throw new Exception("Failed to execute match verification query.");
-    }
-    
-    $v_result = mysqli_stmt_get_result($v_stmt);
-    $match_data = mysqli_fetch_assoc($v_result);
-    mysqli_stmt_close($v_stmt);
+    mysqli_stmt_bind_param($vStmt, "i", $matchId);
+    mysqli_stmt_execute($vStmt);
+    $vResult = mysqli_stmt_get_result($vStmt);
+    $matchData = mysqli_fetch_assoc($vResult);
+    mysqli_stmt_close($vStmt);
 
-    if (!$match_data) {
+    if (!$matchData) {
         http_response_code(404);
-        echo json_encode(['success' => false, 'message' => 'Match record not found.']);
-        if ($transaction_started) mysqli_rollback($conn);
+        echo json_encode(['success' => false, 'code' => 'NOT_FOUND', 'message' => 'Match record not found.']);
+        if ($transactionStarted) mysqli_rollback($conn);
         exit;
     }
 
-    if (!empty($match_data['claimant_user_id']) && (int)$match_data['claimant_user_id'] !== $user_id) {
+    // Ownership check: Session user must be claimant who filed the lost report
+    if (!empty($matchData['claimant_user_id']) && (int)$matchData['claimant_user_id'] !== $userId) {
         http_response_code(403);
-        echo json_encode(['success' => false, 'message' => 'You are not authorized to claim this item.']);
-        if ($transaction_started) mysqli_rollback($conn);
+        echo json_encode(['success' => false, 'code' => 'FORBIDDEN', 'message' => 'You are not authorized to submit proof for this match.']);
+        if ($transactionStarted) mysqli_rollback($conn);
         exit;
     }
 
-    if ($match_data['status'] !== 'pending') {
+    $lostReportId = (int)$matchData['lost_report_id'];
+    $foundReportId = (int)$matchData['found_report_id'];
+    $founderUserId = (int)$matchData['founder_user_id'];
+
+    // 9. Anti-Spam Check 2: Max 2 Active Claims per Lost Item
+    $activeClaims = getActiveClaimsCountForLostItem($lostReportId);
+    if ($activeClaims >= 2 && !in_array($matchData['status'], ['pending_founder_approval', 'ready_for_handover'])) {
+        http_response_code(429);
+        echo json_encode([
+            'success' => false,
+            'code' => 'TOO_MANY_ACTIVE_CLAIMS',
+            'message' => 'You have reached the maximum of 2 active claims for this lost item. Please wait for the founder to review existing claims before submitting another.'
+        ]);
+        if ($transactionStarted) mysqli_rollback($conn);
+        exit;
+    }
+
+    // Status check
+    if (!in_array($matchData['status'], ['pending', 'rejected'])) {
         http_response_code(409);
-        echo json_encode(['success' => false, 'message' => 'This match is no longer available for claiming.']);
-        if ($transaction_started) mysqli_rollback($conn);
+        echo json_encode(['success' => false, 'code' => 'INVALID_STATE', 'message' => 'This match is no longer open for claim submission.']);
+        if ($transactionStarted) mysqli_rollback($conn);
         exit;
     }
 
-    $founder_user_id = (int)$match_data['founder_user_id'];
-    $found_report_id = (int)$match_data['found_report_id'];
+    // 10. Update matches record
+    $proofCol = in_array('claim_details', $mCols) ? 'claim_details' : (in_array('owner_proof', $mCols) ? 'owner_proof' : 'claim_details');
+    $hasProofImgCol = in_array('proof_image', $mCols);
 
-    // 5. Store Claim in recovery_cases
-    $full_proof_details = $proof_text;
-    if ($proof_image_web_path) {
-        $full_proof_details .= "\n\n[Proof Attachment: " . $proof_image_web_path . "]";
-    }
-
-    $rec_stmt = mysqli_prepare($conn, "
-        INSERT INTO recovery_cases (claimant_id, report_id, proof_details, status)
-        VALUES (?, ?, ?, 'pending_verification')
-    ");
-    if ($rec_stmt) {
-        mysqli_stmt_bind_param($rec_stmt, "iis", $user_id, $found_report_id, $full_proof_details);
-        mysqli_stmt_execute($rec_stmt);
-        mysqli_stmt_close($rec_stmt);
-    }
-
-    // 6. Update matches table status safely
-    if (in_array('owner_proof', $mCols)) {
-        $u_stmt = mysqli_prepare($conn, "
+    if ($hasProofImgCol) {
+        $uStmt = mysqli_prepare($conn, "
             UPDATE matches 
-            SET status = 'pending_founder_approval', owner_proof = ?, proof_image = ? 
+            SET status = 'pending_founder_approval', `$proofCol` = ?, proof_image = COALESCE(?, proof_image)
             WHERE `$pkCol` = ?
         ");
-        if ($u_stmt) {
-            mysqli_stmt_bind_param($u_stmt, "ssi", $proof_text, $proof_image_web_path, $match_id);
-            mysqli_stmt_execute($u_stmt);
-            mysqli_stmt_close($u_stmt);
+        if ($uStmt) {
+            mysqli_stmt_bind_param($uStmt, "ssi", $proofText, $proofImagePath, $matchId);
+            mysqli_stmt_execute($uStmt);
+            mysqli_stmt_close($uStmt);
         }
     } else {
-        mysqli_query($conn, "UPDATE matches SET status = 'pending_founder_approval' WHERE `$pkCol` = " . (int)$match_id);
+        $uStmt = mysqli_prepare($conn, "
+            UPDATE matches 
+            SET status = 'pending_founder_approval', `$proofCol` = ?
+            WHERE `$pkCol` = ?
+        ");
+        if ($uStmt) {
+            mysqli_stmt_bind_param($uStmt, "si", $proofText, $matchId);
+            mysqli_stmt_execute($uStmt);
+            mysqli_stmt_close($uStmt);
+        }
     }
 
-    // 7. Send Real-Time Notification to Founder
-    $notif_title = "Ownership Proof Received!";
-    $notif_msg = "A student has submitted proof for the item you found. Please verify and approve.";
-    $notif_link = "item.php?id=" . $found_report_id . "&match_id=" . $match_id;
+    // 11. Send Real-Time Notification to Founder
+    $notifTitle = "Ownership Proof Received!";
+    $notifMsg = "A student submitted verification proof for your found item (#RF-" . str_pad($foundReportId, 5, '0', STR_PAD_LEFT) . "). Please review.";
+    $notifLink = "item.php?type=found&id=" . $foundReportId . "&match_id=" . $matchId;
 
     if (function_exists('insertSystemNotification')) {
-        insertSystemNotification($founder_user_id, $notif_title, $notif_msg, $notif_link, 'FOUND', $found_report_id, 'claim');
+        insertSystemNotification($founderUserId, $notifTitle, $notifMsg, $notifLink, 'FOUND', $foundReportId, 'founder_approval');
     } else {
-        @mysqli_query($conn, "INSERT INTO notifications (user_id, report_type, report_id, type, message, is_read, created_at) VALUES ($founder_user_id, 'FOUND', $found_report_id, 'claim', '" . mysqli_real_escape_string($conn, $notif_msg) . "', 0, NOW())");
+        $safeMsg = mysqli_real_escape_string($conn, $notifMsg);
+        $safeTitle = mysqli_real_escape_string($conn, $notifTitle);
+        $safeLink = mysqli_real_escape_string($conn, $notifLink);
+        @mysqli_query($conn, "INSERT INTO notifications (user_id, report_type, report_id, type, message, link, is_read, created_at) VALUES ($founderUserId, 'FOUND', $foundReportId, 'founder_approval', '$safeMsg', '$safeLink', 0, NOW())");
     }
 
     mysqli_commit($conn);
@@ -198,14 +245,15 @@ try {
     http_response_code(200);
     echo json_encode([
         'success' => true,
-        'message' => 'Proof submitted successfully! The founder has been notified.',
-        'proof_image' => $proof_image_web_path
+        'message' => 'Proof submitted successfully! The founder has been notified to review your claim.',
+        'proof_image' => $proofImagePath,
+        'status' => 'pending_founder_approval'
     ]);
 
 } catch (Exception $e) {
-    if ($transaction_started) {
+    if ($transactionStarted) {
         mysqli_rollback($conn);
     }
     http_response_code(500);
-    echo json_encode(['success' => false, 'message' => 'An error occurred: ' . $e->getMessage()]);
+    echo json_encode(['success' => false, 'code' => 'SERVER_ERROR', 'message' => 'An error occurred while submitting proof: ' . $e->getMessage()]);
 }

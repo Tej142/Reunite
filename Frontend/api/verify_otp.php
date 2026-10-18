@@ -1,7 +1,10 @@
 <?php
 /**
- * Reunite - Verify OTP API
- * Verifies the 6-digit OTP presented during in-person item return to complete the recovery.
+ * Reunite - Claim Lifecycle v2: Secure Live OTP Verification API
+ * Endpoint: POST Frontend/api/verify_otp.php
+ * Verifies the 6-digit numeric OTP entered by the finder or campus administrator.
+ * Security: Timing-safe hash_equals(), 5-attempt brute-force lockout, row-level transaction lock,
+ * updates recovery_cases, marks reports 'reunited', awards trust points.
  */
 
 if (session_status() === PHP_SESSION_NONE) {
@@ -15,80 +18,104 @@ date_default_timezone_set('Asia/Kolkata');
 require_once __DIR__ . '/../../Backend/config/config.php';
 require_once __DIR__ . '/../../Backend/functions.php';
 
-if (!isset($conn) || !$conn) {
-    http_response_code(500);
-    echo json_encode(['success' => false, 'message' => 'Database connection failed.']);
-    exit;
-}
-
+// 1. Strict HTTP Method
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     http_response_code(405);
-    echo json_encode(['success' => false, 'message' => 'Invalid request method. POST required.']);
+    echo json_encode(['success' => false, 'code' => 'METHOD_NOT_ALLOWED', 'message' => 'Method Not Allowed. POST required.']);
     exit;
 }
 
-$user_id = filter_var($_SESSION['user_id'] ?? null, FILTER_VALIDATE_INT, ["options" => ["min_range" => 1]]);
-if (!$user_id) {
+if (!isset($conn) || !$conn) {
+    http_response_code(500);
+    echo json_encode(['success' => false, 'code' => 'DB_UNAVAILABLE', 'message' => 'Database connection failed.']);
+    exit;
+}
+
+// 2. Validate User Authentication
+$userId = filter_var($_SESSION['user_id'] ?? null, FILTER_VALIDATE_INT, ["options" => ["min_range" => 1]]);
+if (!$userId) {
     http_response_code(401);
-    echo json_encode(['success' => false, 'message' => 'Unauthorized. Please login.']);
+    echo json_encode(['success' => false, 'code' => 'UNAUTHORIZED', 'message' => 'Please login to verify the handover code.']);
     exit;
 }
 
-$match_id = filter_input(INPUT_POST, 'match_id', FILTER_VALIDATE_INT)
-            ?: filter_var($_POST['match_id'] ?? null, FILTER_VALIDATE_INT);
-$otp = trim($_POST['otp'] ?? '');
+// 3. Feature Flag Enforcement
+if (!isClaimModuleActiveForUser($userId)) {
+    http_response_code(503);
+    echo json_encode(['success' => false, 'code' => 'MODULE_UPGRADE', 'message' => 'Claiming is currently being upgraded and will be available shortly.']);
+    exit;
+}
 
-if (!$match_id || $match_id <= 0) {
+// 4. Input Parsing & Validation
+$matchId = filter_input(INPUT_POST, 'match_id', FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]])
+           ?: filter_var($_POST['match_id'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+$inputOtp = trim($_POST['otp'] ?? '');
+
+if (!$matchId) {
     http_response_code(400);
-    echo json_encode(['success' => false, 'message' => 'Invalid match ID.']);
+    echo json_encode(['success' => false, 'code' => 'INVALID_MATCH', 'message' => 'Valid match ID is required.']);
     exit;
 }
 
-if (!preg_match('/^[0-9]{6}$/', $otp)) {
+if (!preg_match('/^[0-9]{6}$/', $inputOtp)) {
     http_response_code(400);
-    echo json_encode(['success' => false, 'message' => 'OTP must be exactly 6 digits.']);
+    echo json_encode(['success' => false, 'code' => 'INVALID_OTP_FORMAT', 'message' => 'Verification code must be exactly 6 digits.']);
     exit;
 }
+
+$transactionStarted = false;
 
 try {
-    // Detect column names on matches table
+    // Detect column names across tables
     $mCols = [];
     $cRes = mysqli_query($conn, "SHOW COLUMNS FROM matches");
-    if ($cRes) {
-        while ($cRow = mysqli_fetch_assoc($cRes)) {
-            $mCols[] = strtolower($cRow['Field']);
-        }
-    }
+    if ($cRes) while ($cRow = mysqli_fetch_assoc($cRes)) $mCols[] = strtolower($cRow['Field']);
     $pkCol = in_array('match_id', $mCols) ? 'match_id' : 'id';
     $lostCol = in_array('lost_id', $mCols) ? 'lost_id' : 'lost_report_id';
     $foundCol = in_array('found_id', $mCols) ? 'found_id' : 'found_report_id';
 
-    $lCols = [];
-    $lc = @mysqli_query($conn, "SHOW COLUMNS FROM lost_reports");
-    if ($lc) while ($r = mysqli_fetch_assoc($lc)) $lCols[] = strtolower($r['Field']);
-    $lPk = in_array('lost_id', $lCols) ? 'lost_id' : 'id';
-
     $fCols = [];
-    $fc = @mysqli_query($conn, "SHOW COLUMNS FROM found_reports");
-    if ($fc) while ($r = mysqli_fetch_assoc($fc)) $fCols[] = strtolower($r['Field']);
+    $fRes = @mysqli_query($conn, "SHOW COLUMNS FROM found_reports");
+    if ($fRes) while ($r = mysqli_fetch_assoc($fRes)) $fCols[] = strtolower($r['Field']);
     $fPk = in_array('found_id', $fCols) ? 'found_id' : 'id';
-    $fUserCol = in_array('finder_id', $fCols) ? 'finder_id' : (in_array('user_id', $fCols) ? 'user_id' : 'id');
-    $lUserCol = in_array('user_id', $lCols) ? 'user_id' : (in_array('claimant_id', $lCols) ? 'claimant_id' : (in_array('owner_id', $lCols) ? 'owner_id' : 'id'));
+    $fUserCol = in_array('finder_id', $fCols) ? 'finder_id' : (in_array('user_id', $fCols) ? 'user_id' : 'finder_id');
 
-    // 1. Look up match and confirm user is the founder
-    $stmt = mysqli_prepare($conn, "
-        SELECT m.`$pkCol` AS id, m.status, m.`$lostCol` AS lost_report_id, m.`$foundCol` AS found_report_id,
-               lr.`$lUserCol` as claimant_id, fr.`$fUserCol` as founder_id
+    $lCols = [];
+    $lRes = @mysqli_query($conn, "SHOW COLUMNS FROM lost_reports");
+    if ($lRes) while ($r = mysqli_fetch_assoc($lRes)) $lCols[] = strtolower($r['Field']);
+    $lPk = in_array('lost_id', $lCols) ? 'lost_id' : 'id';
+    $lUserCol = in_array('user_id', $lCols) ? 'user_id' : (in_array('claimant_id', $lCols) ? 'claimant_id' : 'user_id');
+
+    $rcCols = [];
+    $rcRes = @mysqli_query($conn, "SHOW COLUMNS FROM recovery_cases");
+    if ($rcRes) while ($r = mysqli_fetch_assoc($rcRes)) $rcCols[] = strtolower($r['Field']);
+    $rcPk = in_array('id', $rcCols) ? 'id' : (in_array('case_id', $rcCols) ? 'case_id' : 'id');
+    $rcRepCol = in_array('report_id', $rcCols) ? 'report_id' : (in_array('found_id', $rcCols) ? 'found_id' : 'report_id');
+    $rcClaimantCol = in_array('claimant_id', $rcCols) ? 'claimant_id' : (in_array('owner_id', $rcCols) ? 'owner_id' : 'claimant_id');
+
+    mysqli_begin_transaction($conn);
+    $transactionStarted = true;
+
+    // 5. Look up match details
+    $selectSql = "
+        SELECT 
+            m.`$pkCol` AS id, 
+            m.status AS match_status, 
+            m.`$lostCol` AS lost_report_id, 
+            m.`$foundCol` AS found_report_id,
+            lr.`$lUserCol` AS owner_id,
+            fr.`$fUserCol` AS founder_id
         FROM matches m
         LEFT JOIN lost_reports lr ON m.`$lostCol` = lr.`$lPk`
         LEFT JOIN found_reports fr ON m.`$foundCol` = fr.`$fPk`
         WHERE m.`$pkCol` = ?
-        LIMIT 1
-    ");
+        FOR UPDATE
+    ";
+    $stmt = mysqli_prepare($conn, $selectSql);
     if (!$stmt) {
         throw new Exception('Database error: ' . mysqli_error($conn));
     }
-    mysqli_stmt_bind_param($stmt, 'i', $match_id);
+    mysqli_stmt_bind_param($stmt, 'i', $matchId);
     mysqli_stmt_execute($stmt);
     $res = mysqli_stmt_get_result($stmt);
     $match = mysqli_fetch_assoc($res);
@@ -96,166 +123,188 @@ try {
 
     if (!$match) {
         http_response_code(404);
-        echo json_encode(['success' => false, 'message' => 'Match record not found.']);
+        echo json_encode(['success' => false, 'code' => 'NOT_FOUND', 'message' => 'Match record not found.']);
+        if ($transactionStarted) mysqli_rollback($conn);
         exit;
     }
 
-    if ((int)$match['founder_id'] !== $user_id && (int)$match['claimant_id'] !== $user_id) {
-        http_response_code(403);
-        echo json_encode(['success' => false, 'message' => 'You are not authorized to verify this handover.']);
+    $foundId = (int)$match['found_report_id'];
+    $lostId = (int)$match['lost_report_id'];
+    $founderId = (int)$match['founder_id'];
+    $ownerId = (int)$match['owner_id'];
+
+    // 6. Look up Recovery Case with Row Lock
+    $caseSql = "SELECT * FROM recovery_cases WHERE ";
+    if (in_array('match_id', $rcCols)) {
+        $caseSql .= "match_id = $matchId OR (`$rcRepCol` = $foundId AND `$rcClaimantCol` = $ownerId)";
+    } else {
+        $caseSql .= "`$rcRepCol` = $foundId AND `$rcClaimantCol` = $ownerId";
+    }
+    $caseSql .= " ORDER BY `$rcPk` DESC LIMIT 1 FOR UPDATE";
+
+    $caseRes = $conn->query($caseSql);
+    $case = $caseRes ? $caseRes->fetch_assoc() : null;
+
+    if (!$case) {
+        http_response_code(404);
+        echo json_encode(['success' => false, 'code' => 'NO_CASE', 'message' => 'No active recovery case found for this item.']);
+        if ($transactionStarted) mysqli_rollback($conn);
         exit;
     }
 
-    $found_id = (int)$match['found_report_id'];
-    $lost_id = (int)$match['lost_report_id'];
-    $claimant_id = (int)$match['claimant_id'];
+    $caseId = (int)$case[$rcPk];
+    $returnMethod = $case['return_method'] ?? 'hand_on_hand';
 
-    // 2. Fetch Stored OTP (Check DB columns or session)
-    $stored_otp = null;
-    $is_expired = false;
+    // 7. Authorization Check:
+    // User must be the finder, OR an administrator if return_method is admin_office
+    $userRole = strtolower($_SESSION['role'] ?? $_SESSION['user_role'] ?? '');
+    $isAdmin = in_array($userRole, ['admin', 'superadmin', 'staff', 'moderator']);
 
-    // A. Check matches table
-    $check_m = mysqli_query($conn, "SHOW COLUMNS FROM matches LIKE 'otp'");
-    if ($check_m && mysqli_num_rows($check_m) > 0) {
-        $m_res = mysqli_query($conn, "SELECT otp, otp_expires_at FROM matches WHERE id = " . $match_id);
-        if ($m_row = mysqli_fetch_assoc($m_res)) {
-            if (!empty($m_row['otp'])) {
-                $stored_otp = $m_row['otp'];
-                if (!empty($m_row['otp_expires_at']) && strtotime($m_row['otp_expires_at']) < time()) {
-                    $is_expired = true;
-                }
-            }
-        }
-    }
-
-    // B. Check session fallback
-    if (!$stored_otp && isset($_SESSION['handover_otp_' . $match_id])) {
-        $sess_otp_info = $_SESSION['handover_otp_' . $match_id];
-        $stored_otp = $sess_otp_info['otp'];
-        if ($sess_otp_info['expires_at'] < time()) {
-            $is_expired = true;
-        }
-    }
-
-    // C. Check recovery_cases proof_details fallback
-    if (!$stored_otp) {
-        $rc_query = mysqli_prepare($conn, "SELECT proof_details FROM recovery_cases WHERE report_id = ?");
-        if ($rc_query) {
-            mysqli_stmt_bind_param($rc_query, 'i', $found_id);
-            mysqli_stmt_execute($rc_query);
-            $rc_res = mysqli_stmt_get_result($rc_query);
-            if ($rc_row = mysqli_fetch_assoc($rc_res)) {
-                if (!empty($rc_row['proof_details']) && preg_match_all('/Handover OTP:\s*([0-9]{6})/', $rc_row['proof_details'], $m_otps)) {
-                    $stored_otp = end($m_otps[1]);
-                }
-            }
-            mysqli_stmt_close($rc_query);
-        }
-    }
-
-    if (!$stored_otp) {
-        http_response_code(400);
-        echo json_encode(['success' => false, 'message' => 'No active OTP found. Please ask the owner to generate a new OTP.']);
-        exit;
-    }
-
-    if ($is_expired) {
-        http_response_code(400);
-        echo json_encode(['success' => false, 'message' => 'This OTP has expired. Please ask the owner to generate a fresh OTP.']);
-        exit;
-    }
-
-    // 2. Lockout and Attempt Limiting Check
-    $lockKey = 'otp_lockout_' . $match_id;
-    if (isset($_SESSION[$lockKey]) && $_SESSION[$lockKey] > time()) {
-        $remainingSecs = $_SESSION[$lockKey] - time();
-        http_response_code(429);
-        echo json_encode([
-            'success' => false,
-            'message' => 'Too many incorrect attempts. Handover verification is temporarily locked for ' . ceil($remainingSecs / 60) . ' more minute(s).'
-        ]);
-        exit;
-    }
-
-    $attemptKey = 'otp_attempts_' . $match_id;
-    $attempts = (int)($_SESSION[$attemptKey] ?? 0);
-
-    if ($stored_otp !== $otp) {
-        $attempts++;
-        $_SESSION[$attemptKey] = $attempts;
-        if (function_exists('logAccess')) {
-            logAccess($user_id, 'Handover OTP Failed', "Match ID: $match_id, Attempt: $attempts/5");
-        }
-
-        if ($attempts >= 5) {
-            $_SESSION[$lockKey] = time() + 900; // 15-minute lockout
-            unset($_SESSION[$attemptKey]);
-            http_response_code(429);
-            echo json_encode([
-                'success' => false,
-                'message' => 'Too many incorrect OTP attempts. Handover verification locked for 15 minutes.'
-            ]);
+    if ($userId !== $founderId) {
+        if (!($isAdmin && $returnMethod === 'admin_office')) {
+            http_response_code(403);
+            echo json_encode(['success' => false, 'code' => 'FORBIDDEN', 'message' => 'Only the finder or campus administrator can verify this handover.']);
+            if ($transactionStarted) mysqli_rollback($conn);
             exit;
         }
+    }
+
+    // 8. Case Status Check
+    $caseStatus = strtolower($case['status'] ?? '');
+    if ($caseStatus === 'completed' || $caseStatus === 'resolved') {
+        http_response_code(200);
+        echo json_encode(['success' => true, 'code' => 'ALREADY_COMPLETED', 'message' => 'This item has already been marked Reunited.']);
+        if ($transactionStarted) mysqli_rollback($conn);
+        exit;
+    }
+
+    // 9. Brute Force 5-Attempt Lockout Check
+    $attempts = (int)($case['otp_attempts'] ?? 0);
+    if ($attempts >= 5) {
+        http_response_code(403);
+        echo json_encode([
+            'success' => false,
+            'code' => 'LOCKOUT',
+            'message' => 'Maximum invalid attempts (5) reached. For security, the owner must generate a fresh verification code.'
+        ]);
+        if ($transactionStarted) mysqli_rollback($conn);
+        exit;
+    }
+
+    // 10. Fetch Stored OTP Hash and Expiration
+    $storedHash = $case['otp_hash'] ?? null;
+    $expiresAtStr = $case['otp_expires_at'] ?? null;
+
+    // Fallback to session if column not populated
+    if (empty($storedHash) && isset($_SESSION['handover_otp_' . $matchId])) {
+        $sessOtp = $_SESSION['handover_otp_' . $matchId];
+        $storedHash = $sessOtp['hash'] ?? null;
+        $expiresAtStr = !empty($sessOtp['expires_at']) ? date('Y-m-d H:i:s', $sessOtp['expires_at']) : null;
+    }
+
+    if (empty($storedHash) || empty($expiresAtStr)) {
+        http_response_code(400);
+        echo json_encode([
+            'success' => false,
+            'code' => 'NO_OTP_ACTIVE',
+            'message' => 'No active verification code found. Please ask the owner to tap "Get Live OTP".'
+        ]);
+        if ($transactionStarted) mysqli_rollback($conn);
+        exit;
+    }
+
+    // 11. Expiration Check
+    $expiresTs = strtotime($expiresAtStr);
+    if ($expiresTs && time() > $expiresTs) {
+        http_response_code(400);
+        echo json_encode([
+            'success' => false,
+            'code' => 'OTP_EXPIRED',
+            'message' => 'This verification code has expired (valid for 5 minutes). Please ask the owner to refresh the code.'
+        ]);
+        if ($transactionStarted) mysqli_rollback($conn);
+        exit;
+    }
+
+    // 12. Timing-Safe Constant-Time Verification
+    if (!verifyOtpCode($inputOtp, $storedHash)) {
+        $newAttempts = $attempts + 1;
+        $remaining = max(0, 5 - $newAttempts);
+
+        $conn->query("UPDATE recovery_cases SET otp_attempts = $newAttempts WHERE `$rcPk` = $caseId");
+        mysqli_commit($conn);
 
         http_response_code(400);
         echo json_encode([
             'success' => false,
-            'message' => 'Incorrect OTP code. ' . (5 - $attempts) . ' attempt(s) remaining before temporary lockout.'
+            'code' => 'INVALID_OTP',
+            'message' => ($remaining > 0)
+                ? "Incorrect code. {$remaining} attempt(s) remaining."
+                : "Incorrect code. Maximum attempts reached. The owner must generate a fresh code.",
+            'remaining_attempts' => $remaining
         ]);
         exit;
     }
 
-    // Reset attempt counter on success
-    unset($_SESSION[$attemptKey]);
-    unset($_SESSION[$lockKey]);
-
-    // 3. Mark Recovery Complete, Invalidate OTP, & Close Reports
-    mysqli_begin_transaction($conn);
-
-    // Invalidate OTP immediately to prevent reuse and set status to verified
-    mysqli_query($conn, "UPDATE matches SET otp = NULL, otp_expires_at = NULL, status = 'verified' WHERE `$pkCol` = " . (int)$match_id);
-
-    // Update reports to claimed / closed
-    mysqli_query($conn, "UPDATE found_reports SET status = 'claimed' WHERE `$fPk` = " . $found_id);
-    if ($lost_id > 0) {
-        mysqli_query($conn, "UPDATE lost_reports SET status = 'claimed' WHERE `$lPk` = " . $lost_id);
+    // 13. SUCCESS ACTIONS (Verified Handover)
+    // A. Update recovery_cases
+    $uCase = mysqli_prepare($conn, "
+        UPDATE recovery_cases 
+        SET status = 'Completed', completed_at = NOW(), otp_hash = NULL, otp_attempts = 0
+        WHERE `$rcPk` = ?
+    ");
+    if ($uCase) {
+        mysqli_stmt_bind_param($uCase, 'i', $caseId);
+        mysqli_stmt_execute($uCase);
+        mysqli_stmt_close($uCase);
     }
 
-    // Update recovery_cases status
-    $rcCols = [];
-    $rcc = @mysqli_query($conn, "SHOW COLUMNS FROM recovery_cases");
-    if ($rcc) while ($r = mysqli_fetch_assoc($rcc)) $rcCols[] = strtolower($r['Field']);
-    $rcRepCol = in_array('report_id', $rcCols) ? 'report_id' : (in_array('found_id', $rcCols) ? 'found_id' : 'report_id');
-    mysqli_query($conn, "UPDATE recovery_cases SET status = 'handed_off'" . (in_array('owner_verified', $rcCols) ? ", owner_verified = 1" : "") . (in_array('finder_confirmed', $rcCols) ? ", finder_confirmed = 1" : "") . " WHERE `$rcRepCol` = " . $found_id);
+    // B. Update matches table
+    $conn->query("UPDATE matches SET status = 'verified' WHERE `$pkCol` = $matchId");
 
-    // Reward trust scores (+10 for finder, +5 for owner, max 150)
-    if (!empty($match['founder_id'])) {
-        mysqli_query($conn, "UPDATE users SET trust_score = LEAST(150, COALESCE(trust_score, 100) + 10) WHERE user_id = " . (int)$match['founder_id']);
+    // C. Mark found_reports and lost_reports as 'reunited'
+    $conn->query("UPDATE found_reports SET status = 'reunited' WHERE `$fPk` = $foundId");
+    $conn->query("UPDATE lost_reports SET status = 'reunited' WHERE `$lPk` = $lostId");
+
+    // D. Award Trust Points (+10 to Founder, +5 to Owner)
+    $hasTrustScore = false;
+    $uCols = @$conn->query("SHOW COLUMNS FROM users LIKE 'trust_score'");
+    if ($uCols && $uCols->num_rows > 0) {
+        $hasTrustScore = true;
     }
-    if (!empty($match['claimant_id'])) {
-        mysqli_query($conn, "UPDATE users SET trust_score = LEAST(150, COALESCE(trust_score, 100) + 5) WHERE user_id = " . (int)$match['claimant_id']);
+    if ($hasTrustScore) {
+        if ($founderId > 0) {
+            $conn->query("UPDATE users SET trust_score = trust_score + 10 WHERE id = $founderId");
+        }
+        if ($ownerId > 0) {
+            $conn->query("UPDATE users SET trust_score = trust_score + 5 WHERE id = $ownerId");
+        }
     }
 
-    // Clear session OTP
-    unset($_SESSION['handover_otp_' . $match_id]);
+    // E. Clear session cache
+    unset($_SESSION['handover_otp_' . $matchId]);
 
-    // Audit Log
-    if (function_exists('logAccess')) {
-        logAccess($user_id, 'Handover Completed (OTP Verified)', "Match ID: $match_id, Found ID: $found_id, Lost ID: $lost_id");
-    }
+    // F. Send Success Notifications to Both Parties
+    $foundFormatted = "#RF-" . str_pad($foundId, 5, '0', STR_PAD_LEFT);
+    $notifLink = "item.php?type=found&id=" . $foundId;
 
-    // Send Completion Notifications to Both Parties
-    $notif_title = "Item Handover Completed!";
-    $notif_msg = "The physical handover has been verified and confirmed. The recovery case is now officially completed. Thank you!";
-    $notif_link = "item.php?id=" . $found_id;
+    $founderTitle = "Item Reunited! 🎉 (+10 Points)";
+    $founderMsg = "Physical handover for {$foundFormatted} verified! You earned +10 Trust Points. Thank you for making campus better!";
+    
+    $ownerTitle = "Item Recovered! 🎉";
+    $ownerMsg = "Your item {$foundFormatted} has been officially reunited with you! Handover successfully confirmed.";
 
     if (function_exists('insertSystemNotification')) {
-        if ($claimant_id > 0) insertSystemNotification($claimant_id, $notif_title, $notif_msg, $notif_link, 'FOUND', $found_id, 'system');
-        if ($user_id > 0) insertSystemNotification($user_id, $notif_title, $notif_msg, $notif_link, 'FOUND', $found_id, 'system');
+        insertSystemNotification($founderId, $founderTitle, $founderMsg, $notifLink, 'FOUND', $foundId, 'handover_complete');
+        insertSystemNotification($ownerId, $ownerTitle, $ownerMsg, $notifLink, 'FOUND', $foundId, 'handover_complete');
     } else {
-        if ($claimant_id > 0) @mysqli_query($conn, "INSERT INTO notifications (user_id, report_type, report_id, type, message, is_read, created_at) VALUES ($claimant_id, 'FOUND', $found_id, 'system', '" . mysqli_real_escape_string($conn, $notif_msg) . "', 0, NOW())");
-        if ($user_id > 0) @mysqli_query($conn, "INSERT INTO notifications (user_id, report_type, report_id, type, message, is_read, created_at) VALUES ($user_id, 'FOUND', $found_id, 'system', '" . mysqli_real_escape_string($conn, $notif_msg) . "', 0, NOW())");
+        $safeFM = mysqli_real_escape_string($conn, $founderMsg);
+        $safeFT = mysqli_real_escape_string($conn, $founderTitle);
+        $safeOM = mysqli_real_escape_string($conn, $ownerMsg);
+        $safeOT = mysqli_real_escape_string($conn, $ownerTitle);
+        $safeL = mysqli_real_escape_string($conn, $notifLink);
+        @mysqli_query($conn, "INSERT INTO notifications (user_id, report_type, report_id, type, message, link, is_read, created_at) VALUES ($founderId, 'FOUND', $foundId, 'handover_complete', '$safeFM', '$safeL', 0, NOW())");
+        @mysqli_query($conn, "INSERT INTO notifications (user_id, report_type, report_id, type, message, link, is_read, created_at) VALUES ($ownerId, 'FOUND', $foundId, 'handover_complete', '$safeOM', '$safeL', 0, NOW())");
     }
 
     mysqli_commit($conn);
@@ -263,11 +312,15 @@ try {
     http_response_code(200);
     echo json_encode([
         'success' => true,
-        'message' => 'Handover verified successfully! Item marked as returned and case closed.'
+        'message' => 'Handover successfully verified! Both reports are now marked Reunited.',
+        'status' => 'Completed',
+        'points_awarded' => 10
     ]);
 
 } catch (Exception $e) {
-    mysqli_rollback($conn);
+    if ($transactionStarted) {
+        mysqli_rollback($conn);
+    }
     http_response_code(500);
-    echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+    echo json_encode(['success' => false, 'code' => 'SERVER_ERROR', 'message' => 'Error during OTP verification: ' . $e->getMessage()]);
 }

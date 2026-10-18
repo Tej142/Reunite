@@ -466,6 +466,37 @@ $adminInitials = strtoupper(substr($adminName, 0, 1) . (strpos($adminName, ' ') 
           </table>
         </div>
       </div>
+
+      <!-- 2. Temporary Claim Bans Card (Anti-Spam Shield) -->
+      <div class="admin-card" style="margin-top: 24px;">
+        <div class="card-header-bar">
+          <div>
+            <h2 style="margin: 0 0 4px 0;">Temporary Claim Bans (Anti-Spam Shield)</h2>
+            <p style="font-size: 0.8rem; color: var(--muted); margin: 0;">24-hour bans applied when a founder rejects fraudulent ownership proofs.</p>
+          </div>
+          <button type="button" class="btn-refresh" onclick="loadBannedClaimants()" title="Refresh Bans">
+            <i class="fa-solid fa-rotate"></i>
+          </button>
+        </div>
+        <div class="table-responsive">
+          <table class="admin-table">
+            <thead>
+              <tr>
+                <th>User ID</th>
+                <th>Student Name</th>
+                <th>PIN / Identifier</th>
+                <th>College Email</th>
+                <th>Ban Expires</th>
+                <th>Remaining</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="bannedClaimantsTableBody">
+              <tr><td colspan="7" style="text-align:center; padding:20px; color:var(--muted);">Loading banned claimants...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
     </section>
 
     <!-- ══════════════════════════════════════════════════════════════════ -->
