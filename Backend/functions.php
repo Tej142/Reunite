@@ -319,8 +319,9 @@ function isClaimModuleActiveForUser($userId = null) {
 
         if (str_starts_with(strtolower($currentPin), 'qa_') || 
             str_starts_with(strtolower($currentEmail), 'qa_') || 
+            str_starts_with(strtolower($currentPin), '24155') ||
             str_contains(strtolower($currentPin), 'charan') ||
-            in_array(strtolower($currentRole), ['admin', 'superadmin', 'moderator'])) {
+            in_array(strtolower($currentRole), ['admin', 'superadmin', 'moderator', 'tester', 'staff'])) {
             return true;
         }
     }
@@ -1548,20 +1549,33 @@ function ensureRecoveryCasesSchema() {
     }
 
     if (!empty($cols)) {
-        if (!in_array('return_type', $cols)) {
-            @$conn->query("ALTER TABLE `recovery_cases` ADD COLUMN `return_type` ENUM('hand_on_hand', 'admin_office') DEFAULT 'hand_on_hand' AFTER `status`");
+        if (!in_array('match_id', $cols)) {
+            @$conn->query("ALTER TABLE `recovery_cases` ADD COLUMN `match_id` INT(11) NULL AFTER `id`");
+            @$conn->query("ALTER TABLE `recovery_cases` ADD UNIQUE INDEX `uq_match_id` (`match_id`)");
         }
-        if (!in_array('otp', $cols)) {
-            @$conn->query("ALTER TABLE `recovery_cases` ADD COLUMN `otp` VARCHAR(6) DEFAULT NULL AFTER `return_type`");
+        if (!in_array('return_method', $cols) && !in_array('return_type', $cols)) {
+            @$conn->query("ALTER TABLE `recovery_cases` ADD COLUMN `return_method` ENUM('hand_on_hand', 'admin_office') NOT NULL DEFAULT 'hand_on_hand' AFTER `match_id`");
+        }
+        if (!in_array('meeting_location', $cols)) {
+            @$conn->query("ALTER TABLE `recovery_cases` ADD COLUMN `meeting_location` VARCHAR(255) NULL DEFAULT NULL AFTER `return_method`");
+        }
+        if (!in_array('meeting_time', $cols)) {
+            @$conn->query("ALTER TABLE `recovery_cases` ADD COLUMN `meeting_time` DATETIME NULL DEFAULT NULL AFTER `meeting_location`");
+        }
+        if (!in_array('otp_hash', $cols)) {
+            @$conn->query("ALTER TABLE `recovery_cases` ADD COLUMN `otp_hash` VARCHAR(64) NULL DEFAULT NULL AFTER `meeting_time`");
         }
         if (!in_array('otp_expires_at', $cols)) {
-            @$conn->query("ALTER TABLE `recovery_cases` ADD COLUMN `otp_expires_at` DATETIME DEFAULT NULL AFTER `otp`");
+            @$conn->query("ALTER TABLE `recovery_cases` ADD COLUMN `otp_expires_at` DATETIME NULL DEFAULT NULL AFTER `otp_hash`");
         }
         if (!in_array('otp_attempts', $cols)) {
-            @$conn->query("ALTER TABLE `recovery_cases` ADD COLUMN `otp_attempts` INT(11) DEFAULT 0 AFTER `otp_expires_at`");
+            @$conn->query("ALTER TABLE `recovery_cases` ADD COLUMN `otp_attempts` TINYINT(3) UNSIGNED NOT NULL DEFAULT 0 AFTER `otp_expires_at`");
         }
-        if (!in_array('otp_locked_until', $cols)) {
-            @$conn->query("ALTER TABLE `recovery_cases` ADD COLUMN `otp_locked_until` DATETIME DEFAULT NULL AFTER `otp_attempts`");
+        if (!in_array('otp_last_generated', $cols)) {
+            @$conn->query("ALTER TABLE `recovery_cases` ADD COLUMN `otp_last_generated` DATETIME NULL DEFAULT NULL AFTER `otp_attempts`");
+        }
+        if (!in_array('otp_regen_count', $cols)) {
+            @$conn->query("ALTER TABLE `recovery_cases` ADD COLUMN `otp_regen_count` TINYINT(3) UNSIGNED NOT NULL DEFAULT 0 AFTER `otp_last_generated`");
         }
     }
 }
@@ -1783,5 +1797,202 @@ if (function_exists('enforceMaintenanceMode')) {
     enforceMaintenanceMode();
 }
 
+// ============================================================================
+// CLAIM & HANDOVER LIFECYCLE V2 ENGINE HELPERS
+// ============================================================================
 
 
+/**
+ * Checks if a user is currently subject to a temporary claim ban.
+ * Returns array with ban status, expiration timestamp, and remaining seconds.
+ */
+function isClaimantBanned($userId) {
+    global $conn;
+    $result = ['banned' => false, 'ban_until' => null, 'seconds_remaining' => 0];
+    if (!$conn || !(int)$userId) {
+        return $result;
+    }
+    // Check if claim_ban_until column exists
+    $cCheck = @$conn->query("SHOW COLUMNS FROM users LIKE 'claim_ban_until'");
+    if (!$cCheck || $cCheck->num_rows === 0) {
+        return $result;
+    }
+
+    $stmt = @$conn->prepare("SELECT claim_ban_until FROM users WHERE id = ? LIMIT 1");
+    if ($stmt) {
+        $stmt->bind_param('i', $userId);
+        $stmt->execute();
+        $res = $stmt->get_result();
+        if ($row = $res->fetch_assoc()) {
+            if (!empty($row['claim_ban_until'])) {
+                $banTs = strtotime($row['claim_ban_until']);
+                $nowTs = time();
+                if ($banTs > $nowTs) {
+                    $result['banned'] = true;
+                    $result['ban_until'] = $row['claim_ban_until'];
+                    $result['seconds_remaining'] = $banTs - $nowTs;
+                }
+            }
+        }
+        $stmt->close();
+    }
+    return $result;
+}
+
+/**
+ * Enforces a temporary claim ban on a user (e.g. 24 hours on fraudulent/rejected claim).
+ */
+function setClaimantBan($userId, $hours = 24) {
+    global $conn;
+    if (!$conn || !(int)$userId) return false;
+    $hours = max(1, (int)$hours);
+    $cCheck = @$conn->query("SHOW COLUMNS FROM users LIKE 'claim_ban_until'");
+    if (!$cCheck || $cCheck->num_rows === 0) {
+        @$conn->query("ALTER TABLE users ADD COLUMN claim_ban_until DATETIME NULL DEFAULT NULL AFTER status");
+    }
+    $stmt = @$conn->prepare("UPDATE users SET claim_ban_until = DATE_ADD(NOW(), INTERVAL ? HOUR) WHERE id = ?");
+    if ($stmt) {
+        $stmt->bind_param('ii', $hours, $userId);
+        $ok = $stmt->execute();
+        $stmt->close();
+        return $ok;
+    }
+    return false;
+}
+
+/**
+ * Lifts any active claim ban on a user (admin tool action).
+ */
+function liftClaimantBan($userId) {
+    global $conn;
+    if (!$conn || !(int)$userId) return false;
+    $stmt = @$conn->prepare("UPDATE users SET claim_ban_until = NULL WHERE id = ?");
+    if ($stmt) {
+        $stmt->bind_param('i', $userId);
+        $ok = $stmt->execute();
+        $stmt->close();
+        return $ok;
+    }
+    return false;
+}
+
+/**
+ * Counts active in-flight claims for a given lost item (anti-spam quota check, max 2).
+ */
+function getActiveClaimsCountForLostItem($lostId) {
+    global $conn;
+    if (!$conn || !(int)$lostId) return 0;
+    
+    // Resolve columns for matches
+    $mCols = [];
+    $res = @$conn->query("SHOW COLUMNS FROM matches");
+    if ($res) while ($r = $res->fetch_assoc()) $mCols[] = strtolower($r['Field']);
+    $lostCol = in_array('lost_id', $mCols) ? 'lost_id' : 'lost_report_id';
+
+    $stmt = @$conn->prepare("SELECT COUNT(*) as cnt FROM matches WHERE `$lostCol` = ? AND status IN ('pending_founder_approval', 'ready_for_handover')");
+    if ($stmt) {
+        $stmt->bind_param('i', $lostId);
+        $stmt->execute();
+        $cntRow = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+        return (int)($cntRow['cnt'] ?? 0);
+    }
+    return 0;
+}
+
+/**
+ * Scans text for high-risk sensitive credentials (passwords, PIN patterns, credit cards).
+ */
+function containsSensitiveCredentials($text) {
+    if (empty($text)) return false;
+    // Password patterns (e.g. password is: 1234, pwd=secret)
+    if (preg_match('/(?:password|passwd|pwd|pin\s*code|atm\s*pin|cvv|cvc)\s*[:=]\s*\S+/i', $text)) {
+        return true;
+    }
+    // 16-digit credit card pattern with optional spaces/dashes
+    if (preg_match('/\b(?:\d{4}[ -]?){3}\d{4}\b/', $text)) {
+        return true;
+    }
+    return false;
+}
+
+/**
+ * Computes timing-safe HMAC-SHA256 hash of a 6-digit numeric OTP code.
+ */
+function hashOtpCode($otp) {
+    $secret = defined('HMAC_OTP_SECRET') ? HMAC_OTP_SECRET : 'reunite_prod_otp_secret_key_8f7b3a2e1d9c0a';
+    return hash_hmac('sha256', trim((string)$otp), $secret);
+}
+
+/**
+ * Validates an input OTP against the stored HMAC-SHA256 hash in constant time.
+ */
+function verifyOtpCode($inputOtp, $storedHash) {
+    if (empty($inputOtp) || empty($storedHash)) {
+        return false;
+    }
+    $computed = hashOtpCode($inputOtp);
+    return hash_equals($storedHash, $computed);
+}
+
+/**
+ * Strips EXIF metadata from uploaded images and stores securely in media vault.
+ * Whitelists jpeg, png, webp. Enforces max size 8MB.
+ */
+function sanitizeAndStoreProofImage($fileArray, $matchId) {
+    if (!isset($fileArray) || $fileArray['error'] !== UPLOAD_ERR_OK) {
+        return ['success' => false, 'error' => 'No file uploaded or upload error.'];
+    }
+
+    $maxBytes = 8 * 1024 * 1024; // 8MB
+    if ($fileArray['size'] > $maxBytes) {
+        return ['success' => false, 'error' => 'Image exceeds 8MB maximum size limit.'];
+    }
+
+    $finfo = finfo_open(FILEINFO_MIME_TYPE);
+    $mime = finfo_file($finfo, $fileArray['tmp_name']);
+    finfo_close($finfo);
+
+    $allowedMimes = ['image/jpeg', 'image/png', 'image/webp'];
+    if (!in_array($mime, $allowedMimes)) {
+        return ['success' => false, 'error' => 'Invalid image format. Allowed: JPG, PNG, WebP.'];
+    }
+
+    // Destination media vault directory
+    $uploadDir = dirname(__DIR__) . '/Frontend/uploads/proofs';
+    if (!is_dir($uploadDir)) {
+        @mkdir($uploadDir, 0755, true);
+    }
+
+    $filename = 'proof_' . (int)$matchId . '_' . bin2hex(random_bytes(6)) . '.jpg';
+    $targetPath = $uploadDir . '/' . $filename;
+
+    // Strip EXIF and re-encode using GD
+    $imageResource = null;
+    if ($mime === 'image/jpeg') {
+        $imageResource = @imagecreatefromjpeg($fileArray['tmp_name']);
+    } elseif ($mime === 'image/png') {
+        $imageResource = @imagecreatefrompng($fileArray['tmp_name']);
+    } elseif ($mime === 'image/webp') {
+        if (function_exists('imagecreatefromwebp')) {
+            $imageResource = @imagecreatefromwebp($fileArray['tmp_name']);
+        }
+    }
+
+    if ($imageResource) {
+        // Save as clean JPEG stripped of all EXIF/camera metadata
+        imagejpeg($imageResource, $targetPath, 88);
+        imagedestroy($imageResource);
+    } else {
+        // Fallback move
+        if (!move_uploaded_file($fileArray['tmp_name'], $targetPath)) {
+            return ['success' => false, 'error' => 'Failed to save sanitized proof image.'];
+        }
+    }
+
+    return [
+        'success' => true,
+        'web_path' => 'uploads/proofs/' . $filename,
+        'full_path' => $targetPath
+    ];
+}

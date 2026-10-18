@@ -610,6 +610,55 @@ if ($action === 'update_recovery_case') {
     exit;
 }
 
+// ── 7D. Claim & Handover v2: Get Banned Claimants ────────
+if ($action === 'get_banned_claimants') {
+    if (!is_admin_authorized()) {
+        echo json_encode(['success' => false, 'error' => 'Unauthorized admin access.']);
+        exit;
+    }
+    $banned = [];
+    $bCheck = @$conn->query("SHOW COLUMNS FROM users LIKE 'claim_ban_until'");
+    if ($bCheck && $bCheck->num_rows > 0) {
+        $res = $conn->query("SELECT id, name, email, pin, claim_ban_until, TIMESTAMPDIFF(SECOND, NOW(), claim_ban_until) as seconds_remaining FROM users WHERE claim_ban_until > NOW() ORDER BY claim_ban_until DESC");
+        if ($res) {
+            while ($r = $res->fetch_assoc()) {
+                $banned[] = [
+                    'id' => (int)$r['id'],
+                    'name' => $r['name'] ?? 'User',
+                    'email' => !empty($r['email']) ? decryptData($r['email']) : '',
+                    'pin' => $r['pin'] ?? '',
+                    'ban_until' => $r['claim_ban_until'],
+                    'seconds_remaining' => (int)$r['seconds_remaining']
+                ];
+            }
+        }
+    }
+    echo json_encode(['success' => true, 'banned_claimants' => $banned]);
+    exit;
+}
+
+// ── 7E. Claim & Handover v2: Lift Claim Ban ──────────────
+if ($action === 'lift_claim_ban') {
+    if (!is_admin_authorized()) {
+        echo json_encode(['success' => false, 'error' => 'Unauthorized admin access.']);
+        exit;
+    }
+    $req = getRequestData();
+    $targetUserId = (int)($req['user_id'] ?? $_POST['user_id'] ?? 0);
+    if ($targetUserId <= 0) {
+        echo json_encode(['success' => false, 'error' => 'Invalid user ID.']);
+        exit;
+    }
+    $lifted = liftClaimantBan($targetUserId);
+    if ($lifted) {
+        logAccess(0, 'Claim Ban Lifted', "Admin lifted claim ban for User #$targetUserId");
+        echo json_encode(['success' => true, 'message' => "Claim ban lifted for user #$targetUserId."]);
+    } else {
+        echo json_encode(['success' => false, 'error' => "Failed to lift ban for user #$targetUserId."]);
+    }
+    exit;
+}
+
 // ── 8. Delete Report (With Chroma & Media Cleanup) ─────────
 if ($action === 'delete_report') {
     $reportType = strtolower(trim($_POST['report_type'] ?? ''));
