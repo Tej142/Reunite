@@ -124,7 +124,7 @@ DEALLOCATE PREPARE stmt;
 
 -- 4. Archival of legacy in-flight claims
 UPDATE `recovery_cases` SET `status` = 'archived' WHERE `status` = 'pending_verification';
-UPDATE `found_reports` SET `status` = 'active' WHERE `id` IN (1, 2) AND `status` = 'claimed';
+UPDATE `found_reports` SET `status` = 'active' WHERE `found_id` IN (1, 2) AND `status` = 'claimed';
 ```
 
 ---

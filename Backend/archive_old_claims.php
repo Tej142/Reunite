@@ -39,7 +39,7 @@ if (!empty($casesToArchive)) {
     $reportIds = array_filter(array_column($casesToArchive, 'report_id'));
     if (!empty($reportIds)) {
         $idList = implode(',', array_map('intval', $reportIds));
-        $resetStmt = $conn->query("UPDATE found_reports SET status = 'active' WHERE id IN ($idList) AND status = 'claimed'");
+        $resetStmt = $conn->query("UPDATE found_reports SET status = 'active' WHERE found_id IN ($idList) AND status = 'claimed'");
         echo "Reset " . $conn->affected_rows . " found reports (IDs: $idList) from 'claimed' to 'active'.\n";
     }
 } else {
