@@ -601,6 +601,9 @@ async function loadClaims() {
   const tbody = document.getElementById('claimsTableBody');
   tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding:30px; color:var(--muted);"><i class="fa-solid fa-spinner fa-spin"></i> Loading ownership claims...</td></tr>`;
 
+  // Also load banned claimants table
+  loadBannedClaimants();
+
   try {
     const res = await fetch(`${API_ENDPOINT}?action=recovery_cases`);
     const json = await res.json();
@@ -611,50 +614,152 @@ async function loadClaims() {
         return;
       }
 
-      tbody.innerHTML = cases.map(c => `
+      tbody.innerHTML = cases.map(c => {
+        const isDeskReturn = (c.return_type === 'admin_office' || c.return_method === 'admin_office');
+        const isCompleted = (c.status === 'Completed' || c.status === 'resolved' || c.status === 'handed_off');
+        return `
         <tr>
           <td><strong style="color:var(--muted);">#${c.id}</strong></td>
-          <td><code>Match #${c.match_id || c.found_report_id || 'N/A'}</code></td>
+          <td>
+            <code>Match #${c.match_id || c.found_report_id || 'N/A'}</code>
+            <div style="margin-top: 4px;">
+              <span class="status-pill ${isDeskReturn ? 'active' : 'pending'}" style="font-size:0.68rem; padding: 2px 7px;">
+                ${isDeskReturn ? '🏢 Campus Desk' : '🤝 In-Person'}
+              </span>
+            </div>
+          </td>
           <td>
             <div style="font-weight:600; color:var(--ink);">${escapeHtml(c.claimant_name || 'Claimant')}</div>
             <div style="font-size:0.75rem; color:var(--muted);">${escapeHtml(c.claimant_email || '')} • ${escapeHtml(c.claimant_phone || '')}</div>
           </td>
           <td>
             <div style="font-size:0.85rem; color:var(--ink-secondary); max-width:280px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${escapeHtml(c.proof_description || '')}">
-              ${escapeHtml(c.proof_description || 'Proof of ownership documents submitted')}
+              ${escapeHtml(c.proof_description || 'Proof of ownership submitted')}
             </div>
             ${c.proof_image_path ? `
-              <a href="../../${escapeHtml(c.proof_image_path)}" target="_blank" style="font-size:0.75rem; color:var(--accent); text-decoration:none;">
-                <i class="fa-solid fa-paperclip"></i> View Proof Attachment
+              <a href="../../${escapeHtml(c.proof_image_path)}" target="_blank" style="font-size:0.75rem; color:var(--accent); text-decoration:none; display:inline-flex; align-items:center; gap:4px; margin-top:2px;">
+                <i class="fa-solid fa-paperclip"></i> View Proof Photo
               </a>
             ` : ''}
           </td>
           <td>
-            <span class="status-pill ${c.status === 'approved' || c.status === 'handed_off' ? 'active' : (c.status === 'rejected' ? 'blocked' : 'pending')}">
-              ${escapeHtml(c.status || 'pending_verification')}
+            <span class="status-pill ${isCompleted ? 'active' : (c.status === 'rejected' ? 'blocked' : 'pending')}">
+              ${escapeHtml(c.status || 'in_progress')}
             </span>
           </td>
           <td>${c.created_at ? c.created_at.substring(0, 10) : 'N/A'}</td>
           <td>
             <div class="action-btn-group">
-              <button class="btn-action-icon success" title="Approve Claim" onclick="updateClaimStatus(${c.id}, 'approved')">
-                <i class="fa-solid fa-check"></i>
-              </button>
-              <button class="btn-action-icon" title="Mark Handed Off to Student" onclick="updateClaimStatus(${c.id}, 'handed_off')">
-                <i class="fa-solid fa-handshake"></i>
-              </button>
-              <button class="btn-action-icon danger" title="Reject Claim" onclick="updateClaimStatus(${c.id}, 'rejected')">
-                <i class="fa-solid fa-ban"></i>
-              </button>
+              ${isDeskReturn && !isCompleted ? `
+                <button class="btn-action-icon success" style="width: auto; padding: 4px 10px; font-size: 0.75rem; gap: 4px; display: inline-flex; align-items: center;" title="Verify Owner Code & Complete Handover" onclick="verifyDeskOtp(${c.match_id || c.id})">
+                  <i class="fa-solid fa-key"></i> Verify OTP
+                </button>
+              ` : ''}
+              ${!isCompleted ? `
+                <button class="btn-action-icon danger" title="Reject / Cancel Claim" onclick="updateClaimStatus(${c.id}, 'rejected')">
+                  <i class="fa-solid fa-ban"></i>
+                </button>
+              ` : `
+                <span style="font-size: 0.78rem; color: var(--success); font-weight: 600;">✓ Reunited</span>
+              `}
             </div>
           </td>
         </tr>
-      `).join('');
+      `;
+      }).join('');
     } else {
       tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding:30px; color:var(--muted);">No recovery claim cases registered.</td></tr>`;
     }
   } catch (err) {
     tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding:30px; color:var(--danger);">Error loading claims.</td></tr>`;
+  }
+}
+
+async function verifyDeskOtp(matchId) {
+  const code = prompt('Enter the 6-digit verification code presented by the owner at the desk:');
+  if (!code) return;
+  const cleanCode = code.trim();
+  if (!/^\d{6}$/.test(cleanCode)) {
+    alert('Code must be exactly 6 numeric digits.');
+    return;
+  }
+
+  try {
+    const res = await fetch(`../../Frontend/api/verify_otp.php`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: 'match_id=' + encodeURIComponent(matchId) + '&otp=' + encodeURIComponent(cleanCode)
+    });
+    const data = await res.json();
+    if (res.ok && data.success) {
+      showToast('🎉 Handover verified successfully! Item marked Reunited.', 'success');
+      loadClaims();
+      loadStats();
+    } else {
+      showToast(data.message || 'OTP verification failed.', 'error');
+    }
+  } catch (err) {
+    showToast('Network error verifying code.', 'error');
+  }
+}
+
+async function loadBannedClaimants() {
+  const tbody = document.getElementById('bannedClaimantsTableBody');
+  if (!tbody) return;
+
+  try {
+    const res = await fetch(`${API_ENDPOINT}?action=get_banned_claimants`);
+    const json = await res.json();
+    const banned = json.banned_claimants || [];
+
+    if (json.success && Array.isArray(banned)) {
+      if (banned.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding:18px; color:var(--muted);">No students are currently banned from submitting claims.</td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = banned.map(b => {
+        const remainingHrs = Math.max(1, Math.ceil((b.seconds_remaining || 0) / 3600));
+        return `
+          <tr>
+            <td><strong>#${b.id}</strong></td>
+            <td><div style="font-weight:600; color:var(--ink);">${escapeHtml(b.name || 'Student')}</div></td>
+            <td><code>${escapeHtml(b.pin || 'N/A')}</code></td>
+            <td><div style="font-size:0.8rem; color:var(--muted);">${escapeHtml(b.email || 'N/A')}</div></td>
+            <td>${escapeHtml(b.ban_until || '')}</td>
+            <td><span class="status-pill blocked" style="font-size:0.75rem;">~${remainingHrs} hr(s) left</span></td>
+            <td>
+              <button class="btn-action-icon success" style="width: auto; padding: 4px 10px; font-size: 0.75rem; gap: 4px; display: inline-flex; align-items: center;" title="Lift claim ban immediately" onclick="liftClaimBan(${b.id})">
+                <i class="fa-solid fa-unlock"></i> Lift Ban
+              </button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+  } catch (err) {
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding:18px; color:var(--danger);">Error loading banned claimants.</td></tr>`;
+  }
+}
+
+async function liftClaimBan(userId) {
+  if (!confirm(`Are you sure you want to lift the claim ban for student #${userId}?`)) return;
+
+  try {
+    const res = await fetch(`${API_ENDPOINT}?action=lift_claim_ban`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: 'user_id=' + encodeURIComponent(userId)
+    });
+    const json = await res.json();
+    if (json.success) {
+      showToast(json.message || `Claim ban lifted for user #${userId}.`, 'success');
+      loadBannedClaimants();
+    } else {
+      showToast(json.error || 'Failed to lift claim ban.', 'error');
+    }
+  } catch (err) {
+    showToast('Network error lifting claim ban.', 'error');
   }
 }
 

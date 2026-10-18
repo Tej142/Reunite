@@ -474,27 +474,26 @@ if ($logged_in && !empty($currentUserId) && $matchedOppositeItem && $isFound) {
     }
 }
 
+$activeMatchStatus = strtolower($activeMatchRow['status'] ?? '');
+
 // 2. Did the current user already file a claim on this item?
 $userHasPendingClaim = false;
-if ($logged_in && !empty($currentUserId) && $existingClaim) {
-    if ((int)($existingClaim['claimant_id'] ?? 0) === (int)$currentUserId && in_array($existingClaim['status'], ['pending_verification', 'approved'])) {
+if ($logged_in && !empty($currentUserId)) {
+    if ($isMatchedLostOwner && in_array($activeMatchStatus, ['pending_founder_approval', 'ready_for_handover'])) {
+        $userHasPendingClaim = true;
+    } elseif ($existingClaim && (int)($existingClaim['claimant_id'] ?? 0) === (int)$currentUserId && in_array($existingClaim['status'], ['pending_founder_approval', 'in_progress', 'ready_for_handover', 'approved'])) {
         $userHasPendingClaim = true;
     }
 }
 
 // 3. If finder is viewing and there's a pending claim to review:
-$hasClaimToReview = ($isOwnItem && $existingClaim && $existingClaim['status'] === 'pending_verification');
+$hasClaimToReview = ($isOwnItem && ($activeMatchStatus === 'pending_founder_approval' || ($existingClaim && in_array($existingClaim['status'], ['pending_founder_approval', 'pending_verification']))));
 
-// 4. Verification Questions & Handover Status
+// 4. Verification & Handover Status
 $itemCategory = $item['category'] ?? 'General';
 $categoryQuestions = function_exists('getCategoryVerificationQuestions') ? getCategoryVerificationQuestions($itemCategory) : [];
 
-$isHandoverReady = false;
-if ($existingClaim && in_array($existingClaim['status'], ['approved', 'handed_off'])) {
-    $isHandoverReady = true;
-} elseif ($hasAiMatch && in_array(strtolower($activeMatchRow['status'] ?? ''), ['approved', 'verified', 'handed_off'])) {
-    $isHandoverReady = true;
-}
+$isHandoverReady = ($activeMatchStatus === 'ready_for_handover' || ($existingClaim && in_array($existingClaim['status'], ['in_progress', 'ready_for_handover', 'approved'])));
 
 $badgeClass = 'badge-found';
 $badgeLabel = 'Found Item';
@@ -725,10 +724,34 @@ if (empty($similarItems)) {
               <button type="button" class="btn-claim-primary secondary" disabled>
                 <span>Report Reunited / Closed</span>
               </button>
+            <?php elseif ($hasClaimToReview): ?>
+              <?php 
+                $pendingProofText = addslashes($activeMatchRow['claim_details'] ?? ($activeMatchRow['owner_proof'] ?? ($existingClaim['proof_details'] ?? '')));
+                $pendingProofImg = addslashes($activeMatchRow['proof_image'] ?? '');
+              ?>
+              <button type="button" class="btn-claim-primary" onclick="openFounderApprovalModal(<?php echo $currentMatchId ?: 1; ?>, '<?php echo $pendingProofText; ?>', '<?php echo $pendingProofImg; ?>')">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+                <span>Review Ownership Proof &rarr;</span>
+              </button>
+            <?php elseif ($isHandoverReady && $isMatchedLostOwner && $currentMatchId): ?>
+              <button type="button" class="btn-claim-primary" onclick="openOwnerHandoverModal(<?php echo $currentMatchId; ?>)">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                <span>🤝 Get Live Handover OTP</span>
+              </button>
+            <?php elseif ($isHandoverReady && $isOwnItem && $currentMatchId): ?>
+              <button type="button" class="btn-claim-primary" onclick="openFinderVerifyModal(<?php echo $currentMatchId; ?>)">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                <span>🤝 Verify Owner OTP</span>
+              </button>
             <?php elseif ($isOwnItem): ?>
               <button type="button" class="btn-claim-primary disabled-own-item" disabled aria-disabled="true" title="You uploaded this report">
                 <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
                 <span>Uploaded by you</span>
+              </button>
+            <?php elseif ($userHasPendingClaim): ?>
+              <button type="button" class="btn-claim-primary secondary" disabled aria-disabled="true">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 14 14"/></svg>
+                <span>Proof Submitted (Under Review)</span>
               </button>
             <?php elseif ($isMatchedLostOwner && $currentMatchId): ?>
               <button type="button" class="btn-claim-primary" onclick="if(typeof openMatchModal==='function'){openMatchModal(<?php echo htmlspecialchars(json_encode(['match_id'=>$currentMatchId, 'category'=>$itemCategory, 'report_id'=>$formattedId, 'metadata'=>['title'=>$smartTitle, 'location'=>$itemLocation, 'date_reported'=>$itemDateFormatted, 'image_url'=>$itemImagePrimary]])); ?>);}">
@@ -989,10 +1012,30 @@ if (empty($similarItems)) {
 <!-- ── Mobile Sticky Bottom Bar ── -->
 <?php if ($item): ?>
   <div class="mobile-sticky-action-bar" aria-label="Mobile actions">
-    <?php if ($isOwnItem): ?>
+    <?php if ($isReunited): ?>
+      <button type="button" class="btn-claim-primary secondary" disabled style="flex: 1;">
+        <span>Reunited / Closed</span>
+      </button>
+    <?php elseif ($hasClaimToReview): ?>
+      <button type="button" class="btn-claim-primary" onclick="openFounderApprovalModal(<?php echo $currentMatchId ?: 1; ?>, '<?php echo $pendingProofText ?? ''; ?>', '<?php echo $pendingProofImg ?? ''; ?>')" style="flex: 1;">
+        <span>Review Proof &rarr;</span>
+      </button>
+    <?php elseif ($isHandoverReady && $isMatchedLostOwner && $currentMatchId): ?>
+      <button type="button" class="btn-claim-primary" onclick="openOwnerHandoverModal(<?php echo $currentMatchId; ?>)" style="flex: 1;">
+        <span>🤝 Get Live OTP</span>
+      </button>
+    <?php elseif ($isHandoverReady && $isOwnItem && $currentMatchId): ?>
+      <button type="button" class="btn-claim-primary" onclick="openFinderVerifyModal(<?php echo $currentMatchId; ?>)" style="flex: 1;">
+        <span>🤝 Verify OTP</span>
+      </button>
+    <?php elseif ($isOwnItem): ?>
       <button type="button" class="btn-claim-primary disabled-own-item" disabled aria-disabled="true" style="flex: 1;">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
         <span>Uploaded by you</span>
+      </button>
+    <?php elseif ($userHasPendingClaim): ?>
+      <button type="button" class="btn-claim-primary secondary" disabled aria-disabled="true" style="flex: 1;">
+        <span>Under Review</span>
       </button>
     <?php elseif ($isMatchedLostOwner && $currentMatchId): ?>
       <button type="button" class="btn-claim-primary" onclick="if(typeof openMatchModal==='function'){openMatchModal(<?php echo htmlspecialchars(json_encode(['match_id'=>$currentMatchId, 'category'=>$itemCategory, 'report_id'=>$formattedId, 'metadata'=>['title'=>$smartTitle, 'location'=>$itemLocation, 'date_reported'=>$itemDateFormatted, 'image_url'=>$itemImagePrimary]])); ?>);}" style="flex: 1;">
