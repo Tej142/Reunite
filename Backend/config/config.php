@@ -89,6 +89,9 @@ define('FLASK_AI_URL', get_config_val('FLASK_AI_URL', get_config_val('FLASK_BACK
 define('BASE_PATH', dirname(__DIR__));
 define('FRONTEND_URL', '../Frontend');
 
+// Claim & Handover Lifecycle Module Mode: 'off' | 'testers' | 'on' (Default: 'off' during removal/upgrade)
+define('CLAIM_MODULE_MODE', get_config_val('CLAIM_MODULE_MODE', 'off'));
+
 // Establish MySQLi Database Connection
 $conn = null;
 $db_connection_error = '';

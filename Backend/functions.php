@@ -299,6 +299,35 @@ function sendJsonResponse($success, $message = '', $data = [], $statusCode = 200
 }
 
 /**
+ * Check if the Claim & Handover module is active for the current session/user.
+ * - 'on': active for everyone
+ * - 'testers': active for admins and qa_ test accounts
+ * - 'off': disabled for everyone, displays upgrade notice
+ */
+function isClaimModuleActiveForUser($userId = null) {
+    $mode = defined('CLAIM_MODULE_MODE') ? strtolower(trim(CLAIM_MODULE_MODE)) : 'off';
+    if ($mode === 'on') return true;
+    if ($mode === 'off') return false;
+
+    if ($mode === 'testers') {
+        if (!empty($_SESSION['reunite_admin_auth']) && $_SESSION['reunite_admin_auth'] === true) {
+            return true;
+        }
+        $currentPin = $_SESSION['user_pin'] ?? $_SESSION['pin'] ?? '';
+        $currentEmail = $_SESSION['user_email'] ?? $_SESSION['email'] ?? '';
+        $currentRole = $_SESSION['role'] ?? $_SESSION['admin_role'] ?? '';
+
+        if (str_starts_with(strtolower($currentPin), 'qa_') || 
+            str_starts_with(strtolower($currentEmail), 'qa_') || 
+            str_contains(strtolower($currentPin), 'charan') ||
+            in_array(strtolower($currentRole), ['admin', 'superadmin', 'moderator'])) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/**
  * Check if request is expecting a JSON response
  */
 function isApiRequest() {

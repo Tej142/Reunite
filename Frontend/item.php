@@ -725,51 +725,25 @@ if (empty($similarItems)) {
               <button type="button" class="btn-claim-primary secondary" disabled>
                 <span>Report Reunited / Closed</span>
               </button>
-            <?php elseif ($isHandoverReady && ($userHasPendingClaim || $isMatchedLostOwner)): ?>
-              <button type="button" class="btn-claim-primary" onclick="openHandoverOtpDisplayModal(<?php echo $currentMatchId ?: 1; ?>)">
-                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-                <span>🤝 View Handover Code (OTP)</span>
-              </button>
-            <?php elseif ($isHandoverReady && $isOwnItem): ?>
-              <button type="button" class="btn-claim-primary" onclick="openHandoverOtpInputModal(<?php echo $currentMatchId ?: 1; ?>)">
-                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
-                <span>🤝 Confirm Handover (Enter OTP)</span>
-              </button>
-            <?php elseif ($userHasPendingClaim): ?>
-              <button type="button" class="btn-claim-primary secondary" disabled aria-disabled="true" style="opacity: 0.9;">
-                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
-                <span>Proof Submitted (Under Review)</span>
-              </button>
-            <?php elseif ($hasClaimToReview): ?>
-              <button type="button" class="btn-claim-primary" onclick="openFounderApprovalModal(<?php echo $currentMatchId ?: 1; ?>, '<?php echo addslashes($existingClaim['proof_details'] ?? ''); ?>')">
-                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-                <span>Review Ownership Proof &rarr;</span>
-              </button>
-              <button type="button" class="btn-claim-primary secondary" onclick="openHandoverOtpInputModal(<?php echo $currentMatchId ?: 1; ?>)" style="font-size:0.8rem;">
-                <span>Enter OTP</span>
-              </button>
             <?php elseif ($isOwnItem): ?>
               <button type="button" class="btn-claim-primary disabled-own-item" disabled aria-disabled="true" title="You uploaded this report">
                 <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
                 <span>Uploaded by you</span>
               </button>
-            <?php elseif ($isFound && !$isReunited): ?>
-              <button type="button" class="btn-claim-primary" onclick="openClaimVerificationModal()">
+            <?php elseif ($isMatchedLostOwner && $currentMatchId): ?>
+              <button type="button" class="btn-claim-primary" onclick="if(typeof openMatchModal==='function'){openMatchModal(<?php echo htmlspecialchars(json_encode(['match_id'=>$currentMatchId, 'category'=>$itemCategory, 'report_id'=>$formattedId, 'metadata'=>['title'=>$smartTitle, 'location'=>$itemLocation, 'date_reported'=>$itemDateFormatted, 'image_url'=>$itemImagePrimary]])); ?>);}">
                 <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-                <span><?php echo $isMatchedLostOwner ? 'Claim & Verify Your Item (M1)' : 'This is mine, claim it (M1)'; ?></span>
+                <span>Review Match &amp; Submit Proof</span>
               </button>
-              <button type="button" class="btn-claim-primary secondary" onclick="openAdminOfficeModal()" title="Return or retrieve via campus lost & found office" style="font-size:0.8rem; background:rgba(255,255,255,0.06); color:var(--ink);">
-                <span>🏢 Campus Desk (M3)</span>
-              </button>
-            <?php elseif (!$isFound && !$isReunited): ?>
-              <button type="button" class="btn-claim-primary" onclick="flagItemReport('<?php echo htmlspecialchars($formattedId); ?>')">
-                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
-                <span>I found this item</span>
-              </button>
+            <?php elseif (!function_exists('isClaimModuleActiveForUser') || !isClaimModuleActiveForUser($currentUserId)): ?>
+              <div class="claim-upgrade-notice" style="display: flex; align-items: center; gap: 0.6rem; padding: 0.75rem 1.15rem; border-radius: 14px; background: rgba(255, 138, 92, 0.08); border: 1px solid rgba(255, 138, 92, 0.25); color: var(--ink); font-size: 0.85rem; font-weight: 500;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent); flex-shrink: 0;"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                <span>Claiming is being upgraded and will be back soon.</span>
+              </div>
             <?php else: ?>
-              <button type="button" class="btn-claim-primary secondary" disabled>
-                <span>Report Reunited / Closed</span>
-              </button>
+              <a href="search.php" class="btn-claim-primary secondary" style="text-decoration: none;">
+                <span>Back to Search</span>
+              </a>
             <?php endif; ?>
 
             <button type="button" class="btn-action-round" onclick="shareCurrentItem('<?php echo htmlspecialchars($formattedId); ?>', '<?php echo htmlspecialchars($smartTitle); ?>')" aria-label="Share this report" title="Share report">
@@ -1015,23 +989,14 @@ if (empty($similarItems)) {
 <!-- ── Mobile Sticky Bottom Bar ── -->
 <?php if ($item): ?>
   <div class="mobile-sticky-action-bar" aria-label="Mobile actions">
-    <?php if ($userHasPendingClaim): ?>
-      <button type="button" class="btn-claim-primary secondary" disabled aria-disabled="true" style="flex: 1; opacity: 0.9;">
-        <span>Claim Under Review</span>
-      </button>
-    <?php elseif ($hasClaimToReview): ?>
-      <button type="button" class="btn-claim-primary" onclick="openFounderApprovalModal(<?php echo $currentMatchId ?: 1; ?>, '<?php echo addslashes($existingClaim['proof_details'] ?? ''); ?>')" style="flex: 1;">
-        <span>Review Ownership Proof &rarr;</span>
-      </button>
-    <?php elseif ($isOwnItem): ?>
+    <?php if ($isOwnItem): ?>
       <button type="button" class="btn-claim-primary disabled-own-item" disabled aria-disabled="true" style="flex: 1;">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
         <span>Uploaded by you</span>
       </button>
-    <?php elseif ($isFound && !$isReunited): ?>
-      <button type="button" class="btn-claim-primary" onclick="openClaimVerificationModal()" style="flex: 1;">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-        <span><?php echo $isMatchedLostOwner ? 'Claim & Verify Your Item' : 'This is mine, claim it'; ?></span>
+    <?php elseif ($isMatchedLostOwner && $currentMatchId): ?>
+      <button type="button" class="btn-claim-primary" onclick="if(typeof openMatchModal==='function'){openMatchModal(<?php echo htmlspecialchars(json_encode(['match_id'=>$currentMatchId, 'category'=>$itemCategory, 'report_id'=>$formattedId, 'metadata'=>['title'=>$smartTitle, 'location'=>$itemLocation, 'date_reported'=>$itemDateFormatted, 'image_url'=>$itemImagePrimary]])); ?>);}" style="flex: 1;">
+        <span>Review Match &rarr;</span>
       </button>
     <?php else: ?>
       <a href="search.php" class="btn-claim-primary secondary" style="flex: 1; text-decoration: none;">
@@ -1055,65 +1020,10 @@ if (empty($similarItems)) {
   </div>
 </div>
 
-<!-- ── Claim Verification Modal Dialog ── -->
-<div id="claimVerificationModal" class="claim-modal-overlay" role="dialog" aria-modal="true" aria-hidden="true" onclick="if(event.target===this)closeClaimVerificationModal()">
-  <div class="claim-modal-dialog" id="claimModalDialog">
-    <div class="claim-modal-header">
-      <h3 class="claim-modal-title">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-        <span>Ownership Verification</span>
-      </h3>
-      <button type="button" class="claim-modal-close-btn" onclick="closeClaimVerificationModal()" aria-label="Close dialog">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-      </button>
-    </div>
-
-    <p class="claim-modal-sub">
-      To verify that you are the rightful owner of <strong>#<?php echo htmlspecialchars($formattedId); ?></strong>, please answer the questions below.
-    </p>
-
-    <form id="claimProofForm" onsubmit="handleClaimProofSubmit(event, '<?php echo htmlspecialchars($formattedId); ?>')">
-      <div class="claim-form-group" style="margin-bottom: 0.75rem;">
-        <label for="claimStudentName">Full Name / Student PIN</label>
-        <input type="text" id="claimStudentName" class="claim-text-input" value="<?php echo htmlspecialchars($current_user['name'] ?? ''); ?>" placeholder="e.g. Alex Rivera / 21CS042" required />
-      </div>
-
-      <div class="claim-form-group" style="margin-bottom: 0.75rem;">
-        <label for="claimStudentEmail">College Email Address</label>
-        <input type="email" id="claimStudentEmail" class="claim-text-input" value="<?php echo htmlspecialchars($current_user['email'] ?? ''); ?>" placeholder="e.g. student@college.edu" required />
-      </div>
-
-      <?php if (!empty($categoryQuestions)): ?>
-        <div class="category-questions-block" style="background: rgba(255, 138, 92, 0.05); border: 1px solid rgba(255, 138, 92, 0.25); border-radius: 12px; padding: 0.85rem; margin-bottom: 0.85rem;">
-          <div style="font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--accent); margin-bottom: 0.6rem;">
-            Verification Questions for <?php echo htmlspecialchars($itemCategory); ?> (M1)
-          </div>
-          <?php foreach ($categoryQuestions as $qIdx => $questionText): ?>
-            <div class="claim-form-group" style="margin-bottom: 0.65rem;">
-              <label style="font-size: 0.8rem; font-weight: 600; color: var(--ink); margin-bottom: 0.25rem; display: block;">
-                <?php echo ($qIdx + 1) . '. ' . htmlspecialchars($questionText); ?>
-              </label>
-              <input type="text" class="claim-text-input dynamic-cat-q" data-question="<?php echo htmlspecialchars($questionText); ?>" placeholder="Your specific answer..." required />
-            </div>
-          <?php endforeach; ?>
-        </div>
-      <?php endif; ?>
-
-      <div class="claim-form-group" style="margin-bottom: 1.25rem;">
-        <label for="claimSecretProof">Additional Private Proof &amp; Defining Details</label>
-        <textarea id="claimSecretProof" class="claim-text-input" rows="2" placeholder="Describe lock-screen wallpaper, unique scratches, inner pocket contents, or serial number"></textarea>
-      </div>
-
-      <button type="submit" id="btnSubmitProof" class="btn-claim-primary" style="width: 100%; justify-content: center;">
-        <span>Submit Verification Proof &rarr;</span>
-      </button>
-    </form>
-  </div>
-</div>
-
-<!-- ── Global Modals (Founder Approval & Handover OTP / Admin Drop-Off) ── -->
+<!-- ── Global Match & Handover Modals ── -->
+<?php include_once __DIR__ . '/includes/match_verification_modal.php'; ?>
 <?php include_once __DIR__ . '/includes/founder_approval_modal.php'; ?>
-<?php include_once __DIR__ . '/includes/handover_otp_modals.php'; ?>
+<?php include_once __DIR__ . '/includes/owner_handover_modal.php'; ?>
 
 <script src="js/item.js?v=<?php echo time(); ?>"></script>
 </body>
