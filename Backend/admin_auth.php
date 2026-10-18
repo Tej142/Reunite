@@ -7,7 +7,9 @@
 require_once __DIR__ . '/config/config.php';
 require_once __DIR__ . '/functions.php';
 
-init_session();
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
 $data = getRequestData();
 $isApi = isApiRequest();
 

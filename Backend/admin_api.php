@@ -54,9 +54,18 @@ if ($action === 'login') {
     // Check Master Key (Secure comparison only, no hardcoded bypass)
     if (!empty($passcode) && hash_equals(ADMIN_MASTER_KEY, $passcode)) {
         $_SESSION['reunite_admin_auth'] = true;
+        $_SESSION['admin_logged_in'] = true;
+        $_SESSION['role'] = 'admin';
         $_SESSION['reunite_admin_name'] = 'System Administrator';
         $_SESSION['reunite_admin_role'] = 'superadmin';
         
+        setcookie('reunite_admin_session', base64_encode(json_encode(['admin_id' => 1, 'username' => 'admin', 'ts' => time()])), [
+            'expires'  => time() + 3600 * 8,
+            'path'     => '/',
+            'httponly' => true,
+            'samesite' => 'Lax'
+        ]);
+
         logAccess(0, 'Admin Terminal Login (Master Key)', 'Authorization granted via Master Passcode');
         echo json_encode(['success' => true, 'message' => 'Admin clearance granted. Welcome, System Administrator.', 'role' => 'superadmin']);
         exit;

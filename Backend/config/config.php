@@ -90,7 +90,7 @@ define('BASE_PATH', dirname(__DIR__));
 define('FRONTEND_URL', '../Frontend');
 
 // Claim & Handover Lifecycle Module Mode: 'off' | 'testers' | 'on'
-define('CLAIM_MODULE_MODE', get_config_val('CLAIM_MODULE_MODE', 'testers'));
+define('CLAIM_MODULE_MODE', get_config_val('CLAIM_MODULE_MODE', 'on'));
 define('HMAC_OTP_SECRET', get_config_val('HMAC_OTP_SECRET', 'reunite_prod_otp_secret_key_8f7b3a2e1d9c0a'));
 
 // Establish MySQLi Database Connection

@@ -2,6 +2,7 @@ __pycache__/
 *.pyc
 .env
 Backend/.env
+.env.example
 test.py
 chroma_data/
 models/

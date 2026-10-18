@@ -6,6 +6,14 @@
 
 require_once __DIR__ . '/config/config.php';
 
+if (!function_exists('init_session')) {
+    function init_session() {
+        if (session_status() === PHP_SESSION_NONE) {
+            session_start();
+        }
+    }
+}
+
 /**
  * Encrypt sensitive data using AES-256-CBC
  */
