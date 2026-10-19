@@ -323,27 +323,11 @@ function sendJsonResponse($success, $message = '', $data = [], $statusCode = 200
  * - 'off': disabled for everyone, displays upgrade notice
  */
 function isClaimModuleActiveForUser($userId = null, $modeOverride = null) {
-    $mode = $modeOverride !== null ? strtolower(trim($modeOverride)) : (defined('CLAIM_MODULE_MODE') ? strtolower(trim(CLAIM_MODULE_MODE)) : 'off');
-    if ($mode === 'on') return true;
+    $mode = $modeOverride !== null ? strtolower(trim($modeOverride)) : (defined('CLAIM_MODULE_MODE') ? strtolower(trim(CLAIM_MODULE_MODE)) : 'on');
+    // If explicitly disabled
     if ($mode === 'off') return false;
-
-    if ($mode === 'testers') {
-        if (!empty($_SESSION['reunite_admin_auth']) && $_SESSION['reunite_admin_auth'] === true) {
-            return true;
-        }
-        $currentPin = $_SESSION['user_pin'] ?? $_SESSION['pin'] ?? '';
-        $currentEmail = $_SESSION['user_email'] ?? $_SESSION['email'] ?? '';
-        $currentRole = $_SESSION['role'] ?? $_SESSION['admin_role'] ?? '';
-
-        if (str_starts_with(strtolower($currentPin), 'qa_') || 
-            str_starts_with(strtolower($currentEmail), 'qa_') || 
-            str_starts_with(strtolower($currentPin), '24155') ||
-            str_contains(strtolower($currentPin), 'charan') ||
-            in_array(strtolower($currentRole), ['admin', 'superadmin', 'moderator', 'tester', 'staff'])) {
-            return true;
-        }
-    }
-    return false;
+    // Production default: fully active for all campus students and users
+    return true;
 }
 
 /**
