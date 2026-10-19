@@ -114,6 +114,11 @@ UPLOAD_FOLDER.mkdir(parents=True, exist_ok=True)
 def home():
     return "LostConnect AI Server Running"
 
+@app.route("/health", methods=["GET"])
+def health():
+    return jsonify({"status": "healthy", "service": "Reunite AI Microservice", "timestamp": time.time()})
+
+
 
 # =========================================================
 # START REPORT (Instant Choice & Talk to AI)
@@ -416,6 +421,40 @@ def talk_to_ai_chat():
                     except Exception as img_err:
                         print(f"[TalkToAI] Image analysis error notice: {img_err}")
 
+            # Handle direct audio voice recording if attached
+            audio_file = request.files.get("audio")
+            if audio_file and not user_message:
+                try:
+                    audio_bytes = audio_file.read()
+                    mime = audio_file.mimetype or "audio/webm"
+                    if "webm" in mime:
+                        mime = "audio/webm"
+                    elif "wav" in mime:
+                        mime = "audio/wav"
+                    elif "mp4" in mime or "m4a" in mime:
+                        mime = "audio/mp4"
+                    elif "ogg" in mime:
+                        mime = "audio/ogg"
+
+                    from google.genai import types
+                    from AI_Module.config import client as genai_client, GEMINI_MODEL
+                    audio_part = types.Part.from_bytes(data=audio_bytes, mime_type=mime)
+                    trans_prompt = (
+                        "Listen carefully to this voice message from a person reporting a lost or found item. "
+                        "Transcribe their exact spoken words verbatim. "
+                        "Return ONLY the plain transcript text with no extra introduction, notes, or punctuation wrappers."
+                    )
+                    trans_res = genai_client.models.generate_content(
+                        model=GEMINI_MODEL,
+                        contents=[audio_part, trans_prompt]
+                    )
+                    transcribed = (trans_res.text or "").strip()
+                    if transcribed:
+                        user_message = transcribed
+                        print(f"[TalkToAI] Transcribed audio via Gemini: '{user_message}'")
+                except Exception as audio_err:
+                    print(f"[TalkToAI] Audio transcription error notice: {audio_err}")
+
         # If user uploaded photo without text, provide helpful default text
         if not user_message and (image_urls or image_analysis):
             user_message = "I've shared a photo of the item."
@@ -423,7 +462,7 @@ def talk_to_ai_chat():
         if not user_message and not image_urls:
             return jsonify({
                 "success": False,
-                "error": "Message or photo cannot be empty."
+                "error": "Message, audio recording, or photo cannot be empty."
             }), 400
 
         result = DynamicTalkAIService.handle_turn(
@@ -434,6 +473,8 @@ def talk_to_ai_chat():
             image_analysis=image_analysis,
             image_urls=image_urls
         )
+        if user_message:
+            result["transcribed_user_message"] = user_message
 
         return jsonify(result), 200
 

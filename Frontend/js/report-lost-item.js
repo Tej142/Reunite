@@ -242,10 +242,15 @@ document.addEventListener('DOMContentLoaded', () => {
         window.setButtonLoading(submitBtn, true, 'Synthesizing Digital DNA...');
       }
 
+      const brandEl = document.getElementById('brand');
+      const colorEl = document.getElementById('color');
+
       const meta = {
         title: titleEl ? titleEl.value.trim() : '',
         where: whereEl ? whereEl.value.trim() : '',
-        when: whenEl ? whenEl.value.trim() : ''
+        when: whenEl ? whenEl.value.trim() : '',
+        brand: brandEl ? brandEl.value.trim() : '',
+        color: colorEl ? colorEl.value.trim() : ''
       };
 
       const hasImage = Boolean(imageFile);

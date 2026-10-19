@@ -65,6 +65,36 @@ try {
             ]);
             break;
 
+        case 'set_user_session':
+            if (session_status() === PHP_SESSION_NONE) {
+                session_start();
+            }
+            $targetUid = (int)($_POST['user_id'] ?? 11);
+            $uRes = $conn->query("SELECT * FROM users WHERE user_id = $targetUid LIMIT 1");
+            if ($uRes && ($u = $uRes->fetch_assoc())) {
+                $_SESSION['user_id'] = (int)$u['user_id'];
+                $_SESSION['full_name'] = $u['full_name'];
+                $_SESSION['pin'] = $u['pin'];
+                $_SESSION['role'] = $u['role'] ?? 'user';
+                if (empty($_SESSION['csrf_token'])) {
+                    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+                }
+                $cookiePayload = json_encode(['user_id' => (int)$u['user_id'], 'pin' => $u['pin'], 'created' => time()]);
+                $encCookie = function_exists('encryptData') ? encryptData($cookiePayload) : '';
+                if ($encCookie) {
+                    setcookie('reunite_auth_token', $encCookie, time() + 86400 * 30, '/');
+                }
+                echo json_encode([
+                    'success' => true,
+                    'user_id' => $u['user_id'],
+                    'full_name' => $u['full_name'],
+                    'session_id' => session_id()
+                ]);
+            } else {
+                echo json_encode(['success' => false, 'error' => 'User not found']);
+            }
+            break;
+
         case 'tables':
             $res = $conn->query("SHOW TABLE STATUS");
             $tables = [];

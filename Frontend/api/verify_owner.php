@@ -61,8 +61,32 @@ if ($banStatus['banned']) {
 
 // 5. Input Validation
 $matchId = filter_input(INPUT_POST, 'match_id', FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]])
-           ?: filter_var($_POST['match_id'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
-$proofText = trim($_POST['proof_text'] ?? '');
+           ?: filter_var($_POST['match_id'] ?? ($_REQUEST['match_id'] ?? null), FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+$proofText = trim($_POST['proof_text'] ?? ($_REQUEST['proof_text'] ?? ''));
+
+// Fallback to raw php://input if multipart/urlencoded body was parsed differently by proxy
+if (empty($proofText) || !$matchId) {
+    $rawInput = file_get_contents('php://input');
+    if (!empty($rawInput)) {
+        $json = json_decode($rawInput, true);
+        if (is_array($json)) {
+            if (empty($proofText) && isset($json['proof_text'])) {
+                $proofText = trim((string)$json['proof_text']);
+            }
+            if (!$matchId && isset($json['match_id'])) {
+                $matchId = filter_var($json['match_id'], FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+            }
+        } else {
+            parse_str($rawInput, $parsedPost);
+            if (empty($proofText) && isset($parsedPost['proof_text'])) {
+                $proofText = trim((string)$parsedPost['proof_text']);
+            }
+            if (!$matchId && isset($parsedPost['match_id'])) {
+                $matchId = filter_var($parsedPost['match_id'], FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+            }
+        }
+    }
+}
 
 if (!$matchId) {
     http_response_code(400);
@@ -73,7 +97,7 @@ if (!$matchId) {
 $proofLength = mb_strlen($proofText, 'UTF-8');
 if ($proofLength < 20 || $proofLength > 1000) {
     http_response_code(400);
-    echo json_encode(['success' => false, 'code' => 'INVALID_LENGTH', 'message' => 'Ownership proof must be between 20 and 1000 characters.']);
+    echo json_encode(['success' => false, 'code' => 'INVALID_LENGTH', 'message' => 'Ownership proof must be between 20 and 1000 characters. Received ' . $proofLength . ' characters.']);
     exit;
 }
 

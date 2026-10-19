@@ -22,13 +22,13 @@ $is_profile = ($current_page === 'profile.php');
     if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
       window.requestIdleCallback(function() {
         try {
-          fetch(window.FLASK_BACKEND_URL + '/health', { mode: 'no-cors', cache: 'no-store' }).catch(function(){});
+          fetch(window.FLASK_BACKEND_URL + '/', { mode: 'no-cors', cache: 'no-store' }).catch(function(){});
         } catch(e) {}
       }, { timeout: 3500 });
     } else {
       setTimeout(function() {
         try {
-          fetch(window.FLASK_BACKEND_URL + '/health', { mode: 'no-cors', cache: 'no-store' }).catch(function(){});
+          fetch(window.FLASK_BACKEND_URL + '/', { mode: 'no-cors', cache: 'no-store' }).catch(function(){});
         } catch(e) {}
       }, 2500);
     }
@@ -192,7 +192,9 @@ if ($logged_in && isset($conn) && $conn) {
                     } elseif (stripos($notif['title'] ?? '', 'found') !== false) {
                         $iconSvg = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>';
                     }
-                    $timeStr = !empty($notif['created_at']) ? date('M d, H:i', strtotime($notif['created_at'])) : 'Recently';
+                    $timeStr = !empty($notif['created_at']) && function_exists('formatRelativeTime')
+                        ? formatRelativeTime($notif['created_at'])
+                        : (!empty($notif['created_at']) ? date('M d, H:i', strtotime($notif['created_at'])) : 'Recently');
 
                     // Smart link resolution
                     $linkUrl = !empty($notif['link']) ? $notif['link'] : '';
@@ -455,3 +457,13 @@ if ($logged_in && isset($conn) && $conn) {
 
 <!-- ── Reusable Orbi Mascot Template for JavaScript dynamic cloning ── -->
 <template id="orbi-template"><?php echo orbi('idle', 120); ?></template>
+
+<?php if ($logged_in && !$is_auth_page): ?>
+<!-- ── Global Claim & Handover Lifecycle Assets ── -->
+<link rel="stylesheet" href="css/claim.css?v=<?php echo time(); ?>">
+<?php 
+include_once __DIR__ . '/../includes/match_verification_modal.php';
+include_once __DIR__ . '/../includes/founder_approval_modal.php';
+include_once __DIR__ . '/../includes/owner_handover_modal.php';
+?>
+<?php endif; ?>

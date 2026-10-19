@@ -24,11 +24,12 @@ if (!function_exists('format_time_ago')) {
         $time = strtotime($timestamp_str);
         if (!$time) return 'Recently';
         $diff = time() - $time;
-        if ($diff < 45) return 'Just now';
-        if ($diff < 3600) return floor($diff / 60) . 'm ago';
+        if ($diff < 60) return 'Just now';
+        if ($diff < 3600) return max(1, floor($diff / 60)) . 'm ago';
         if ($diff < 86400) return floor($diff / 3600) . 'h ago';
         if ($diff < 172800) return 'Yesterday';
-        return floor($diff / 86400) . 'd ago';
+        if ($diff < 604800) return floor($diff / 86400) . 'd ago';
+        return date('M d', $time);
     }
 }
 
@@ -106,9 +107,10 @@ if ($action === 'create') {
                 exit;
             }
         } else {
-            $stmt = $conn->prepare("INSERT INTO notifications (user_id, report_type, report_id, type, message, is_read, created_at) VALUES (?, ?, ?, ?, ?, 0, NOW())");
+            $nowStr = date('Y-m-d H:i:s');
+            $stmt = $conn->prepare("INSERT INTO notifications (user_id, report_type, report_id, type, message, is_read, created_at) VALUES (?, ?, ?, ?, ?, 0, ?)");
             if ($stmt) {
-                $stmt->bind_param("isiss", $targetUserId, $reportType, $reportId, $type, $message);
+                $stmt->bind_param("isisss", $targetUserId, $reportType, $reportId, $type, $message, $nowStr);
                 $stmt->execute();
                 $newId = $stmt->insert_id;
                 $stmt->close();

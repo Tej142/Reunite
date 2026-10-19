@@ -591,6 +591,23 @@
   background: #10B981;
   box-shadow: 0 0 6px rgba(16, 185, 129, 0.65);
   flex-shrink: 0;
+  transition: all 0.3s ease;
+}
+
+.copilot-live-dot.connecting {
+  background: #F59E0B;
+  box-shadow: 0 0 8px rgba(245, 158, 11, 0.7);
+  animation: pulseDotLive 1.4s infinite ease-in-out;
+}
+
+.copilot-live-dot.ready {
+  background: #10B981;
+  box-shadow: 0 0 6px rgba(16, 185, 129, 0.65);
+}
+
+.copilot-live-dot.fallback {
+  background: #0EA5E9;
+  box-shadow: 0 0 6px rgba(14, 165, 233, 0.65);
 }
 
 .chat-header-actions {
@@ -684,6 +701,7 @@
   background: rgba(16, 185, 129, 0.1);
   color: #059669;
   border: 1px solid rgba(16, 185, 129, 0.25);
+  transition: all 0.25s ease;
 }
 
 .voice-header-badge .live-dot {
@@ -692,6 +710,39 @@
   border-radius: 50%;
   background: #059669;
   display: inline-block;
+  transition: background-color 0.25s ease;
+}
+
+.voice-header-badge.live {
+  background: rgba(16, 185, 129, 0.1);
+  color: #059669;
+  border-color: rgba(16, 185, 129, 0.3);
+}
+.voice-header-badge.live .live-dot {
+  background: #10B981;
+  box-shadow: 0 0 6px rgba(16, 185, 129, 0.6);
+}
+
+.voice-header-badge.working {
+  background: rgba(245, 158, 11, 0.12);
+  color: #B45309;
+  border-color: rgba(245, 158, 11, 0.35);
+}
+.voice-header-badge.working .live-dot {
+  background: #F59E0B;
+  box-shadow: 0 0 6px rgba(245, 158, 11, 0.7);
+  animation: pulseDotLive 0.8s infinite ease-in-out;
+}
+
+.voice-header-badge.speaking {
+  background: rgba(196, 98, 45, 0.12);
+  color: #C4622D;
+  border-color: rgba(196, 98, 45, 0.35);
+}
+.voice-header-badge.speaking .live-dot {
+  background: #C4622D;
+  box-shadow: 0 0 6px rgba(196, 98, 45, 0.7);
+  animation: pulseDotLive 1s infinite ease-in-out;
 }
 
 /* Dedicated Live Visualizer Bar (Reveals on Voice Activation) */
@@ -699,15 +750,81 @@
   display: none !important;
   align-items: center;
   justify-content: space-between;
-  padding: 0.6rem 1.35rem;
-  background: linear-gradient(90deg, rgba(239, 68, 68, 0.08) 0%, rgba(239, 68, 68, 0.02) 100%);
-  border-bottom: 1px solid rgba(239, 68, 68, 0.18);
+  gap: 0.75rem;
+  padding: 0.6rem clamp(0.75rem, 2vw, 1.35rem);
+  background: linear-gradient(90deg, rgba(16, 185, 129, 0.08) 0%, rgba(16, 185, 129, 0.02) 100%);
+  border-bottom: 1px solid rgba(16, 185, 129, 0.2);
   flex-shrink: 0;
   animation: slideDownVoiceBar 0.25s ease-out;
+  transition: background 0.3s ease, border-color 0.3s ease;
 }
 
 .voice-live-bar.active {
   display: flex !important;
+}
+
+.voice-live-bar.state-listening {
+  background: linear-gradient(90deg, rgba(16, 185, 129, 0.1) 0%, rgba(16, 185, 129, 0.02) 100%);
+  border-bottom-color: rgba(16, 185, 129, 0.25);
+}
+.voice-live-bar.state-listening .live-pulse-dot {
+  background: #10B981;
+  box-shadow: 0 0 8px rgba(16, 185, 129, 0.8);
+}
+.voice-live-bar.state-listening .voice-live-text {
+  color: #059669;
+}
+
+.voice-live-bar.state-working {
+  background: linear-gradient(90deg, rgba(245, 158, 11, 0.12) 0%, rgba(245, 158, 11, 0.02) 100%);
+  border-bottom-color: rgba(245, 158, 11, 0.3);
+}
+.voice-live-bar.state-working .live-pulse-dot {
+  background: #F59E0B;
+  box-shadow: 0 0 8px rgba(245, 158, 11, 0.8);
+}
+.voice-live-bar.state-working .voice-live-text {
+  color: #D97706;
+}
+
+.voice-live-bar.state-speaking {
+  background: linear-gradient(90deg, rgba(196, 98, 45, 0.12) 0%, rgba(196, 98, 45, 0.02) 100%);
+  border-bottom-color: rgba(196, 98, 45, 0.3);
+}
+.voice-live-bar.state-speaking .live-pulse-dot {
+  background: #C4622D;
+  box-shadow: 0 0 8px rgba(196, 98, 45, 0.8);
+}
+.voice-live-bar.state-speaking .voice-live-text {
+  color: #C4622D;
+}
+
+.btn-voice-send {
+  display: none;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.28rem 0.85rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  border-radius: 999px;
+  background: #C4622D;
+  color: #fff;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(196, 98, 45, 0.35);
+  animation: popInSend 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.btn-voice-send:hover {
+  background: #A84E20;
+  transform: translateY(-1px);
+}
+
+@keyframes popInSend {
+  from { opacity: 0; transform: scale(0.85); }
+  to { opacity: 1; transform: scale(1); }
 }
 
 @keyframes slideDownVoiceBar {
@@ -2026,17 +2143,6 @@
     transform: scale(1.4);
     opacity: 0.6;
   }
-}
-
-.voice-live-bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  padding: 0.75rem clamp(0.5rem, 2vw, 1.25rem);
-  background: rgba(255, 255, 255, 0.03);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  backdrop-filter: blur(8px);
 }
 
 .voice-visualizer-wrap {

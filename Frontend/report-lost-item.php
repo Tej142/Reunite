@@ -126,6 +126,17 @@
 
       <div class="row-2">
         <div class="field">
+          <label for="brand">Brand / Manufacturer <span class="opt">— or "I don't know"</span></label>
+          <input type="text" id="brand" placeholder="e.g. Dell, Apple, Lenovo, or I don't know" />
+        </div>
+        <div class="field">
+          <label for="color">Primary Color <span class="opt">— or "I don't know"</span></label>
+          <input type="text" id="color" placeholder="e.g. Dark Grey, Silver, Black, or I don't know" />
+        </div>
+      </div>
+
+      <div class="row-2">
+        <div class="field">
           <label for="where">Where you lost it</label>
           <input type="text" id="where" placeholder="e.g. Washington Square Park" required />
         </div>
@@ -206,10 +217,23 @@
 
       <!-- Step 2: Key Attributes -->
       <div class="wizard-step-content" data-step="2" style="display: none;">
-        <div class="wizard-step-title">Step 2: Key visual traits</div>
-        <div class="wizard-step-sub">Select color and condition to help AI match finder photos.</div>
+        <div class="wizard-step-title">Step 2: Key visual traits &amp; identification</div>
+        <div class="wizard-step-sub">Select brand, color, and condition to help AI match finder photos accurately.</div>
 
-        <label>Primary Color</label>
+        <label>Brand / Manufacturer</label>
+        <div class="pills-group" data-group="brand">
+          <span class="choice-pill">Dell</span>
+          <span class="choice-pill">Lenovo</span>
+          <span class="choice-pill">HP</span>
+          <span class="choice-pill">Apple</span>
+          <span class="choice-pill">Samsung</span>
+          <span class="choice-pill">Asus</span>
+          <span class="choice-pill">Acer</span>
+          <span class="choice-pill">Other</span>
+          <span class="choice-pill" data-value="unknown">I don't know / Not sure</span>
+        </div>
+
+        <label style="margin-top: 1.5rem;">Primary Color</label>
         <div class="pills-group" data-group="color">
           <span class="choice-pill">Black</span>
           <span class="choice-pill">Brown</span>
@@ -219,6 +243,8 @@
           <span class="choice-pill">White / Beige</span>
           <span class="choice-pill">Gold / Yellow</span>
           <span class="choice-pill">Green</span>
+          <span class="choice-pill">Multi-Color / Pattern</span>
+          <span class="choice-pill" data-value="unknown">I don't know / Not sure</span>
         </div>
 
         <label style="margin-top: 1.5rem;">Physical Condition</label>
@@ -227,6 +253,7 @@
           <span class="choice-pill">Slight Scuffs</span>
           <span class="choice-pill">Worn / Used</span>
           <span class="choice-pill">Damaged / Cracked</span>
+          <span class="choice-pill" data-value="unknown">Not sure</span>
         </div>
       </div>
 
@@ -268,7 +295,7 @@
             <div class="chat-avatar"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg></div>
             <div>
               <div class="chat-name">Reunite AI Voice &amp; Chat Copilot</div>
-              <div class="chat-sub" id="talkAiSubStatus"><span class="copilot-live-dot"></span> Powered by Google Gemini Live Voice</div>
+              <div class="chat-sub" id="talkAiSubStatus"><span class="copilot-live-dot ready"></span> Powered by Google Gemini Live Voice</div>
             </div>
           </div>
           <div class="chat-header-actions">
@@ -291,11 +318,14 @@
         <div class="voice-live-bar" id="voiceLiveBar" style="display:none;">
           <div class="voice-live-indicator">
             <span class="live-pulse-dot"></span>
-            <span class="voice-live-text">Voice Active &bull; Speak Naturally</span>
+            <span class="voice-live-text" id="voiceLiveText">Voice Active &bull; Speak Naturally</span>
           </div>
           <div class="voice-visualizer-wrap">
             <canvas id="voiceVisualizer" width="180" height="24"></canvas>
           </div>
+          <button type="button" class="btn-voice-send" id="btnVoiceSend" title="Send spoken words immediately" style="display:none;">
+            Send &#10148;
+          </button>
         </div>
 
         <!-- Chat Drag-and-Drop Overlay -->

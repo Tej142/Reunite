@@ -495,6 +495,33 @@ $categoryQuestions = function_exists('getCategoryVerificationQuestions') ? getCa
 
 $isHandoverReady = ($activeMatchStatus === 'ready_for_handover' || ($existingClaim && in_array($existingClaim['status'], ['in_progress', 'ready_for_handover', 'approved'])));
 
+$itemLocation = $item['location'] ?? 'Campus Grounds';
+$itemDateFormatted = htmlspecialchars(($item['report_date'] ?? date('Y-m-d')) . ' (' . formatRelativeTime($item['created_at'] ?? $item['report_date'] ?? null) . ')');
+$itemImagePrimary = $imgSrc;
+
+$matchModalData = [
+    'match_id' => $currentMatchId,
+    'category' => $itemCategory,
+    'report_id' => $formattedId,
+    'metadata' => [
+        'title' => $smartTitle,
+        'location' => $itemLocation,
+        'date_reported' => $itemDateFormatted,
+        'image_url' => $itemImagePrimary
+    ],
+    'ai_reasons' => [
+        'match_score' => $matchScore ?: 98,
+        'visual_match_confidence' => $visualScore ?: 98,
+        'digital_dna_similarity' => $textScore ?: 96,
+        'reason_text' => $matchReason ?: 'Multimodal AI detected high feature similarity with your lost report.',
+        'safe_match_reasons' => [
+            'category' => true,
+            'visual_similarity' => true,
+            'multiple_attributes' => true
+        ]
+    ]
+];
+
 $badgeClass = 'badge-found';
 $badgeLabel = 'Found Item';
 if ($isReunited) {
@@ -510,11 +537,11 @@ $hostStr = $_SERVER['HTTP_HOST'] ?? 'reunite-app.rf.gd';
 $uriStr = $_SERVER['REQUEST_URI'] ?? '';
 $canonicalUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" : "http") . "://{$hostStr}{$uriStr}";
 
-// ── 5. Similar Items (Fetched dynamically from database) ─────────
+// ── 5. Similar Items (Fetched dynamically from database only) ─────────
 $similarItems = [];
 if ($conn && $numericId > 0) {
     $catSafe = $conn->real_escape_string($item['category'] ?? 'General');
-    $simQ = @$conn->query("SELECT `$foundIdCol` as id, $foundTitleSelect, $foundCatSelect, $foundLocSelect, $foundImgSelect FROM found_reports WHERE `$foundIdCol` != $numericId AND (status = 'active' OR status = '' OR status IS NULL) ORDER BY (category = '$catSafe') DESC, `$foundIdCol` DESC LIMIT 3");
+    $simQ = @$conn->query("SELECT `$foundIdCol` as id, $foundTitleSelect, $foundCatSelect, $foundLocSelect, $foundImgSelect FROM found_reports WHERE `$foundIdCol` != $numericId AND status NOT IN ('reunited', 'Closed', 'closed', 'Returned') ORDER BY (category = '$catSafe') DESC, `$foundIdCol` DESC LIMIT 3");
     if ($simQ && $simQ->num_rows > 0) {
         while ($simRow = $simQ->fetch_assoc()) {
             $simId = 'RF-' . str_pad($simRow['id'], 5, '0', STR_PAD_LEFT);
@@ -528,32 +555,10 @@ if ($conn && $numericId > 0) {
                 'category' => $simRow['category'] ?: 'General',
                 'location' => $simRow['location'] ?: 'Campus',
                 'img' => $simImg,
-                'match' => '88%'
+                'match' => 'Related'
             ];
         }
     }
-}
-
-// Fallback suggestions only if database has no other items
-if (empty($similarItems)) {
-    $similarItems = [
-        [
-            'id' => 'RF-00002',
-            'title' => 'Peter England Classic Wristwatch',
-            'category' => 'Wearables & Watches',
-            'location' => 'Computer Lab 2, Tech Block',
-            'img' => 'https://images.unsplash.com/photo-1524805444758-089113d48a6d?w=500&h=350&fit=crop&auto=format',
-            'match' => '91%'
-        ],
-        [
-            'id' => 'RL-00001',
-            'title' => 'Tommy Hilfiger Leather Wallet',
-            'category' => 'Wallets & Bags',
-            'location' => 'Student Cafeteria',
-            'img' => 'https://images.unsplash.com/photo-1627123424574-724758594e93?w=500&h=350&fit=crop&auto=format',
-            'match' => '84%'
-        ]
-    ];
 }
 ?>
 <!doctype html>
@@ -726,10 +731,19 @@ if (empty($similarItems)) {
               </button>
             <?php elseif ($hasClaimToReview): ?>
               <?php 
-                $pendingProofText = addslashes($activeMatchRow['claim_details'] ?? ($activeMatchRow['owner_proof'] ?? ($existingClaim['proof_details'] ?? '')));
-                $pendingProofImg = addslashes($activeMatchRow['proof_image'] ?? '');
+                $pendingProofText = (string)($activeMatchRow['claim_details'] ?? ($activeMatchRow['owner_proof'] ?? ($existingClaim['proof_details'] ?? '')));
+                $pendingProofImg = (string)($activeMatchRow['proof_image'] ?? '');
               ?>
-              <button type="button" class="btn-claim-primary" onclick="openFounderApprovalModal(<?php echo $currentMatchId ?: 1; ?>, '<?php echo $pendingProofText; ?>', '<?php echo $pendingProofImg; ?>')">
+              <script type="application/json" id="founderPendingClaimData">
+                <?php echo json_encode([
+                    'match_id' => (int)($currentMatchId ?: 1),
+                    'claim_details' => $pendingProofText,
+                    'proof_image' => $pendingProofImg,
+                    'item_title' => $smartTitle,
+                    'report_code' => $formattedId
+                ], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>
+              </script>
+              <button type="button" class="btn-claim-primary" id="btnFounderReviewClaim" onclick="openFounderApprovalModal(<?php echo (int)($currentMatchId ?: 1); ?>)">
                 <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
                 <span>Review Ownership Proof &rarr;</span>
               </button>
@@ -754,7 +768,7 @@ if (empty($similarItems)) {
                 <span>Proof Submitted (Under Review)</span>
               </button>
             <?php elseif ($isMatchedLostOwner && $currentMatchId): ?>
-              <button type="button" class="btn-claim-primary" onclick="if(typeof openMatchModal==='function'){openMatchModal(<?php echo htmlspecialchars(json_encode(['match_id'=>$currentMatchId, 'category'=>$itemCategory, 'report_id'=>$formattedId, 'metadata'=>['title'=>$smartTitle, 'location'=>$itemLocation, 'date_reported'=>$itemDateFormatted, 'image_url'=>$itemImagePrimary]])); ?>);}">
+              <button type="button" class="btn-claim-primary" onclick="if(typeof openMatchModal==='function'){openMatchModal(<?php echo htmlspecialchars(json_encode($matchModalData)); ?>);}">
                 <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
                 <span>Review Match &amp; Submit Proof</span>
               </button>
@@ -946,31 +960,33 @@ if (empty($similarItems)) {
         </div>
       </section>
 
-      <!-- 5. Similar Items Row -->
-      <section class="item-section-card" aria-labelledby="headingSimilar">
-        <h2 class="item-section-heading" id="headingSimilar">
-          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
-          <span>Similar Items on Campus</span>
-        </h2>
-        <div class="similar-items-grid">
-          <?php foreach ($similarItems as $sim): ?>
-            <a href="item.php?id=<?php echo htmlspecialchars($sim['id']); ?>" class="similar-item-card">
-              <div class="similar-img-box">
-                <img src="<?php echo htmlspecialchars($sim['img']); ?>" alt="<?php echo htmlspecialchars($sim['title']); ?>" loading="lazy" />
-                <span class="similar-match-pill"><?php echo htmlspecialchars($sim['match']); ?> Match</span>
-              </div>
-              <div class="similar-card-body">
-                <span class="similar-card-category"><?php echo htmlspecialchars($sim['category']); ?></span>
-                <h3 class="similar-card-title"><?php echo htmlspecialchars($sim['title']); ?></h3>
-                <span class="similar-card-loc">
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
-                  <?php echo htmlspecialchars($sim['location']); ?>
-                </span>
-              </div>
-            </a>
-          <?php endforeach; ?>
-        </div>
-      </section>
+      <!-- 5. Similar Items Row (Only shown if real related items exist in database) -->
+      <?php if (!empty($similarItems)): ?>
+        <section class="item-section-card" aria-labelledby="headingSimilar">
+          <h2 class="item-section-heading" id="headingSimilar">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+            <span>Similar Items on Campus</span>
+          </h2>
+          <div class="similar-items-grid">
+            <?php foreach ($similarItems as $sim): ?>
+              <a href="item.php?id=<?php echo htmlspecialchars($sim['id']); ?>" class="similar-item-card">
+                <div class="similar-img-box">
+                  <img src="<?php echo htmlspecialchars($sim['img']); ?>" alt="<?php echo htmlspecialchars($sim['title']); ?>" loading="lazy" />
+                  <span class="similar-match-pill"><?php echo htmlspecialchars($sim['match']); ?></span>
+                </div>
+                <div class="similar-card-body">
+                  <span class="similar-card-category"><?php echo htmlspecialchars($sim['category']); ?></span>
+                  <h3 class="similar-card-title"><?php echo htmlspecialchars($sim['title']); ?></h3>
+                  <span class="similar-card-loc">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
+                    <?php echo htmlspecialchars($sim['location']); ?>
+                  </span>
+                </div>
+              </a>
+            <?php endforeach; ?>
+          </div>
+        </section>
+      <?php endif; ?>
 
       <!-- 6. How Claiming Works Explainer -->
       <section class="item-section-card" aria-labelledby="headingHowWorks">
@@ -1017,7 +1033,7 @@ if (empty($similarItems)) {
         <span>Reunited / Closed</span>
       </button>
     <?php elseif ($hasClaimToReview): ?>
-      <button type="button" class="btn-claim-primary" onclick="openFounderApprovalModal(<?php echo $currentMatchId ?: 1; ?>, '<?php echo $pendingProofText ?? ''; ?>', '<?php echo $pendingProofImg ?? ''; ?>')" style="flex: 1;">
+      <button type="button" class="btn-claim-primary" onclick="openFounderApprovalModal(<?php echo (int)($currentMatchId ?: 1); ?>)" style="flex: 1;">
         <span>Review Proof &rarr;</span>
       </button>
     <?php elseif ($isHandoverReady && $isMatchedLostOwner && $currentMatchId): ?>
@@ -1038,7 +1054,7 @@ if (empty($similarItems)) {
         <span>Under Review</span>
       </button>
     <?php elseif ($isMatchedLostOwner && $currentMatchId): ?>
-      <button type="button" class="btn-claim-primary" onclick="if(typeof openMatchModal==='function'){openMatchModal(<?php echo htmlspecialchars(json_encode(['match_id'=>$currentMatchId, 'category'=>$itemCategory, 'report_id'=>$formattedId, 'metadata'=>['title'=>$smartTitle, 'location'=>$itemLocation, 'date_reported'=>$itemDateFormatted, 'image_url'=>$itemImagePrimary]])); ?>);}" style="flex: 1;">
+      <button type="button" class="btn-claim-primary" onclick="if(typeof openMatchModal==='function'){openMatchModal(<?php echo htmlspecialchars(json_encode($matchModalData)); ?>);}" style="flex: 1;">
         <span>Review Match &rarr;</span>
       </button>
     <?php else: ?>

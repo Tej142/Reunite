@@ -221,7 +221,7 @@ try {
     mysqli_stmt_close($uMatch);
 
     // B. Auto-decline competing pending claims on same found item without ban
-    $conn->query("UPDATE matches SET status = 'declined_competition' WHERE `$foundCol` = $foundId AND `$pkCol` != $matchId AND status = 'pending_founder_approval'");
+    $conn->query("UPDATE matches SET status = 'declined_competition' WHERE `$foundCol` = $foundId AND `$pkCol` != $matchId AND status IN ('pending', 'pending_founder_approval')");
 
     // C. Insert or update recovery_cases with status 'in_progress' and OTP columns NULL
     $hasMatchIdCol = in_array('match_id', $rcCols);

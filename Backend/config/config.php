@@ -106,6 +106,7 @@ try {
         $conn = null;
     } elseif ($conn) {
         $conn->set_charset("utf8mb4");
+        @$conn->query("SET time_zone = '+05:30'");
     }
 } catch (Throwable $e) {
     $db_connection_error = $e->getMessage();
@@ -120,6 +121,7 @@ if (!$conn && defined('DB_HOST') && DB_HOST !== 'localhost' && DB_HOST !== '127.
         if ($localConn && !$localConn->connect_error) {
             $conn = $localConn;
             $conn->set_charset("utf8mb4");
+            @$conn->query("SET time_zone = '+05:30'");
             $db_connection_error = '';
         }
     } catch (Throwable $ignore) {}

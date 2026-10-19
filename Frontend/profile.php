@@ -201,7 +201,7 @@ if ($userId && isset($conn) && $conn) {
     $userStats['reports_filed'] = count($userReports);
 
     // 3. Count AI matches linked to user's reports (lost or found)
-    $mStmt = $conn->prepare("SELECT COUNT(DISTINCT m.id) as match_cnt FROM matches m LEFT JOIN lost_reports lr ON m.lost_report_id = lr.lost_id LEFT JOIN found_reports fr ON m.found_report_id = fr.found_id WHERE lr.user_id = ? OR fr.finder_id = ?");
+    $mStmt = $conn->prepare("SELECT COUNT(DISTINCT m.id) as match_cnt FROM matches m LEFT JOIN lost_reports lr ON m.lost_report_id = lr.lost_id LEFT JOIN found_reports fr ON m.found_report_id = fr.found_id WHERE (lr.user_id = ? OR fr.finder_id = ?) AND (m.status != 'rejected' AND (m.confidence_tier IS NULL OR m.confidence_tier != 'DISCARD'))");
     if ($mStmt) {
         $mStmt->bind_param("ii", $userId, $userId);
         $mStmt->execute();
@@ -547,7 +547,7 @@ if ($userId && isset($conn) && $conn) {
           <div class="pref-toggle-item">
             <div>
               <div class="pref-title">Instant AI Match Notifications</div>
-              <div class="pref-desc">Receive instant alerts when a found item matches your lost report with &gt; 85% confidence.</div>
+              <div class="pref-desc">Receive instant alerts when a found item matches your lost report with &ge; 65% verified confidence (emails for &ge; 90%).</div>
             </div>
             <label class="switch">
               <input type="checkbox" checked />

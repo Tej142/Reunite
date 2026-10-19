@@ -1,0 +1,534 @@
+/**
+ * Reunite — Official Claim & Handover Lifecycle Stylesheet (v2.0)
+ * Uses standard Reunite design tokens (--surface, --accent, --border, --ink, --muted)
+ * Supports full responsive viewports (360px to 1920px) and seamless Dark Mode.
+ */
+
+/* ── Global Modal Overlay & Backdrop ──────────────────────── */
+#modalOverlay,
+.claim-modal-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 99999;
+  background: rgba(15, 12, 10, 0.72);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  padding: 1rem;
+  overflow-y: auto;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.25s ease-out;
+}
+
+#modalOverlay.flex,
+#modalOverlay[aria-hidden="false"]:not(.hidden),
+.claim-modal-overlay.active {
+  display: flex !important;
+}
+
+#modalOverlay.hidden,
+.claim-modal-overlay.hidden {
+  display: none !important;
+}
+
+/* ── Modal Cards & Dialog Panels ──────────────────────────── */
+.claim-modal-card,
+#matchDetailsModal,
+#verificationModal,
+#founderApprovalModal,
+#ownerHandoverModal {
+  position: relative;
+  width: 100%;
+  max-width: 640px;
+  background: var(--surface, #ffffff);
+  border: 1px solid var(--border, #E7E3DC);
+  border-radius: var(--radius-xl, 1.25rem);
+  box-shadow: 0 24px 64px -12px rgba(28, 25, 23, 0.28);
+  padding: clamp(1.25rem, 1rem + 1vw, 2rem);
+  color: var(--ink, #1C1917);
+  margin: auto;
+  max-height: 90vh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.25s ease;
+}
+
+/* Dark mode panel adjustment */
+[data-theme="dark"] .claim-modal-card,
+[data-theme="dark"] #matchDetailsModal,
+[data-theme="dark"] #verificationModal,
+[data-theme="dark"] #founderApprovalModal,
+[data-theme="dark"] #ownerHandoverModal {
+  background: var(--surface, #1C1917);
+  border-color: var(--border, #2E2A27);
+  box-shadow: 0 24px 64px -12px rgba(0, 0, 0, 0.65);
+}
+
+/* ── Modal Header & Close Button ──────────────────────────── */
+.claim-modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--border-soft, #F0EDE8);
+}
+
+[data-theme="dark"] .claim-modal-header {
+  border-bottom-color: var(--border, #2E2A27);
+}
+
+.claim-modal-title {
+  font-family: 'Fraunces', Georgia, serif;
+  font-size: clamp(1.25rem, 1.15rem + 0.5vw, 1.6rem);
+  font-weight: 600;
+  color: var(--ink, #1C1917);
+  margin: 0;
+  line-height: 1.25;
+}
+
+.claim-modal-subtitle {
+  font-size: 0.875rem;
+  color: var(--muted, #78716C);
+  margin-top: 0.25rem;
+  line-height: 1.45;
+}
+
+.claim-modal-close-btn {
+  background: var(--bg-alt, #F5F2EE);
+  border: 1px solid var(--border, #E7E3DC);
+  border-radius: 50%;
+  width: 2.25rem;
+  height: 2.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted, #78716C);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.2s ease;
+}
+
+.claim-modal-close-btn:hover {
+  background: var(--border, #E7E3DC);
+  color: var(--ink, #1C1917);
+}
+
+[data-theme="dark"] .claim-modal-close-btn {
+  background: var(--surface-alt, #262220);
+  border-color: var(--border, #2E2A27);
+  color: var(--muted-2, #A8A29E);
+}
+
+/* ── Form Inputs & Textareas (16px+ for Mobile UX) ────────── */
+.claim-form-group {
+  margin-bottom: 1.25rem;
+}
+
+.claim-form-label {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--ink, #1C1917);
+  margin-bottom: 0.4rem;
+}
+
+.claim-input,
+.claim-textarea,
+.claim-select {
+  width: 100%;
+  font-size: 1rem; /* Crucial: 16px min prevents mobile zoom */
+  font-family: inherit;
+  padding: 0.75rem 1rem;
+  background: var(--bg-alt, #F5F2EE);
+  border: 1px solid var(--border, #E7E3DC);
+  border-radius: var(--radius-md, 0.75rem);
+  color: var(--ink, #1C1917);
+  outline: none;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  box-sizing: border-box;
+}
+
+[data-theme="dark"] .claim-input,
+[data-theme="dark"] .claim-textarea,
+[data-theme="dark"] .claim-select {
+  background: var(--surface-alt, #262220);
+  border-color: var(--border, #2E2A27);
+  color: var(--ink, #FAF8F5);
+}
+
+.claim-input:focus,
+.claim-textarea:focus,
+.claim-select:focus {
+  border-color: var(--accent, #C4622D);
+  box-shadow: 0 0 0 3px rgba(196, 98, 45, 0.15);
+}
+
+.claim-textarea {
+  min-height: 110px;
+  resize: vertical;
+  line-height: 1.5;
+}
+
+/* ── Proof Image Upload & Preview ─────────────────────────── */
+.claim-dropzone {
+  border: 2px dashed var(--border, #E7E3DC);
+  border-radius: var(--radius-md, 0.75rem);
+  padding: 1.5rem 1rem;
+  text-align: center;
+  background: var(--bg-alt, #F5F2EE);
+  cursor: pointer;
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+
+.claim-dropzone:hover {
+  border-color: var(--accent, #C4622D);
+  background: var(--accent-tint, #F2E8E1);
+}
+
+[data-theme="dark"] .claim-dropzone {
+  background: var(--surface-alt, #262220);
+  border-color: var(--border, #2E2A27);
+}
+
+[data-theme="dark"] .claim-dropzone:hover {
+  background: rgba(196, 98, 45, 0.12);
+}
+
+.claim-preview-wrap {
+  position: relative;
+  margin-top: 0.75rem;
+  border-radius: var(--radius-md, 0.75rem);
+  overflow: hidden;
+  border: 1px solid var(--border, #E7E3DC);
+  max-height: 220px;
+}
+
+.claim-preview-img {
+  width: 100%;
+  height: 100%;
+  max-height: 220px;
+  object-fit: cover;
+  display: block;
+}
+
+/* ── Anti-Spam Ban & Limit Alerts ─────────────────────────── */
+.claim-alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.9rem 1.15rem;
+  border-radius: var(--radius-md, 0.75rem);
+  font-size: 0.875rem;
+  line-height: 1.5;
+  margin-bottom: 1.25rem;
+}
+
+.claim-alert-warning {
+  background: #FFFBEB;
+  border: 1px solid #FDE68A;
+  color: #92400E;
+}
+
+.claim-alert-danger {
+  background: #FEF2F2;
+  border: 1px solid #FECACA;
+  color: #B91C1C;
+}
+
+[data-theme="dark"] .claim-alert-warning {
+  background: rgba(146, 64, 14, 0.2);
+  border-color: rgba(253, 230, 138, 0.25);
+  color: #FDE68A;
+}
+
+[data-theme="dark"] .claim-alert-danger {
+  background: rgba(185, 28, 28, 0.2);
+  border-color: rgba(254, 202, 202, 0.25);
+  color: #FECACA;
+}
+
+/* ── Return Method Chooser Cards ──────────────────────────── */
+.return-methods-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 0.85rem;
+  margin-bottom: 1.25rem;
+}
+
+.return-method-card {
+  position: relative;
+  display: block;
+  border: 2px solid var(--border, #E7E3DC);
+  border-radius: var(--radius-md, 0.75rem);
+  padding: 1rem;
+  background: var(--bg-alt, #F5F2EE);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.return-method-card:hover {
+  border-color: var(--accent, #C4622D);
+}
+
+.return-method-card.selected,
+.return-method-card input[type="radio"]:checked ~ .return-method-content {
+  border-color: var(--accent, #C4622D);
+  background: var(--accent-tint, #F2E8E1);
+}
+
+[data-theme="dark"] .return-method-card {
+  background: var(--surface-alt, #262220);
+  border-color: var(--border, #2E2A27);
+}
+
+[data-theme="dark"] .return-method-card.selected,
+[data-theme="dark"] .return-method-card input[type="radio"]:checked ~ .return-method-content {
+  background: rgba(196, 98, 45, 0.15);
+  border-color: var(--accent, #C4622D);
+}
+
+/* ── Live Handover OTP Display with Countdown ─────────────── */
+.otp-display-container {
+  text-align: center;
+  padding: 1.75rem 1rem;
+  background: var(--bg-alt, #F5F2EE);
+  border: 1px solid var(--border, #E7E3DC);
+  border-radius: var(--radius-lg, 1rem);
+  margin: 1.25rem 0;
+}
+
+[data-theme="dark"] .otp-display-container {
+  background: var(--surface-alt, #262220);
+  border-color: var(--border, #2E2A27);
+}
+
+.otp-digits-box {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: clamp(0.35rem, 0.25rem + 0.5vw, 0.75rem);
+  margin: 1rem 0;
+}
+
+.otp-digit {
+  width: clamp(2.5rem, 2rem + 1.5vw, 3.5rem);
+  height: clamp(3.25rem, 2.75rem + 1.5vw, 4.25rem);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: clamp(1.5rem, 1.25rem + 1vw, 2.25rem);
+  font-weight: 700;
+  background: var(--surface, #ffffff);
+  border: 2px solid var(--border, #E7E3DC);
+  border-radius: var(--radius-md, 0.75rem);
+  color: var(--accent, #C4622D);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
+  transition: all 0.2s ease;
+}
+
+[data-theme="dark"] .otp-digit {
+  background: #1C1917;
+  border-color: var(--border, #2E2A27);
+  color: #FF9A6B;
+}
+
+/* ── EXPIRED State (Requirement S3-5: Turns Red, Reads "EXPIRED") ── */
+.otp-display-container.expired .otp-digit {
+  border-color: #EF4444 !important;
+  color: #DC2626 !important;
+  background: #FFF5F5 !important;
+}
+
+[data-theme="dark"] .otp-display-container.expired .otp-digit {
+  background: rgba(220, 38, 38, 0.15) !important;
+  color: #F87171 !important;
+  border-color: #EF4444 !important;
+}
+
+.otp-countdown-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.35rem 0.85rem;
+  background: var(--surface, #ffffff);
+  border: 1px solid var(--border, #E7E3DC);
+  border-radius: 9999px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--ink, #1C1917);
+}
+
+[data-theme="dark"] .otp-countdown-pill {
+  background: #1C1917;
+  border-color: var(--border, #2E2A27);
+  color: var(--ink, #FAF8F5);
+}
+
+.otp-countdown-pill.expired {
+  background: #FEF2F2 !important;
+  border-color: #FECACA !important;
+  color: #DC2626 !important;
+}
+
+[data-theme="dark"] .otp-countdown-pill.expired {
+  background: rgba(220, 38, 38, 0.2) !important;
+  color: #FCA5A5 !important;
+}
+
+/* ── Status Badges ────────────────────────────────────────── */
+.claim-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem 0.65rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.claim-badge-pending {
+  background: #FEF3C7;
+  color: #92400E;
+}
+
+.claim-badge-ready {
+  background: #DBEAFE;
+  color: #1E40AF;
+}
+
+.claim-badge-verified,
+.claim-badge-completed {
+  background: #D1FAE5;
+  color: #065F46;
+}
+
+.claim-badge-rejected {
+  background: #FEE2E2;
+  color: #991B1B;
+}
+
+[data-theme="dark"] .claim-badge-pending { background: rgba(217, 119, 6, 0.25); color: #FCD34D; }
+[data-theme="dark"] .claim-badge-ready { background: rgba(37, 99, 235, 0.25); color: #93C5FD; }
+[data-theme="dark"] .claim-badge-verified,
+[data-theme="dark"] .claim-badge-completed { background: rgba(5, 150, 105, 0.25); color: #6EE7B7; }
+[data-theme="dark"] .claim-badge-rejected { background: rgba(220, 38, 38, 0.25); color: #FCA5A5; }
+
+/* ── Action Buttons ───────────────────────────────────────── */
+.claim-btn-group {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: flex-end;
+  margin-top: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.claim-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.7rem 1.4rem;
+  font-size: 0.925rem;
+  font-weight: 600;
+  border-radius: var(--radius-md, 0.75rem);
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-decoration: none;
+}
+
+.claim-btn-primary {
+  background: var(--accent, #C4622D);
+  color: #ffffff;
+}
+
+.claim-btn-primary:hover {
+  filter: brightness(1.08);
+}
+
+.claim-btn-danger {
+  background: #DC2626;
+  color: #ffffff;
+}
+
+.claim-btn-danger:hover {
+  background: #B91C1C;
+}
+
+.claim-btn-secondary {
+  background: var(--bg-alt, #F5F2EE);
+  border-color: var(--border, #E7E3DC);
+  color: var(--ink, #1C1917);
+}
+
+.claim-btn-secondary:hover {
+  background: var(--border, #E7E3DC);
+}
+
+[data-theme="dark"] .claim-btn-secondary {
+  background: var(--surface-alt, #262220);
+  border-color: var(--border, #2E2A27);
+  color: var(--ink, #FAF8F5);
+}
+
+.claim-btn:disabled,
+.claim-btn.disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+/* ── Mobile Layout Adjustments (360px - 640px) ─────────────── */
+@media (max-width: 640px) {
+  #modalOverlay,
+  .claim-modal-overlay {
+    padding: 0;
+    align-items: flex-end;
+  }
+
+  .claim-modal-card,
+  #matchDetailsModal,
+  #founderApprovalModal,
+  #ownerHandoverModal {
+    max-width: 100%;
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+    max-height: 94vh;
+    padding: 1.25rem 1rem env(safe-area-inset-bottom, 1rem) 1rem;
+  }
+
+  .claim-btn-group {
+    flex-direction: column-reverse;
+  }
+
+  .claim-btn-group .claim-btn {
+    width: 100%;
+  }
+
+  .return-methods-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ── Accessibility & Reduced Motion ───────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  #modalOverlay,
+  .claim-modal-overlay,
+  .claim-modal-card,
+  .claim-btn,
+  .otp-digit {
+    transition: none !important;
+    animation: none !important;
+  }
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent, #C4622D);
+  outline-offset: 2px;
+}

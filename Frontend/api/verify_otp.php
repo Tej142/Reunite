@@ -274,10 +274,10 @@ try {
     }
     if ($hasTrustScore) {
         if ($founderId > 0) {
-            $conn->query("UPDATE users SET trust_score = trust_score + 10 WHERE id = $founderId");
+            $conn->query("UPDATE users SET trust_score = trust_score + 10 WHERE user_id = $founderId");
         }
         if ($ownerId > 0) {
-            $conn->query("UPDATE users SET trust_score = trust_score + 5 WHERE id = $ownerId");
+            $conn->query("UPDATE users SET trust_score = trust_score + 5 WHERE user_id = $ownerId");
         }
     }
 

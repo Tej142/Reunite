@@ -1,0 +1,221 @@
+{
+  "engine_version": "2.0.0",
+  "thresholds": {
+    "notification_threshold": 65.0,
+    "email_threshold": 90.0,
+    "min_possible_score": 50.0,
+    "strong_tier_threshold": 65.0
+  },
+  "temporal": {
+    "max_prior_tolerance_hours": 24,
+    "stale_time_days": 45
+  },
+  "weights": {
+    "title_match": 30.0,
+    "category_match": 25.0,
+    "brand_match_boost": 25.0,
+    "model_match_boost": 20.0,
+    "distinctive_marks_boost": 15.0,
+    "identifier_match_boost": 45.0,
+    "proximity_boost": 10.0,
+    "visual_high_boost": 10.0,
+    "model_mismatch_penalty": -35.0,
+    "color_conflict_penalty": -35.0,
+    "size_mismatch_penalty": -25.0,
+    "location_divergence_penalty": -20.0,
+    "stale_time_penalty": -15.0
+  },
+  "brands": {
+    "dell": {
+      "canonical": "Dell",
+      "aliases": ["dell", "del", "alienware", "latitude", "inspiron", "xps", "vostro", "precision", "g-series", "g15", "g16"],
+      "sub_brands": {
+        "alienware": "Alienware",
+        "latitude": "Latitude",
+        "inspiron": "Inspiron",
+        "xps": "XPS",
+        "vostro": "Vostro",
+        "precision": "Precision"
+      }
+    },
+    "lenovo": {
+      "canonical": "Lenovo",
+      "aliases": ["lenovo", "thinkpad", "ideapad", "legion", "yoga", "loq", "thinkbook", "v15", "v14"],
+      "sub_brands": {
+        "thinkpad": "ThinkPad",
+        "ideapad": "IdeaPad",
+        "legion": "Legion",
+        "yoga": "Yoga",
+        "loq": "LOQ",
+        "thinkbook": "ThinkBook"
+      }
+    },
+    "hp": {
+      "canonical": "HP",
+      "aliases": ["hp", "hewlett packard", "hewlett-packard", "pavilion", "envy", "omen", "victus", "spectre", "elitebook", "probook"],
+      "sub_brands": {
+        "pavilion": "Pavilion",
+        "envy": "Envy",
+        "omen": "Omen",
+        "victus": "Victus",
+        "spectre": "Spectre",
+        "elitebook": "EliteBook",
+        "probook": "ProBook"
+      }
+    },
+    "apple": {
+      "canonical": "Apple",
+      "aliases": ["apple", "macbook", "macbook pro", "macbook air", "iphone", "ipad", "airpods", "airpod", "iwatch", "apple watch", "mac mini", "imac"],
+      "sub_brands": {
+        "macbook pro": "MacBook Pro",
+        "macbook air": "MacBook Air",
+        "macbook": "MacBook",
+        "iphone": "iPhone",
+        "ipad": "iPad",
+        "airpods": "AirPods",
+        "apple watch": "Apple Watch"
+      }
+    },
+    "samsung": {
+      "canonical": "Samsung",
+      "aliases": ["samsung", "galaxy", "galaxy book", "galaxy buds", "galaxy watch", "s24", "s23", "s22", "s21", "z fold", "z flip"],
+      "sub_brands": {
+        "galaxy book": "Galaxy Book",
+        "galaxy buds": "Galaxy Buds",
+        "galaxy watch": "Galaxy Watch",
+        "galaxy": "Galaxy"
+      }
+    },
+    "asus": {
+      "canonical": "Asus",
+      "aliases": ["asus", "rog", "republic of gamers", "tuf", "zenbook", "vivobook", "expertbook", "strix", "zephyrus"],
+      "sub_brands": {
+        "rog": "ROG",
+        "tuf": "TUF",
+        "zenbook": "ZenBook",
+        "vivobook": "VivoBook"
+      }
+    },
+    "acer": {
+      "canonical": "Acer",
+      "aliases": ["acer", "predator", "nitro", "aspire", "swift", "helios", "spin"],
+      "sub_brands": {
+        "predator": "Predator",
+        "nitro": "Nitro",
+        "aspire": "Aspire",
+        "swift": "Swift"
+      }
+    },
+    "zebronics": {
+      "canonical": "Zebronics",
+      "aliases": ["zebronics", "zeb", "zeb-"]
+    },
+    "boat": {
+      "canonical": "boAt",
+      "aliases": ["boat", "bo-at", "airdopes", "bassheads", "rockerz", "wave", "storm"]
+    },
+    "noise": {
+      "canonical": "Noise",
+      "aliases": ["noise", "colorfit", "buds vs"]
+    },
+    "wildcraft": {
+      "canonical": "Wildcraft",
+      "aliases": ["wildcraft", "wild craft"]
+    },
+    "american tourister": {
+      "canonical": "American Tourister",
+      "aliases": ["american tourister", "americantourister"]
+    },
+    "skybags": {
+      "canonical": "Skybags",
+      "aliases": ["skybags", "sky bags"]
+    },
+    "fastrack": {
+      "canonical": "Fastrack",
+      "aliases": ["fastrack", "fast track"]
+    },
+    "titan": {
+      "canonical": "Titan",
+      "aliases": ["titan", "raga"]
+    },
+    "fossil": {
+      "canonical": "Fossil",
+      "aliases": ["fossil"]
+    },
+    "casio": {
+      "canonical": "Casio",
+      "aliases": ["casio", "g-shock", "g shock", "edifice", "enticer"]
+    },
+    "milton": {
+      "canonical": "Milton",
+      "aliases": ["milton", "thermosteel"]
+    },
+    "cello": {
+      "canonical": "Cello",
+      "aliases": ["cello"]
+    },
+    "oneplus": {
+      "canonical": "OnePlus",
+      "aliases": ["oneplus", "one plus", "nord"]
+    },
+    "xiaomi": {
+      "canonical": "Xiaomi",
+      "aliases": ["xiaomi", "redmi", "mi", "poco"]
+    },
+    "google": {
+      "canonical": "Google",
+      "aliases": ["google", "pixel"]
+    }
+  },
+  "color_families": {
+    "black": { "canonical": "Black", "neighbors": ["Grey", "Dark Blue"] },
+    "grey": { "canonical": "Grey", "neighbors": ["Black", "Silver"] },
+    "gray": { "canonical": "Grey", "neighbors": ["Black", "Silver"] },
+    "dark grey": { "canonical": "Grey", "neighbors": ["Black", "Silver"] },
+    "space grey": { "canonical": "Grey", "neighbors": ["Black", "Silver"] },
+    "silver": { "canonical": "Silver", "neighbors": ["Grey", "White"] },
+    "white": { "canonical": "White", "neighbors": ["Silver", "Cream", "Beige"] },
+    "blue": { "canonical": "Blue", "neighbors": ["Dark Blue", "Light Blue", "Navy"] },
+    "dark blue": { "canonical": "Blue", "neighbors": ["Blue", "Navy", "Black"] },
+    "navy": { "canonical": "Blue", "neighbors": ["Dark Blue", "Blue", "Black"] },
+    "light blue": { "canonical": "Blue", "neighbors": ["Blue", "Silver"] },
+    "red": { "canonical": "Red", "neighbors": ["Maroon", "Pink"] },
+    "maroon": { "canonical": "Red", "neighbors": ["Red", "Brown"] },
+    "pink": { "canonical": "Pink", "neighbors": ["Red", "White"] },
+    "brown": { "canonical": "Brown", "neighbors": ["Tan", "Beige", "Black"] },
+    "tan": { "canonical": "Brown", "neighbors": ["Brown", "Beige"] },
+    "beige": { "canonical": "Beige", "neighbors": ["Brown", "Tan", "White", "Cream"] },
+    "cream": { "canonical": "Beige", "neighbors": ["White", "Beige"] },
+    "green": { "canonical": "Green", "neighbors": ["Olive", "Teal"] },
+    "olive": { "canonical": "Green", "neighbors": ["Green", "Brown"] },
+    "yellow": { "canonical": "Yellow", "neighbors": ["Orange", "Gold"] },
+    "gold": { "canonical": "Gold", "neighbors": ["Yellow", "Silver", "Beige"] },
+    "orange": { "canonical": "Orange", "neighbors": ["Yellow", "Red"] },
+    "purple": { "canonical": "Purple", "neighbors": ["Violet", "Blue"] },
+    "multi-color": { "canonical": "Multi-Color", "neighbors": ["*"] },
+    "multi": { "canonical": "Multi-Color", "neighbors": ["*"] }
+  },
+  "category_incompatibilities": [
+    ["laptop", "phone"],
+    ["laptop", "smartphone"],
+    ["laptop", "tablet"],
+    ["laptop", "mouse"],
+    ["laptop", "watch"],
+    ["laptop", "wallet"],
+    ["laptop", "keys"],
+    ["phone", "mouse"],
+    ["phone", "wallet"],
+    ["phone", "keys"],
+    ["phone", "bottle"],
+    ["mouse", "keyboard"],
+    ["mouse", "wallet"],
+    ["mouse", "keys"],
+    ["mouse", "bottle"],
+    ["wallet", "keys"],
+    ["wallet", "bottle"],
+    ["keys", "bottle"],
+    ["bag", "keys"],
+    ["bag", "bottle"],
+    ["watch", "bottle"]
+  ]
+}

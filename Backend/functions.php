@@ -322,8 +322,8 @@ function sendJsonResponse($success, $message = '', $data = [], $statusCode = 200
  * - 'testers': active for admins and qa_ test accounts
  * - 'off': disabled for everyone, displays upgrade notice
  */
-function isClaimModuleActiveForUser($userId = null) {
-    $mode = defined('CLAIM_MODULE_MODE') ? strtolower(trim(CLAIM_MODULE_MODE)) : 'off';
+function isClaimModuleActiveForUser($userId = null, $modeOverride = null) {
+    $mode = $modeOverride !== null ? strtolower(trim($modeOverride)) : (defined('CLAIM_MODULE_MODE') ? strtolower(trim(CLAIM_MODULE_MODE)) : 'off');
     if ($mode === 'on') return true;
     if ($mode === 'off') return false;
 
@@ -952,9 +952,9 @@ function consumePasswordResetToken($token, $newPassword) {
 }
 
 /**
- * Dynamically inserts or retrieves a match record across any table schema variations
+ * Dynamically inserts or retrieves a match record across any table schema variations (Matching v2 supported)
  */
-function insertMatchRecord($lostId, $foundId, $score) {
+function insertMatchRecord($lostId, $foundId, $score, $tier = 'STRONG', $matchReasons = null, $engineVersion = '2.0.0') {
     global $conn;
     if (!$conn) return null;
 
@@ -969,29 +969,68 @@ function insertMatchRecord($lostId, $foundId, $score) {
     $mScoreCol = in_array('match_percentage', $mCols) ? 'match_percentage' : (in_array('similarity_score', $mCols) ? 'similarity_score' : (in_array('score', $mCols) ? 'score' : 'match_percentage'));
     $mIdCol = in_array('match_id', $mCols) ? 'match_id' : (in_array('id', $mCols) ? 'id' : 'match_id');
 
+    $scoreDecimal = number_format($score, 2, '.', '');
+    $hasTier = in_array('confidence_tier', $mCols);
+    $hasReasons = in_array('match_reasons', $mCols);
+    $hasEngine = in_array('engine_version', $mCols);
+    $hasStatus = in_array('status', $mCols);
+    $hasCreated = in_array('created_at', $mCols);
+
+    $reasonsJson = is_array($matchReasons) ? json_encode($matchReasons, JSON_UNESCAPED_SLASHES) : $matchReasons;
+
     // Check if match already exists
-    $checkStmt = $conn->prepare("SELECT $mIdCol FROM matches WHERE $mLostCol = ? AND $mFoundCol = ?");
+    $checkStmt = $conn->prepare("SELECT $mIdCol, status FROM matches WHERE $mLostCol = ? AND $mFoundCol = ?");
     if ($checkStmt) {
         $checkStmt->bind_param("ii", $lostId, $foundId);
         $checkStmt->execute();
         $res = $checkStmt->get_result();
         if ($res && $res->num_rows > 0) {
             $row = $res->fetch_assoc();
+            $existingId = (int)($row[$mIdCol] ?? 1);
+            $existingStatus = $row['status'] ?? 'pending';
             $checkStmt->close();
-            return (int)($row[$mIdCol] ?? 1);
+
+            // Update score, tier, reasons if pending
+            if ($existingStatus === 'pending' || empty($existingStatus)) {
+                $upParts = ["$mScoreCol = ?"];
+                $types = "d";
+                $params = [$scoreDecimal];
+
+                if ($hasTier) { $upParts[] = "confidence_tier = ?"; $types .= "s"; $params[] = $tier; }
+                if ($hasReasons) { $upParts[] = "match_reasons = ?"; $types .= "s"; $params[] = $reasonsJson; }
+                if ($hasEngine) { $upParts[] = "engine_version = ?"; $types .= "s"; $params[] = $engineVersion; }
+
+                $params[] = $existingId;
+                $types .= "i";
+
+                $upSql = "UPDATE matches SET " . implode(", ", $upParts) . " WHERE $mIdCol = ?";
+                $upStmt = $conn->prepare($upSql);
+                if ($upStmt) {
+                    $upStmt->bind_param($types, ...$params);
+                    $upStmt->execute();
+                    $upStmt->close();
+                }
+            }
+            return $existingId;
         }
         $checkStmt->close();
     }
 
-    $scoreDecimal = number_format($score, 2, '.', '');
-    $hasStatus = in_array('status', $mCols);
-    $hasCreated = in_array('created_at', $mCols);
+    $colsToInsert = [$mLostCol, $mFoundCol, $mScoreCol];
+    $placeholders = ["?", "?", "?"];
+    $types = "iid";
+    $params = [$lostId, $foundId, $scoreDecimal];
 
-    $sql = "INSERT INTO matches ($mLostCol, $mFoundCol, $mScoreCol" . ($hasStatus ? ", status" : "") . ($hasCreated ? ", created_at" : "") . ") VALUES (?, ?, ?" . ($hasStatus ? ", 'pending'" : "") . ($hasCreated ? ", NOW()" : "") . ")";
+    if ($hasTier) { $colsToInsert[] = 'confidence_tier'; $placeholders[] = '?'; $types .= 's'; $params[] = $tier; }
+    if ($hasReasons) { $colsToInsert[] = 'match_reasons'; $placeholders[] = '?'; $types .= 's'; $params[] = $reasonsJson; }
+    if ($hasEngine) { $colsToInsert[] = 'engine_version'; $placeholders[] = '?'; $types .= 's'; $params[] = $engineVersion; }
+    if ($hasStatus) { $colsToInsert[] = 'status'; $placeholders[] = "'pending'"; }
+    if ($hasCreated) { $colsToInsert[] = 'created_at'; $placeholders[] = 'NOW()'; }
 
+    $sql = "INSERT INTO matches (" . implode(", ", $colsToInsert) . ") VALUES (" . implode(", ", $placeholders) . ")";
     $stmt = $conn->prepare($sql);
     if ($stmt) {
-        $stmt->bind_param("iid", $lostId, $foundId, $scoreDecimal);
+        $stmt->bind_param($types, ...$params);
         if ($stmt->execute()) {
             $newId = $stmt->insert_id;
             $stmt->close();
@@ -1004,6 +1043,23 @@ function insertMatchRecord($lostId, $foundId, $score) {
         error_log("[Matches] Insert prepare error: " . $conn->error);
     }
     return null;
+}
+
+/**
+ * Helper to calculate human-readable relative time (Campus IST timezone)
+ */
+if (!function_exists('formatRelativeTime')) {
+    function formatRelativeTime($dateStr) {
+        if (empty($dateStr)) return 'Recently';
+        $time = strtotime($dateStr);
+        if (!$time) return 'Recently';
+        $diff = time() - $time;
+        if ($diff < 60) return 'Just now';
+        if ($diff < 3600) return max(1, floor($diff / 60)) . 'm ago';
+        if ($diff < 86400) return floor($diff / 3600) . 'h ago';
+        if ($diff < 604800) return floor($diff / 86400) . 'd ago';
+        return date('M d, Y', $time);
+    }
 }
 
 /**
@@ -1057,12 +1113,16 @@ function insertSystemNotification($targetUserId, $title, $message, $link = '', $
         $vals[] = 0;
         $types .= 'i';
     }
+    if (in_array('created_at', $nCols)) {
+        $fields[] = 'created_at';
+        $vals[] = date('Y-m-d H:i:s');
+        $types .= 's';
+    }
 
     $fieldList = implode(', ', $fields);
     $placeholders = implode(', ', array_fill(0, count($fields), '?'));
-    $hasCreatedAt = in_array('created_at', $nCols);
 
-    $sql = "INSERT INTO notifications ($fieldList" . ($hasCreatedAt ? ", created_at" : "") . ") VALUES ($placeholders" . ($hasCreatedAt ? ", NOW()" : "") . ")";
+    $sql = "INSERT INTO notifications ($fieldList) VALUES ($placeholders)";
 
     $stmt = $conn->prepare($sql);
     if ($stmt) {
@@ -1078,17 +1138,56 @@ function insertSystemNotification($targetUserId, $title, $message, $link = '', $
 }
 
 /**
- * Executes Vector + Hybrid Real-Time Matchmaking and generates user notifications
+ * Executes Vector + Hybrid Real-Time Matchmaking v2 with Structured Attribute Verification
  */
 function runRealtimeMatchmaking($insertedId, $reportType, $category, $title, $description, $location, $imageWebPath, $userId) {
     global $conn;
     if (!$conn || !$insertedId) return [];
 
+    if (!defined('REUNITE_MATCHING_V2_LOADED')) {
+        require_once __DIR__ . '/matching_v2.php';
+    }
+
     $createdMatches = [];
     $targetType = ($reportType === 'found') ? 'lost' : 'found';
     $targetTable = ($reportType === 'found') ? 'lost_reports' : 'found_reports';
+    $insertedTable = ($reportType === 'found') ? 'found_reports' : 'lost_reports';
 
-    // 1. Query Vector Matches from Flask AI Engine
+    // 1. Fetch newly inserted report details
+    $iColsRes = $conn->query("SHOW COLUMNS FROM `$insertedTable`");
+    $iCols = [];
+    if ($iColsRes) {
+        while ($c = $iColsRes->fetch_assoc()) $iCols[] = strtolower($c['Field']);
+    }
+    $iIdCol = in_array('id', $iCols) ? 'id' : (($reportType === 'found') ? 'found_id' : 'lost_id');
+    
+    $insStmt = $conn->prepare("SELECT * FROM `$insertedTable` WHERE $iIdCol = ? LIMIT 1");
+    if (!$insStmt) return [];
+    $insStmt->bind_param("i", $insertedId);
+    $insStmt->execute();
+    $insertedRow = $insStmt->get_result()->fetch_assoc();
+    $insStmt->close();
+    if (!$insertedRow) return [];
+
+    // Check for Digital DNA record
+    $insertedDna = null;
+    $dnaCheck = $conn->query("SHOW TABLES LIKE 'digital_dna'");
+    $hasDnaTable = ($dnaCheck && $dnaCheck->num_rows > 0);
+    if ($hasDnaTable) {
+        $dnaStmt = $conn->prepare("SELECT * FROM digital_dna WHERE report_type = ? AND report_id = ? LIMIT 1");
+        if ($dnaStmt) {
+            $dnaStmt->bind_param("si", $reportType, $insertedId);
+            $dnaStmt->execute();
+            $insertedDna = $dnaStmt->get_result()->fetch_assoc();
+            $dnaStmt->close();
+        }
+    }
+    $insertedAttrs = extractNormalizedAttributesV2($insertedRow, $insertedDna);
+    if ($userId > 0 && empty($insertedAttrs['user_id'])) {
+        $insertedAttrs['user_id'] = (int)$userId;
+    }
+
+    // 2. Query Vector Matches from Flask AI Engine
     $vectorMatches = [];
     try {
         $flaskUrl = (defined('FLASK_AI_URL') ? FLASK_AI_URL : 'https://reunite-ai-backend.onrender.com') . '/report/search-matches';
@@ -1097,7 +1196,7 @@ function runRealtimeMatchmaking($insertedId, $reportType, $category, $title, $de
             'report_id' => ($reportType === 'found' ? 'RF-' : 'RL-') . str_pad($insertedId, 5, '0', STR_PAD_LEFT),
             'report_type' => $targetType,
             'image_path' => $imageWebPath,
-            'top_k' => 10
+            'top_k' => 15
         ];
         $ch = curl_init($flaskUrl);
         if ($ch) {
@@ -1123,20 +1222,17 @@ function runRealtimeMatchmaking($insertedId, $reportType, $category, $title, $de
         error_log("[Matchmaking] Vector search notice: " . $e->getMessage());
     }
 
-    $matchedDbIds = [];
-
-    // Process Vector Matches
+    $candidateScores = [];
     foreach ($vectorMatches as $vm) {
         $meta = $vm['metadata'] ?? [];
         $matchedId = (int)($meta['db_id'] ?? 0);
-        $score = (float)($vm['match_percentage'] ?? 0);
-
-        if ($matchedId > 0 && $score >= 35.0) {
-            $matchedDbIds[$matchedId] = $score;
+        $vScore = (float)($vm['match_percentage'] ?? 0);
+        if ($matchedId > 0) {
+            $candidateScores[$matchedId] = $vScore;
         }
     }
 
-    // 2. Hybrid / Fallback DB Similarity Matcher
+    // 3. Fallback / Hybrid Opposites from DB
     $colsRes = $conn->query("SHOW COLUMNS FROM `$targetTable`");
     $targetCols = [];
     if ($colsRes) {
@@ -1145,225 +1241,158 @@ function runRealtimeMatchmaking($insertedId, $reportType, $category, $title, $de
     $idCol = in_array('id', $targetCols) ? 'id' : (($targetType === 'found') ? 'found_id' : 'lost_id');
     $userCol = in_array('user_id', $targetCols) ? 'user_id' : (in_array('finder_id', $targetCols) ? 'finder_id' : 'user_id');
 
-    $queryOpposite = "SELECT $idCol AS id, $userCol AS user_id, title, description, category, location, status FROM `$targetTable` WHERE ($idCol != ?) AND (status = 'active' OR status = 'Pending' OR status = '' OR status IS NULL)";
+    $queryOpposite = "SELECT * FROM `$targetTable` WHERE ($idCol != ?) AND (status = 'active' OR status = 'Pending' OR status = '' OR status IS NULL)";
     $stmtOpp = $conn->prepare($queryOpposite);
     if ($stmtOpp) {
         $stmtOpp->bind_param("i", $insertedId);
         $stmtOpp->execute();
         $resOpp = $stmtOpp->get_result();
-        
-        $tokens1 = array_unique(array_filter(preg_split('/[\s,\.\-_:\/()]+/', strtolower("$title $description $category $location"))));
-        $stopWords = ['the','a','an','in','on','at','near','by','is','was','of','for','and','or','with','i','my','to','from','it','its','have','has','had','found','lost','item','report','reported'];
-        $cleanTokens1 = array_diff($tokens1, $stopWords);
-        
-        while ($opp = $resOpp->fetch_assoc()) {
-            $oppId = (int)$opp['id'];
-            if (isset($matchedDbIds[$oppId])) continue; // Already matched by vector engine
 
-            $oppTokens = array_unique(array_filter(preg_split('/[\s,\.\-_:\/()]+/', strtolower("{$opp['title']} {$opp['description']} {$opp['category']} {$opp['location']}"))));
-            $cleanOppTokens = array_diff($oppTokens, $stopWords);
-            
-            $common = array_intersect($cleanTokens1, $cleanOppTokens);
-            
-            $score = 0;
+        while ($oppRow = $resOpp->fetch_assoc()) {
+            $oppId = (int)$oppRow[$idCol];
 
-            // 1. Direct Title & Object Similarity
-            $titleA = strtolower(trim($title));
-            $titleB = strtolower(trim($opp['title'] ?? ''));
-            if (!empty($titleA) && !empty($titleB)) {
-                if ($titleA === $titleB) {
-                    $score += 50;
-                } elseif (stripos($titleA, $titleB) !== false || stripos($titleB, $titleA) !== false) {
-                    $score += 40;
-                } else {
-                    similar_text($titleA, $titleB, $simPct);
-                    if ($simPct >= 70) {
-                        $score += 40;
-                    } elseif ($simPct >= 50) {
-                        $score += 25;
-                    }
+            // Fetch Digital DNA for opposite report if available
+            $oppDna = null;
+            if ($hasDnaTable) {
+                $dnaStmt = $conn->prepare("SELECT * FROM digital_dna WHERE report_type = ? AND report_id = ? LIMIT 1");
+                if ($dnaStmt) {
+                    $dnaStmt->bind_param("si", $targetType, $oppId);
+                    $dnaStmt->execute();
+                    $oppDna = $dnaStmt->get_result()->fetch_assoc();
+                    $dnaStmt->close();
                 }
             }
+            $oppAttrs = extractNormalizedAttributesV2($oppRow, $oppDna);
 
-            // 2. Category Similarity (Exact, Substring, or Stem)
-            $catA = strtolower(trim($category));
-            $catB = strtolower(trim($opp['category'] ?? ''));
-            if (!empty($catA) && !empty($catB) && $catA !== 'general' && $catB !== 'general') {
-                if ($catA === $catB) {
-                    $score += 40;
-                } elseif (stripos($catA, $catB) !== false || stripos($catB, $catA) !== false) {
-                    $score += 35;
-                } else {
-                    $keyStems = ['mouse', 'watch', 'wallet', 'phone', 'bag', 'key', 'card', 'airpod', 'earbud', 'headphone', 'laptop', 'bottle', 'id', 'license', 'book', 'umbrella', 'charger', 'glasses', 'calculator'];
-                    foreach ($keyStems as $stem) {
-                        if (stripos($catA, $stem) !== false && stripos($catB, $stem) !== false) {
-                            $score += 35;
-                            break;
-                        }
-                    }
-                }
+            $lostAttrs = ($reportType === 'found') ? $oppAttrs : $insertedAttrs;
+            $foundAttrs = ($reportType === 'found') ? $insertedAttrs : $oppAttrs;
+            $lostId = ($reportType === 'found') ? $oppId : $insertedId;
+            $foundId = ($reportType === 'found') ? $insertedId : $oppId;
+
+            $vectorScore = $candidateScores[$oppId] ?? null;
+
+            // Execute Matching Engine v2 Evaluation
+            $eval = evaluateMatchV2($lostAttrs, $foundAttrs, $vectorScore);
+
+            // If vetoed or discarded, skip completely
+            if ($eval['confidence_tier'] === 'DISCARD' || $eval['veto_triggered'] !== null || $eval['final_score'] < 50.0) {
+                continue;
             }
 
-            // 2. Meaningful Word Overlap
-            $overlapCount = count($common);
-            if ($overlapCount > 0) {
-                $score += min($overlapCount * 20, 50);
-            }
+            // Save or update match record in database
+            $matchId = insertMatchRecord(
+                $lostId,
+                $foundId,
+                $eval['final_score'],
+                $eval['confidence_tier'],
+                $eval['match_reasons'],
+                $eval['engine_version']
+            );
 
-            // 3. Partial Token Matches (e.g. "watches" vs "watch", "leather" vs "leather-strap")
-            if ($overlapCount === 0) {
-                foreach ($cleanTokens1 as $t1) {
-                    if (strlen($t1) < 4) continue;
-                    foreach ($cleanOppTokens as $t2) {
-                        if (strlen($t2) < 4) continue;
-                        if (stripos($t1, $t2) !== false || stripos($t2, $t1) !== false) {
-                            $score += 20;
-                            break 2;
-                        }
-                    }
-                }
-            }
-
-            // 4. Location Proximity
-            $locA = strtolower(trim($location));
-            $locB = strtolower(trim($opp['location'] ?? ''));
-            if (!empty($locA) && !empty($locB)) {
-                if (stripos($locA, $locB) !== false || stripos($locB, $locA) !== false) {
-                    $score += 15;
-                } else {
-                    $locTokensA = array_diff(array_filter(preg_split('/[\s,\.\-_]+/', $locA)), $stopWords);
-                    $locTokensB = array_diff(array_filter(preg_split('/[\s,\.\-_]+/', $locB)), $stopWords);
-                    if (!empty(array_intersect($locTokensA, $locTokensB))) {
-                        $score += 15;
-                    }
-                }
-            }
-
-            if ($score >= 35) {
-                $matchedDbIds[$oppId] = min($score, 98.0);
-            }
-        }
-        $stmtOpp->close();
-    }
-
-    // 3. Insert into `matches` and trigger `notifications`
-    foreach ($matchedDbIds as $oppId => $score) {
-        $lostId = ($reportType === 'found') ? $oppId : $insertedId;
-        $foundId = ($reportType === 'found') ? $insertedId : $oppId;
-
-        // Insert or fetch match record dynamically
-        $matchId = insertMatchRecord($lostId, $foundId, $score);
-
-        // Fetch details of both reports to construct personalized notifications
-        $lostColsRes = $conn->query("SHOW COLUMNS FROM lost_reports");
-        $lCols = [];
-        if ($lostColsRes) {
-            while ($lc = $lostColsRes->fetch_assoc()) $lCols[] = strtolower($lc['Field']);
-        }
-        $lIdCol = in_array('id', $lCols) ? 'id' : 'lost_id';
-
-        $foundColsRes = $conn->query("SHOW COLUMNS FROM found_reports");
-        $fCols = [];
-        if ($foundColsRes) {
-            while ($fc = $foundColsRes->fetch_assoc()) $fCols[] = strtolower($fc['Field']);
-        }
-        $fIdCol = in_array('id', $fCols) ? 'id' : 'found_id';
-
-        $lostInfoRes = $conn->query("SELECT * FROM lost_reports WHERE $lIdCol = $lostId LIMIT 1");
-        $lostInfo = $lostInfoRes ? $lostInfoRes->fetch_assoc() : null;
-
-        $foundInfoRes = $conn->query("SELECT * FROM found_reports WHERE $fIdCol = $foundId LIMIT 1");
-        $foundInfo = $foundInfoRes ? $foundInfoRes->fetch_assoc() : null;
-
-        if ($lostInfo && $foundInfo) {
-            $lostUserId = (int)($lostInfo['user_id'] ?? 0);
-            $foundUserId = (int)($foundInfo['user_id'] ?? $foundInfo['finder_id'] ?? 0);
-
-            if ($lostUserId === 0 && $reportType === 'lost' && $userId > 0) {
-                $lostUserId = (int)$userId;
-            }
-            if ($foundUserId === 0 && $reportType === 'found' && $userId > 0) {
-                $foundUserId = (int)$userId;
-            }
-
+            // Check Notification Policy: Only STRONG tier with score >= 65% triggers in-app notification
             $emojiRegex = '/[\x{1F300}-\x{1FAFF}\x{1F000}-\x{1F2FF}\x{2300}-\x{23FF}\x{2600}-\x{27BF}\x{2B00}-\x{2BFF}\x{FE00}-\x{FE0F}\x{200D}]/u';
-            $lostTitle = trim(preg_replace('/\s+/', ' ', preg_replace($emojiRegex, '', $lostInfo['title'] ?? '')));
-            $foundTitle = trim(preg_replace('/\s+/', ' ', preg_replace($emojiRegex, '', $foundInfo['title'] ?? '')));
-            $scoreDisplay = round($score) . '%';
+            $lostTitle = trim(preg_replace('/\s+/', ' ', preg_replace($emojiRegex, '', $lostAttrs['title'] ?? '')));
+            $foundTitle = trim(preg_replace('/\s+/', ' ', preg_replace($emojiRegex, '', $foundAttrs['title'] ?? '')));
+            $scoreDisplay = round($eval['final_score']) . '%';
+            $reasonsSummary = $eval['why_matched_summary'] ? " ({$eval['why_matched_summary']})" : "";
 
-            // Notification for Lost Report Owner
-            if ($lostUserId > 0) {
-                $nTitle = "Potential Match: " . substr($foundTitle, 0, 40);
-                $nMsg = "A found item '" . $foundTitle . "' matches your lost report '" . $lostTitle . "' with {$scoreDisplay} similarity.";
-                $nLink = "item.php?type=found&id=" . $foundId . ($matchId ? "&match_id=" . $matchId : "");
-                insertSystemNotification($lostUserId, $nTitle, $nMsg, $nLink, 'FOUND', $foundId, 'match');
+            if ($eval['should_notify']) {
+                $lostUserId = (int)$lostAttrs['user_id'];
+                $foundUserId = (int)$foundAttrs['user_id'];
 
-                // Email notification to lost report owner (non-blocking)
-                try {
-                    $uRes = $conn->query("SELECT email, full_name FROM users WHERE user_id = $lostUserId LIMIT 1");
-                    if ($uRes && ($uRow = $uRes->fetch_assoc())) {
-                        $uEmail = function_exists('decryptData') ? decryptData($uRow['email']) : $uRow['email'];
-                        if (!empty($uEmail) && filter_var($uEmail, FILTER_VALIDATE_EMAIL) && function_exists('sendBrevoEmail')) {
-                            $emailSubj = "Reunite: Potential Match Detected for Your Lost Item!";
-                            $emailHtml = "<div style='font-family:sans-serif;max-width:550px;margin:0 auto;padding:24px;background:#ffffff;border:1px solid #e2e8f0;border-radius:12px;'>"
-                                . "<h2 style='color:#0d9488;margin-top:0;'>Potential Match Found!</h2>"
-                                . "<p>Hi <strong>" . htmlspecialchars($uRow['full_name'] ?? 'Student') . "</strong>,</p>"
-                                . "<p>Our matchmaking engine has detected a potential match for your reported lost item:</p>"
-                                . "<div style='background:#f8fafc;padding:14px;border-left:4px solid #0d9488;margin:16px 0;border-radius:4px;'>"
-                                . "<p style='margin:4px 0;'><strong>Your Lost Item:</strong> " . htmlspecialchars($lostTitle) . "</p>"
-                                . "<p style='margin:4px 0;'><strong>Matching Found Item:</strong> " . htmlspecialchars($foundTitle) . "</p>"
-                                . "<p style='margin:4px 0;color:#0d9488;font-weight:bold;'>Match Confidence: " . $scoreDisplay . "</p>"
-                                . "</div>"
-                                . "<p style='margin-top:20px;'><a href='https://reunite.site.je/" . $nLink . "' style='display:inline-block;padding:10px 20px;background:#0d9488;color:#ffffff;text-decoration:none;border-radius:6px;font-weight:bold;'>View Match Details</a></p>"
-                                . "<hr style='margin:25px 0 15px 0;border:none;border-top:1px solid #e2e8f0;'>"
-                                . "<p style='font-size:12px;color:#94a3b8;margin:0;'>Reunite - Campus Lost and Found Platform</p></div>";
-                            @sendBrevoEmail($uEmail, $uRow['full_name'], $emailSubj, $emailHtml);
-                        }
-                    }
-                } catch (Exception $e) {}
+                // Notification for Lost Report Owner
+                if ($lostUserId > 0) {
+                    $nTitle = "Potential Match: " . substr($foundTitle, 0, 40);
+                    $nMsg = "A found item '" . $foundTitle . "' matches your lost report '" . $lostTitle . "' with {$scoreDisplay} similarity" . $reasonsSummary . ".";
+                    $nLink = "item.php?type=found&id=" . $foundId . ($matchId ? "&match_id=" . $matchId : "");
+                    insertSystemNotification($lostUserId, $nTitle, $nMsg, $nLink, 'FOUND', $foundId, 'match');
+                }
+
+                // Notification for Found Report Owner
+                if ($foundUserId > 0) {
+                    $nTitle = "Potential Match: " . substr($lostTitle, 0, 40);
+                    $nMsg = "Your reported found item '" . $foundTitle . "' has a {$scoreDisplay} match with a lost item ('" . $lostTitle . "')" . $reasonsSummary . ".";
+                    $nLink = "item.php?type=found&id=" . $foundId . ($matchId ? "&match_id=" . $matchId : "");
+                    insertSystemNotification($foundUserId, $nTitle, $nMsg, $nLink, 'FOUND', $foundId, 'match');
+                }
             }
 
-            // Notification for Found Report Owner
-            if ($foundUserId > 0) {
-                $nTitle = "Potential Match: " . substr($lostTitle, 0, 40);
-                $nMsg = "Your reported found item '" . $foundTitle . "' has a {$scoreDisplay} match with a lost item ('" . $lostTitle . "').";
-                $nLink = "item.php?type=found&id=" . $foundId . ($matchId ? "&match_id=" . $matchId : "");
-                insertSystemNotification($foundUserId, $nTitle, $nMsg, $nLink, 'FOUND', $foundId, 'match');
+            // Check Email Policy: Only STRONG tier with score >= 90% triggers Brevo email
+            if ($eval['should_email']) {
+                $lostUserId = (int)$lostAttrs['user_id'];
+                $foundUserId = (int)$foundAttrs['user_id'];
 
-                // Email notification to found report owner (non-blocking)
-                try {
-                    $fRes = $conn->query("SELECT email, full_name FROM users WHERE user_id = $foundUserId LIMIT 1");
-                    if ($fRes && ($fRow = $fRes->fetch_assoc())) {
-                        $fEmail = function_exists('decryptData') ? decryptData($fRow['email']) : $fRow['email'];
-                        if (!empty($fEmail) && filter_var($fEmail, FILTER_VALIDATE_EMAIL) && function_exists('sendBrevoEmail')) {
-                            $emailSubj = "Reunite: Match Alert for Item You Found!";
-                            $emailHtml = "<div style='font-family:sans-serif;max-width:550px;margin:0 auto;padding:24px;background:#ffffff;border:1px solid #e2e8f0;border-radius:12px;'>"
-                                . "<h2 style='color:#0d9488;margin-top:0;'>Match Alert!</h2>"
-                                . "<p>Hi <strong>" . htmlspecialchars($fRow['full_name'] ?? 'Student') . "</strong>,</p>"
-                                . "<p>A student has reported a lost item that closely matches the item you found:</p>"
-                                . "<div style='background:#f8fafc;padding:14px;border-left:4px solid #0d9488;margin:16px 0;border-radius:4px;'>"
-                                . "<p style='margin:4px 0;'><strong>Found Item:</strong> " . htmlspecialchars($foundTitle) . "</p>"
-                                . "<p style='margin:4px 0;'><strong>Matching Lost Report:</strong> " . htmlspecialchars($lostTitle) . "</p>"
-                                . "<p style='margin:4px 0;color:#0d9488;font-weight:bold;'>Match Confidence: " . $scoreDisplay . "</p>"
-                                . "</div>"
-                                . "<p style='margin-top:20px;'><a href='https://reunite.site.je/" . $nLink . "' style='display:inline-block;padding:10px 20px;background:#0d9488;color:#ffffff;text-decoration:none;border-radius:6px;font-weight:bold;'>View Match Details</a></p>"
-                                . "<hr style='margin:25px 0 15px 0;border:none;border-top:1px solid #e2e8f0;'>"
-                                . "<p style='font-size:12px;color:#94a3b8;margin:0;'>Reunite - Campus Lost and Found Platform</p></div>";
-                            @sendBrevoEmail($fEmail, $fRow['full_name'], $emailSubj, $emailHtml);
+                // Brevo Email to Lost Owner
+                if ($lostUserId > 0) {
+                    try {
+                        $uRes = $conn->query("SELECT email, full_name FROM users WHERE user_id = $lostUserId LIMIT 1");
+                        if ($uRes && ($uRow = $uRes->fetch_assoc())) {
+                            $uEmail = function_exists('decryptData') ? decryptData($uRow['email']) : $uRow['email'];
+                            if (!empty($uEmail) && filter_var($uEmail, FILTER_VALIDATE_EMAIL) && function_exists('sendBrevoEmail')) {
+                                $nLink = "item.php?type=found&id=" . $foundId . ($matchId ? "&match_id=" . $matchId : "");
+                                $emailSubj = "Reunite: Verified Match Detected for Your Lost Item!";
+                                $emailHtml = "<div style='font-family:sans-serif;max-width:550px;margin:0 auto;padding:24px;background:#ffffff;border:1px solid #e2e8f0;border-radius:12px;'>"
+                                    . "<h2 style='color:#0d9488;margin-top:0;'>High-Confidence Match Found!</h2>"
+                                    . "<p>Hi <strong>" . htmlspecialchars($uRow['full_name'] ?? 'Student') . "</strong>,</p>"
+                                    . "<p>Our matchmaking engine has detected a high-confidence match for your reported lost item:</p>"
+                                    . "<div style='background:#f8fafc;padding:14px;border-left:4px solid #0d9488;margin:16px 0;border-radius:4px;'>"
+                                    . "<p style='margin:4px 0;'><strong>Your Lost Item:</strong> " . htmlspecialchars($lostTitle) . "</p>"
+                                    . "<p style='margin:4px 0;'><strong>Matching Found Item:</strong> " . htmlspecialchars($foundTitle) . "</p>"
+                                    . "<p style='margin:4px 0;color:#0d9488;font-weight:bold;'>Match Confidence: " . $scoreDisplay . "</p>"
+                                    . ($eval['why_matched_summary'] ? "<p style='margin:4px 0;font-size:13px;color:#64748b;'><strong>Match Signals:</strong> " . htmlspecialchars($eval['why_matched_summary']) . "</p>" : "")
+                                    . "</div>"
+                                    . "<p style='margin-top:20px;'><a href='https://reunite.site.je/" . $nLink . "' style='display:inline-block;padding:10px 20px;background:#0d9488;color:#ffffff;text-decoration:none;border-radius:6px;font-weight:bold;'>View Match Details</a></p>"
+                                    . "<hr style='margin:25px 0 15px 0;border:none;border-top:1px solid #e2e8f0;'>"
+                                    . "<p style='font-size:12px;color:#94a3b8;margin:0;'>Reunite - Campus Lost and Found Platform</p></div>";
+                                @sendBrevoEmail($uEmail, $uRow['full_name'], $emailSubj, $emailHtml);
+                            }
                         }
-                    }
-                } catch (Exception $e) {}
+                    } catch (Exception $e) {}
+                }
+
+                // Brevo Email to Finder
+                if ($foundUserId > 0) {
+                    try {
+                        $fRes = $conn->query("SELECT email, full_name FROM users WHERE user_id = $foundUserId LIMIT 1");
+                        if ($fRes && ($fRow = $fRes->fetch_assoc())) {
+                            $fEmail = function_exists('decryptData') ? decryptData($fRow['email']) : $fRow['email'];
+                            if (!empty($fEmail) && filter_var($fEmail, FILTER_VALIDATE_EMAIL) && function_exists('sendBrevoEmail')) {
+                                $nLink = "item.php?type=found&id=" . $foundId . ($matchId ? "&match_id=" . $matchId : "");
+                                $emailSubj = "Reunite: Verified Match Alert for Item You Found!";
+                                $emailHtml = "<div style='font-family:sans-serif;max-width:550px;margin:0 auto;padding:24px;background:#ffffff;border:1px solid #e2e8f0;border-radius:12px;'>"
+                                    . "<h2 style='color:#0d9488;margin-top:0;'>Match Alert!</h2>"
+                                    . "<p>Hi <strong>" . htmlspecialchars($fRow['full_name'] ?? 'Student') . "</strong>,</p>"
+                                    . "<p>A student has reported a lost item that closely matches the item you found:</p>"
+                                    . "<div style='background:#f8fafc;padding:14px;border-left:4px solid #0d9488;margin:16px 0;border-radius:4px;'>"
+                                    . "<p style='margin:4px 0;'><strong>Found Item:</strong> " . htmlspecialchars($foundTitle) . "</p>"
+                                    . "<p style='margin:4px 0;'><strong>Matching Lost Report:</strong> " . htmlspecialchars($lostTitle) . "</p>"
+                                    . "<p style='margin:4px 0;color:#0d9488;font-weight:bold;'>Match Confidence: " . $scoreDisplay . "</p>"
+                                    . ($eval['why_matched_summary'] ? "<p style='margin:4px 0;font-size:13px;color:#64748b;'><strong>Match Signals:</strong> " . htmlspecialchars($eval['why_matched_summary']) . "</p>" : "")
+                                    . "</div>"
+                                    . "<p style='margin-top:20px;'><a href='https://reunite.site.je/" . $nLink . "' style='display:inline-block;padding:10px 20px;background:#0d9488;color:#ffffff;text-decoration:none;border-radius:6px;font-weight:bold;'>View Match Details</a></p>"
+                                    . "<hr style='margin:25px 0 15px 0;border:none;border-top:1px solid #e2e8f0;'>"
+                                    . "<p style='font-size:12px;color:#94a3b8;margin:0;'>Reunite - Campus Lost and Found Platform</p></div>";
+                                @sendBrevoEmail($fEmail, $fRow['full_name'], $emailSubj, $emailHtml);
+                            }
+                        }
+                    } catch (Exception $e) {}
+                }
             }
 
             $createdMatches[] = [
                 'match_id' => $matchId,
                 'lost_id' => $lostId,
                 'found_id' => $foundId,
-                'similarity_score' => $score,
+                'similarity_score' => $eval['final_score'],
+                'confidence_tier' => $eval['confidence_tier'],
+                'why_matched_summary' => $eval['why_matched_summary'],
+                'should_notify' => $eval['should_notify'],
+                'should_email' => $eval['should_email'],
                 'lost_title' => $lostTitle,
                 'found_title' => $foundTitle
             ];
         }
+        $stmtOpp->close();
     }
 
     return $createdMatches;
@@ -1836,7 +1865,7 @@ function isClaimantBanned($userId) {
         return $result;
     }
 
-    $stmt = @$conn->prepare("SELECT claim_ban_until FROM users WHERE id = ? LIMIT 1");
+    $stmt = @$conn->prepare("SELECT claim_ban_until FROM users WHERE user_id = ? LIMIT 1");
     if ($stmt) {
         $stmt->bind_param('i', $userId);
         $stmt->execute();
@@ -1868,7 +1897,7 @@ function setClaimantBan($userId, $hours = 24) {
     if (!$cCheck || $cCheck->num_rows === 0) {
         @$conn->query("ALTER TABLE users ADD COLUMN claim_ban_until DATETIME NULL DEFAULT NULL AFTER status");
     }
-    $stmt = @$conn->prepare("UPDATE users SET claim_ban_until = DATE_ADD(NOW(), INTERVAL ? HOUR) WHERE id = ?");
+    $stmt = @$conn->prepare("UPDATE users SET claim_ban_until = DATE_ADD(NOW(), INTERVAL ? HOUR) WHERE user_id = ?");
     if ($stmt) {
         $stmt->bind_param('ii', $hours, $userId);
         $ok = $stmt->execute();
@@ -1884,7 +1913,7 @@ function setClaimantBan($userId, $hours = 24) {
 function liftClaimantBan($userId) {
     global $conn;
     if (!$conn || !(int)$userId) return false;
-    $stmt = @$conn->prepare("UPDATE users SET claim_ban_until = NULL WHERE id = ?");
+    $stmt = @$conn->prepare("UPDATE users SET claim_ban_until = NULL WHERE user_id = ?");
     if ($stmt) {
         $stmt->bind_param('i', $userId);
         $ok = $stmt->execute();
