@@ -303,6 +303,10 @@ $errorMsg = $_GET['error'] ?? '';
       </button>
     </form>
 
+    <div style="text-align:center; margin-top:14px;">
+      <a href="../admin.php" style="color:var(--muted); font-size:0.8125rem; text-decoration:none;">&larr; Switch to System Maintenance &amp; Health HUD</a>
+    </div>
+
     <div class="security-notice">
       <i class="fa-solid fa-lock"></i> Restricted Area &bull; All administrative access attempts are audited.
     </div>

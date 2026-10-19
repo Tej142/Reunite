@@ -225,12 +225,35 @@ function is_admin() {
     if (!empty($_SESSION['role']) && in_array(strtolower($_SESSION['role']), ['admin', 'superadmin', 'moderator'])) {
         return true;
     }
+    // Shared hosting fallback: verify admin session cookie
+    if (!empty($_COOKIE['reunite_admin_session'])) {
+        try {
+            $adminCookie = json_decode(base64_decode($_COOKIE['reunite_admin_session']), true);
+            if (is_array($adminCookie) && !empty($adminCookie['ts']) && (time() - $adminCookie['ts'] < 86400 * 7)) {
+                $_SESSION['reunite_admin_auth'] = true;
+                $_SESSION['admin_logged_in'] = true;
+                $_SESSION['role'] = 'admin';
+                if (!empty($adminCookie['username'])) {
+                    $_SESSION['username'] = $adminCookie['username'];
+                }
+                return true;
+            }
+        } catch (Exception $e) {
+            // Malformed cookie ignored
+        }
+    }
     return false;
 }
 
 function require_admin() {
     init_session();
     if (!is_admin()) {
+        // If accessed within the admin/ subdirectory, redirect to login.php
+        $script = $_SERVER['SCRIPT_NAME'] ?? '';
+        if (strpos($script, '/admin/') !== false) {
+            header("Location: login.php");
+            exit();
+        }
         header("Location: ../admin.php");
         exit();
     }

@@ -112,6 +112,12 @@ $adminInitials = strtoupper(substr($adminName, 0, 1) . (strpos($adminName, ' ') 
             <span>System Health</span>
           </button>
         </li>
+        <li>
+          <a href="../admin.php" class="nav-tab-btn" style="text-decoration:none; display:flex; align-items:center; color:inherit;">
+            <i class="fa-solid fa-screwdriver-wrench"></i>
+            <span>Maintenance HUD</span>
+          </a>
+        </li>
       </ul>
     </div>
 

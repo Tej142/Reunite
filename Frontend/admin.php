@@ -136,6 +136,13 @@ $isAdmin = !empty($_SESSION['reunite_admin_auth']) && $_SESSION['reunite_admin_a
         </button>
       </form>
 
+      <div style="text-align:center; margin-top:14px; margin-bottom:10px;">
+        <a href="admin/login.php" style="color:var(--admin-accent, #0d9488); font-size:0.8125rem; text-decoration:none; font-weight:600; display:inline-flex; align-items:center; gap:5px;">
+          <span>Need Claim Verification Desk &amp; Command Center?</span>
+          <span>Access Here &rarr;</span>
+        </a>
+      </div>
+
       <div class="admin-auth-footer">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>
@@ -182,6 +189,10 @@ $isAdmin = !empty($_SESSION['reunite_admin_auth']) && $_SESSION['reunite_admin_a
           <span class="admin-pulse-dot"></span>
           <span id="adminUserPillName">System Administrator</span>
         </div>
+        <a href="admin/index.php" class="btn-admin" style="text-decoration:none; display:inline-flex; align-items:center; gap:6px; font-weight:600; font-size:0.8125rem; padding:6px 14px; border-radius:8px; background:var(--admin-accent, #0d9488); color:#ffffff;" title="Open Claim Desk & Command Center">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          Claim Desk &amp; Command Center &rarr;
+        </a>
         <button type="button" class="btn-admin-logout" id="btnAdminLogout" title="Terminate Admin Session">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
           Exit Terminal
