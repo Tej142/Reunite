@@ -8,19 +8,21 @@ require_once __DIR__ . '/../../Backend/config/config.php';
 require_once __DIR__ . '/../../Backend/functions.php';
 require_once __DIR__ . '/orbi.php';
 
-function init_session() {
-    if (session_status() === PHP_SESSION_NONE) {
-        session_start();
-    }
-    if (empty($_SESSION['csrf_token'])) {
-        try {
-            $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
-        } catch (Exception $e) {
-            $_SESSION['csrf_token'] = md5(uniqid((string)mt_rand(), true));
+if (!function_exists('init_session')) {
+    function init_session() {
+        if (session_status() === PHP_SESSION_NONE) {
+            session_start();
         }
-    }
-    if (function_exists('enforceMaintenanceMode')) {
-        enforceMaintenanceMode();
+        if (empty($_SESSION['csrf_token'])) {
+            try {
+                $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+            } catch (Exception $e) {
+                $_SESSION['csrf_token'] = md5(uniqid((string)mt_rand(), true));
+            }
+        }
+        if (function_exists('enforceMaintenanceMode')) {
+            enforceMaintenanceMode();
+        }
     }
 }
 

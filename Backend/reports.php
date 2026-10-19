@@ -272,7 +272,7 @@ if ($action === 'create' || ($method === 'POST' && ($action === '' || $action ==
     }
 
     if ($conn) {
-        $status = 'active'; // Valid enum in lost_reports & found_reports: ('active','matched','claimed','closed')
+        $status = 'Pending'; // Valid enum in lost_reports & found_reports: ('Pending','active','Matched','Recovered','Returned','Closed')
         
         // Smart Temporal Resolution (Resolves "yesterday", "today morning", "2 days ago", etc.)
         $temporalRes = resolveReportDateTime($dateLostFound, $description);
