@@ -253,7 +253,7 @@ try {
     // 11. Send Real-Time Notification to Founder
     $notifTitle = "Ownership Proof Received!";
     $notifMsg = "A student submitted verification proof for your found item (#RF-" . str_pad($foundReportId, 5, '0', STR_PAD_LEFT) . "). Please review.";
-    $notifLink = "item.php?type=found&id=" . $foundReportId . "&match_id=" . $matchId;
+    $notifLink = "item.php?type=found&id=" . $foundReportId . "&match_id=" . $matchId . "&view_claims=1";
 
     if (function_exists('insertSystemNotification')) {
         insertSystemNotification($founderUserId, $notifTitle, $notifMsg, $notifLink, 'FOUND', $foundReportId, 'founder_approval');

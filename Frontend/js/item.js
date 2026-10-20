@@ -137,6 +137,19 @@ function initKeyboardListeners() {
         return;
       }
 
+      // Close claim requests list overlay if open
+      const claimRequestsOverlay = document.getElementById('claimRequestsListOverlay');
+      if (claimRequestsOverlay && (claimRequestsOverlay.classList.contains('flex') || claimRequestsOverlay.style.display === 'flex')) {
+        if (typeof closeClaimRequestsListModal === 'function') {
+          closeClaimRequestsListModal();
+        } else {
+          claimRequestsOverlay.classList.remove('flex');
+          claimRequestsOverlay.style.display = 'none';
+          document.body.style.overflow = '';
+        }
+        return;
+      }
+
       // Close owner handover overlay if open
       const ownerOverlay = document.getElementById('ownerHandoverOverlay');
       if (ownerOverlay && !ownerOverlay.classList.contains('hidden')) {

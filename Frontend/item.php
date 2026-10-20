@@ -486,14 +486,94 @@ if ($logged_in && !empty($currentUserId)) {
     }
 }
 
+// ── 3B. Multi-Claim Retrieval for Found Item Founder ────────────
+$founderClaimsList = [];
+$pendingClaimsCount = 0;
+$handoverReadyCount = 0;
+$reunitedClaimsCount = 0;
+$handoverMatchId = 0;
+
+if ($conn && $numericId > 0 && $isFound && $isOwnItem) {
+    $hasTierCol = in_array('confidence_tier', $colNames ?? []);
+    $tierSelect = $hasTierCol ? "m.confidence_tier" : "'STRONG' AS confidence_tier";
+    $hasProofImg = in_array('proof_image', $colNames ?? []);
+    $proofImgSelect = $hasProofImg ? "m.proof_image" : "NULL AS proof_image";
+    $proofCol = in_array('claim_details', $colNames ?? []) ? 'claim_details' : (in_array('owner_proof', $colNames ?? []) ? 'owner_proof' : 'claim_details');
+
+    $claimSql = "
+        SELECT 
+            m.`$pkCol` AS match_id,
+            m.`$lostCol` AS lost_id,
+            m.`$foundCol` AS found_id,
+            m.`$scoreCol` AS match_percentage,
+            $tierSelect,
+            m.status AS match_status,
+            m.`$proofCol` AS claim_details,
+            $proofImgSelect,
+            m.created_at AS match_created_at,
+            l.title AS lost_title,
+            l.category AS lost_category,
+            l.description AS lost_description,
+            l.location AS lost_location,
+            l.image_path AS lost_image_path,
+            COALESCE(l.date_lost, l.lost_date) AS lost_date,
+            u.user_id AS claimant_id,
+            u.full_name AS claimant_name,
+            u.pin AS claimant_pin,
+            u.college AS claimant_college,
+            u.branch AS claimant_branch,
+            u.trust_score AS claimant_trust_score,
+            rc.id AS recovery_case_id,
+            rc.status AS recovery_status,
+            rc.return_method,
+            rc.meeting_location,
+            rc.meeting_time,
+            rc.otp_expires_at
+        FROM matches m
+        LEFT JOIN lost_reports l ON m.`$lostCol` = l.`$lostIdCol`
+        LEFT JOIN users u ON l.user_id = u.user_id
+        LEFT JOIN recovery_cases rc ON m.`$pkCol` = rc.match_id
+        WHERE m.`$foundCol` = $numericId
+        ORDER BY 
+            CASE 
+                WHEN m.status = 'ready_for_handover' THEN 1
+                WHEN m.status = 'pending_founder_approval' THEN 2
+                WHEN m.status = 'verified' THEN 3
+                WHEN m.status = 'pending' THEN 4
+                ELSE 5
+            END,
+            m.`$scoreCol` DESC,
+            m.`$pkCol` DESC
+    ";
+
+    $cRes = @$conn->query($claimSql);
+    if ($cRes) {
+        while ($cRow = $cRes->fetch_assoc()) {
+            $mSt = strtolower($cRow['match_status'] ?? '');
+            if ($mSt === 'pending_founder_approval') {
+                $pendingClaimsCount++;
+            } elseif ($mSt === 'ready_for_handover') {
+                $handoverReadyCount++;
+                if (!$handoverMatchId) $handoverMatchId = (int)$cRow['match_id'];
+            } elseif ($mSt === 'verified') {
+                $reunitedClaimsCount++;
+            }
+            $founderClaimsList[] = $cRow;
+        }
+    }
+}
+
 // 3. If finder is viewing and there's a pending claim to review:
-$hasClaimToReview = ($isOwnItem && ($activeMatchStatus === 'pending_founder_approval' || ($existingClaim && in_array($existingClaim['status'], ['pending_founder_approval', 'pending_verification']))));
+$hasClaimToReview = ($isOwnItem && ($pendingClaimsCount > 0 || $activeMatchStatus === 'pending_founder_approval' || ($existingClaim && in_array($existingClaim['status'], ['pending_founder_approval', 'pending_verification']))));
 
 // 4. Verification & Handover Status
 $itemCategory = $item['category'] ?? 'General';
 $categoryQuestions = function_exists('getCategoryVerificationQuestions') ? getCategoryVerificationQuestions($itemCategory) : [];
 
-$isHandoverReady = ($activeMatchStatus === 'ready_for_handover' || ($existingClaim && in_array($existingClaim['status'], ['in_progress', 'ready_for_handover', 'approved'])));
+$isHandoverReady = ($handoverReadyCount > 0 || $activeMatchStatus === 'ready_for_handover' || ($existingClaim && in_array($existingClaim['status'], ['in_progress', 'ready_for_handover', 'approved'])));
+if ($handoverMatchId > 0 && empty($currentMatchId)) {
+    $currentMatchId = $handoverMatchId;
+}
 
 $itemLocation = $item['location'] ?? 'Campus Grounds';
 $itemDateFormatted = htmlspecialchars(($item['report_date'] ?? date('Y-m-d')) . ' (' . formatRelativeTime($item['created_at'] ?? $item['report_date'] ?? null) . ')');
@@ -711,6 +791,42 @@ if ($conn && $numericId > 0) {
                 This item matches your reported Lost Report <strong>#<?php echo htmlspecialchars($oppCode ?? 'RL-' . str_pad($oppId ?? 0, 5, '0', STR_PAD_LEFT)); ?></strong>. Submit your proof below to reclaim it.
               </div>
             </div>
+          <?php elseif ($isOwnItem && $isFound && !empty($founderClaimsList)): ?>
+            <!-- Multi-Claim Banner for Founder -->
+            <div class="match-alert-pill-banner" style="background: rgba(196, 98, 45, 0.1); border: 1.5px solid rgba(196, 98, 45, 0.4); border-radius: 12px; padding: 0.95rem 1.15rem; margin-bottom: 0.9rem; display: flex; align-items: flex-start; gap: 0.75rem;">
+              <span style="font-size: 1.35rem; line-height: 1;">📋</span>
+              <div style="font-size: 0.85rem; color: var(--ink); flex: 1;">
+                <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; flex-wrap: wrap;">
+                  <strong style="color: var(--accent); font-size: 0.95rem;">
+                    <?php if (count($founderClaimsList) > 1): ?>
+                      Multiple Claim Requests (<?php echo count($founderClaimsList); ?> Requests)
+                    <?php else: ?>
+                      Claim Request Received
+                    <?php endif; ?>
+                  </strong>
+                  <?php if ($pendingClaimsCount > 0): ?>
+                    <span style="background: rgba(245, 158, 11, 0.18); color: #b45309; font-size: 0.75rem; font-weight: 700; padding: 0.2rem 0.6rem; border-radius: 999px; border: 1px solid rgba(245, 158, 11, 0.4);">
+                      <?php echo $pendingClaimsCount; ?> Pending Verification
+                    </span>
+                  <?php elseif ($handoverReadyCount > 0): ?>
+                    <span style="background: rgba(16, 185, 129, 0.18); color: #059669; font-size: 0.75rem; font-weight: 700; padding: 0.2rem 0.6rem; border-radius: 999px; border: 1px solid rgba(16, 185, 129, 0.4);">
+                      🤝 Handover Ready
+                    </span>
+                  <?php endif; ?>
+                </div>
+                <span style="display: block; margin-top: 0.25rem; color: var(--ink); line-height: 1.45;">
+                  <?php if (count($founderClaimsList) > 1): ?>
+                    Multiple students have submitted claim requests for this item. Click below to inspect their submitted proof and verify the rightful owner.
+                  <?php elseif ($pendingClaimsCount > 0): ?>
+                    Ownership proof has been submitted by a student and is ready for your verification!
+                  <?php elseif ($handoverReadyCount > 0): ?>
+                    You approved an owner for this item. Meet the owner to verify their 6-digit OTP code and complete the handover.
+                  <?php else: ?>
+                    Click below to view the claim requests and verification history for this item.
+                  <?php endif; ?>
+                </span>
+              </div>
+            </div>
           <?php elseif ($hasAiMatch && $isOwnItem && !$isReunited): ?>
             <div class="match-alert-pill-banner" style="background: rgba(196, 98, 45, 0.09); border: 1.5px solid rgba(196, 98, 45, 0.35); border-radius: 12px; padding: 0.85rem 1rem; margin-bottom: 0.9rem; display: flex; align-items: flex-start; gap: 0.65rem;">
               <span style="font-size: 1.25rem; line-height: 1;">✨</span>
@@ -729,24 +845,27 @@ if ($conn && $numericId > 0) {
               <button type="button" class="btn-claim-primary secondary" disabled>
                 <span>Report Reunited / Closed</span>
               </button>
-            <?php elseif ($hasClaimToReview): ?>
-              <?php 
-                $pendingProofText = (string)($activeMatchRow['claim_details'] ?? ($activeMatchRow['owner_proof'] ?? ($existingClaim['proof_details'] ?? '')));
-                $pendingProofImg = (string)($activeMatchRow['proof_image'] ?? '');
-              ?>
-              <script type="application/json" id="founderPendingClaimData">
-                <?php echo json_encode([
-                    'match_id' => (int)($currentMatchId ?: 1),
-                    'claim_details' => $pendingProofText,
-                    'proof_image' => $pendingProofImg,
-                    'item_title' => $smartTitle,
-                    'report_code' => $formattedId
-                ], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>
-              </script>
-              <button type="button" class="btn-claim-primary" id="btnFounderReviewClaim" onclick="openFounderApprovalModal(<?php echo (int)($currentMatchId ?: 1); ?>)">
-                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
-                <span>Review Ownership Proof &rarr;</span>
+              <?php if ($isOwnItem && !empty($founderClaimsList)): ?>
+                <button type="button" class="btn-claim-primary secondary" onclick="openClaimRequestsListModal()" style="display:inline-flex; align-items:center; gap:0.45rem;">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/><path d="M9 12h6"/><path d="M9 16h6"/></svg>
+                  <span>Show Claim Requests (<?php echo count($founderClaimsList); ?>)</span>
+                </button>
+              <?php endif; ?>
+            <?php elseif ($isOwnItem && $isFound && !empty($founderClaimsList)): ?>
+              <!-- Founder Multi-Claim Button: Show Claim Requests -->
+              <button type="button" class="btn-claim-primary" id="btnShowClaimRequests" onclick="openClaimRequestsListModal()" style="display:inline-flex; align-items:center; gap:0.55rem;">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/><path d="M9 12h6"/><path d="M9 16h6"/></svg>
+                <span>Show Claim Requests (<?php echo count($founderClaimsList); ?>) &rarr;</span>
+                <?php if ($pendingClaimsCount > 0): ?>
+                  <span style="background:rgba(255,255,255,0.25); padding:2px 7px; border-radius:999px; font-size:0.75rem; font-weight:800;"><?php echo $pendingClaimsCount; ?></span>
+                <?php endif; ?>
               </button>
+              <?php if ($handoverReadyCount > 0): ?>
+                <button type="button" class="btn-claim-primary" style="background:#059669; box-shadow:0 4px 18px rgba(5,150,105,0.32);" onclick="openFinderVerifyModal(<?php echo (int)($handoverMatchId ?: $currentMatchId); ?>)">
+                  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                  <span>🤝 Verify Owner OTP</span>
+                </button>
+              <?php endif; ?>
             <?php elseif ($isHandoverReady && $isMatchedLostOwner && $currentMatchId): ?>
               <button type="button" class="btn-claim-primary" onclick="openOwnerHandoverModal(<?php echo $currentMatchId; ?>)">
                 <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
@@ -1032,10 +1151,21 @@ if ($conn && $numericId > 0) {
       <button type="button" class="btn-claim-primary secondary" disabled style="flex: 1;">
         <span>Reunited / Closed</span>
       </button>
-    <?php elseif ($hasClaimToReview): ?>
-      <button type="button" class="btn-claim-primary" onclick="openFounderApprovalModal(<?php echo (int)($currentMatchId ?: 1); ?>)" style="flex: 1;">
-        <span>Review Proof &rarr;</span>
+      <?php if ($isOwnItem && !empty($founderClaimsList)): ?>
+        <button type="button" class="btn-claim-primary secondary" onclick="openClaimRequestsListModal()" style="flex: 1;">
+          <span>Claims (<?php echo count($founderClaimsList); ?>)</span>
+        </button>
+      <?php endif; ?>
+    <?php elseif ($isOwnItem && $isFound && !empty($founderClaimsList)): ?>
+      <button type="button" class="btn-claim-primary" onclick="openClaimRequestsListModal()" style="flex: 1; display:flex; align-items:center; justify-content:center; gap:0.4rem;">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/><path d="M9 12h6"/><path d="M9 16h6"/></svg>
+        <span>Show Claims (<?php echo count($founderClaimsList); ?>) &rarr;</span>
       </button>
+      <?php if ($handoverReadyCount > 0): ?>
+        <button type="button" class="btn-claim-primary" style="background:#059669; padding: 0 12px;" onclick="openFinderVerifyModal(<?php echo (int)($handoverMatchId ?: $currentMatchId); ?>)">
+          <span>🤝 OTP</span>
+        </button>
+      <?php endif; ?>
     <?php elseif ($isHandoverReady && $isMatchedLostOwner && $currentMatchId): ?>
       <button type="button" class="btn-claim-primary" onclick="openOwnerHandoverModal(<?php echo $currentMatchId; ?>)" style="flex: 1;">
         <span>🤝 Get Live OTP</span>
@@ -1083,7 +1213,19 @@ if ($conn && $numericId > 0) {
 <?php include_once __DIR__ . '/includes/match_verification_modal.php'; ?>
 <?php include_once __DIR__ . '/includes/founder_approval_modal.php'; ?>
 <?php include_once __DIR__ . '/includes/owner_handover_modal.php'; ?>
+<?php include_once __DIR__ . '/includes/claim_requests_list_modal.php'; ?>
 
 <script src="js/item.js?v=<?php echo time(); ?>"></script>
+<script>
+// Auto-open claim requests modal if deep-linked via URL parameter (?view_claims=1 or ?claims=1)
+document.addEventListener('DOMContentLoaded', function() {
+  const urlParams = new URLSearchParams(window.location.search);
+  if (urlParams.get('view_claims') === '1' || urlParams.get('claims') === '1' || window.location.hash === '#claim-requests') {
+    if (typeof openClaimRequestsListModal === 'function') {
+      openClaimRequestsListModal();
+    }
+  }
+});
+</script>
 </body>
 </html>
