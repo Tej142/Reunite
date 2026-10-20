@@ -9,7 +9,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const modeDescriptions = {
     mode1: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px; margin-right:4px;"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> <strong>AI Vision &amp; Text Parser:</strong> Upload photos &amp; describe your item directly. AI extracts traits automatically.',
-    mode2: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px; margin-right:4px;"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg> <strong>Guided Choice Assistant:</strong> Step-by-step smart questionnaire tailored for quick input.',
+    mode2: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px; margin-right:4px;"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> <strong>Instant Choice:</strong> Dynamic AI questionnaire tailored specifically to your item category.',
     mode3: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px; margin-right:4px;"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg> <strong>Talk to AI Live Copilot:</strong> Speak or type details naturally — AI drafts your report in real time.'
   };
 
@@ -100,57 +100,372 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // 3. Mode 2 Guided Choice Wizard Logic
+  // 3. Mode 2 Instant Choice Wizard Logic (Dynamic & Smart)
   let currentStep = 1;
   const totalSteps = 3;
-  const guidedState = {
+
+  const SMART_CLIENT_QUESTIONS = {
+    electronics: [
+      { id: "device_type", question: "What type of electronic device is this?", type: "choice", choices: ["Smartphone", "Laptop", "Wireless Earbuds", "Smartwatch", "Tablet", "Power Bank", "Headphones", "Scientific Calculator", "Other Device"], required: true },
+      { id: "brand", question: "What is the brand / manufacturer?", type: "choice", choices: ["Apple", "Samsung", "Dell", "HP", "Lenovo", "Asus", "Acer", "Boat", "Noise", "Sony", "OnePlus", "Xiaomi / Redmi", "Realme", "Casio", "Other Brand", "I don't know / Not sure"], required: true },
+      { id: "model", question: "Specific model name or series (if known)?", type: "text", placeholder: "e.g. iPhone 13, Inspiron 15, Galaxy S21", required: false },
+      { id: "color", question: "What is the primary color of the device?", type: "choice", choices: ["Black", "Space Grey / Silver", "White", "Midnight Blue", "Gold", "Red", "Green", "Other"], required: true },
+      { id: "screen_condition", question: "Physical condition of the item?", type: "choice", choices: ["Like New / Mint", "Good with minor scuffs", "Worn / Scratched", "Cracked screen / Damaged"], required: false },
+      { id: "case_cover", question: "Was the device in a protective case, sleeve, or pouch?", type: "text", placeholder: "e.g. Matte black silicone case, transparent cover", required: false },
+      { id: "lock_screen_wallpaper", question: "Private Verification: Lock screen wallpaper, stickers, or unique markings?", type: "text", placeholder: "e.g. Anime wallpaper, dog photo, initial sticker on back", required: false, private: true }
+    ],
+    wallets: [
+      { id: "wallet_type", question: "What type of wallet, purse, or bag is this?", type: "choice", choices: ["Bifold Wallet", "Trifold Wallet", "Cardholder", "Purse / Handbag", "College Backpack", "Sling / Crossbody Pouch"], required: true },
+      { id: "brand", question: "What brand is it?", type: "choice", choices: ["Wildcraft", "Woodland", "Fastrack", "Tommy Hilfiger", "Titan", "American Tourister", "Skybags", "Puma", "Local / Unbranded", "Other"], required: false },
+      { id: "material", question: "What material is it made of?", type: "choice", choices: ["Genuine Leather", "Synthetic / Faux Leather", "Canvas / Fabric", "Nylon / Polyester", "Metal"], required: true },
+      { id: "color", question: "Primary color of the wallet / bag?", type: "choice", choices: ["Black", "Dark Brown", "Tan / Light Brown", "Navy Blue", "Grey", "Red", "Olive Green", "Patterned"], required: true },
+      { id: "distinguishing_marks", question: "Any unique exterior markings, zippers, or logos?", type: "text", placeholder: "e.g. White zipper, college keychain, embossed logo", required: false },
+      { id: "private_contents_hint", question: "Private Verification: Non-sensitive card name initial or unique item inside?", type: "text", placeholder: "e.g. Library card with name initial S, old 10 rupee note, bus pass", required: false, private: true }
+    ],
+    keys: [
+      { id: "key_type", question: "What kind of key or key set is this?", type: "choice", choices: ["Bike / Scooter Key", "Car Key with Remote Fob", "Hostel / Room Key", "House / Padlock Key", "Almirah / Drawer Key", "Key Bunch"], required: true },
+      { id: "key_count", question: "How many keys are on the ring?", type: "choice", choices: ["Single key (1)", "2 to 3 keys", "4 to 6 keys", "Large bunch (7+ keys)"], required: true },
+      { id: "key_brand", question: "Brand or emblem on the key / fob?", type: "choice", choices: ["Honda", "Hero", "Yamaha", "TVS", "Suzuki", "Royal Enfield", "Hyundai", "Maruti Suzuki", "Godrej", "Link", "Yale", "Unmarked / Standard"], required: false },
+      { id: "keychain_design", question: "Keychain, lanyard, or accessory attached?", type: "choice", choices: ["Metal ring only (No keychain)", "Fabric / Campus Lanyard", "Rubber / Figurine Keychain", "Leather Fob", "Carabiner Clip", "Bottle Opener"], required: true },
+      { id: "unique_key_mark", question: "Private Verification: Unique scratch, colored tape, or ribbon tag?", type: "text", placeholder: "e.g. Red electrical tape near head, bent tip, specific keychain engraving", required: false, private: true }
+    ],
+    clothing: [
+      { id: "clothing_type", question: "What type of clothing or wearable item?", type: "choice", choices: ["Hoodie / Sweatshirt", "Jacket / Windbreaker", "Cap / Beanie", "T-Shirt / Shirt", "Shoes / Sneakers", "Wristwatch", "Glasses / Sunglasses", "Scarf"], required: true },
+      { id: "brand", question: "What brand is it?", type: "choice", choices: ["Nike", "Adidas", "Puma", "Zara", "Decathlon", "Levi's", "H&M", "Fastrack", "Casio", "Other Brand", "Unbranded"], required: false },
+      { id: "color", question: "Primary color or pattern?", type: "choice", choices: ["Black", "Navy Blue", "Grey", "White", "Red", "Green", "Maroon", "Striped / Checkered"], required: true },
+      { id: "clothing_size", question: "Approximate size?", type: "choice", choices: ["S", "M", "L", "XL", "XXL", "Free Size / Adjustable", "Shoe Size"], required: false },
+      { id: "unique_wear_mark", question: "Private Verification: Interior tag name, micro-tear, or unique badge?", type: "text", placeholder: "e.g. Stitched patch on left pocket, tailor name written on wash tag", required: false, private: true }
+    ],
+    documents: [
+      { id: "document_type", question: "What type of document or academic record?", type: "choice", choices: ["College ID Card", "Hall Ticket / Exam Pass", "Library Card", "Govt ID (Aadhaar / DL)", "Marks Memo / Certificate", "Lab Manual / Project Notebook", "Textbook"], required: true },
+      { id: "issuing_institution", question: "Issuing institution or college?", type: "choice", choices: ["Sri Venkateswara Govt Polytechnic, Tirupati", "Govt Polytechnic Pillaripattu, Puttur", "Venkata Perumal", "State Board of Technical Education", "Other Institution"], required: true },
+      { id: "department", question: "Academic branch or department?", type: "choice", choices: ["Computer Engineering (CME)", "Electronics & Comm (ECE)", "Electrical & Electronics (EEE)", "Mechanical (ME)", "Civil (CE)", "General Studies"], required: false },
+      { id: "cover_color", question: "Color of holder, lanyard, or notebook cover?", type: "choice", choices: ["Blue", "Red", "Transparent / Clear", "Black", "Green", "Yellow", "No cover"], required: false },
+      { id: "holder_name_initial", question: "Private Verification: Student name initials or roll number prefix?", type: "text", placeholder: "e.g. First two letters of student name or last 3 digits of PIN", required: false, private: true }
+    ],
+    other: [
+      { id: "item_title", question: "What is the general name of this item?", type: "text", placeholder: "e.g. Water bottle, Calculator, Umbrella, Scientific Tool", required: true },
+      { id: "brand", question: "Brand or manufacturer (if visible)?", type: "choice", choices: ["Cello", "Milton", "Fastrack", "Casio", "Lenskart", "Quechua", "Wildcraft", "Unknown / Unbranded", "Other"], required: false },
+      { id: "color", question: "Primary color of the item?", type: "choice", choices: ["Black", "Blue", "Silver / Grey", "Red", "Green", "White", "Transparent", "Multi-Color"], required: true },
+      { id: "material", question: "What material is it primarily made of?", type: "choice", choices: ["Plastic", "Stainless Steel / Metal", "Glass", "Fabric / Canvas", "Rubber / Silicone", "Wood", "Other"], required: false },
+      { id: "condition", question: "Physical condition?", type: "choice", choices: ["Brand New / Mint", "Gently Used", "Worn / Scratched", "Damaged"], required: false },
+      { id: "distinguishing_marks", question: "Private Verification: Distinguishing scratches, engravings, or stickers?", type: "text", placeholder: "e.g. Scratch on base, name sticker, custom engraving", required: false, private: true }
+    ]
+  };
+
+  const instantChoiceState = {
     category: '',
-    color: '',
-    condition: '',
-    brand: '',
+    reportType: reportType,
+    questions: [],
+    answers: {},
+    loadedCategory: null,
+    isLoading: false,
     where: '',
-    when: '',
-    verification: '',
-    email: ''
+    when: ''
   };
 
   const stepDots = document.querySelectorAll('.wizard-step-dot');
   const wizardSteps = document.querySelectorAll('.wizard-step-content');
   const btnPrev = document.getElementById('btnWizardPrev');
   const btnNext = document.getElementById('btnWizardNext');
+  const dynamicLoadingEl = document.getElementById('dynamicQuestionsLoading');
+  const dynamicContainerEl = document.getElementById('dynamicQuestionsContainer');
+  const step2SubTitleEl = document.getElementById('step2SubTitle');
 
-  // Category Option Tiles click
+  function formatCategoryName(cat) {
+    if (!cat) return 'General Item';
+    const c = cat.toLowerCase();
+    if (c === 'electronics') return 'Electronics & Gadgets';
+    if (c === 'wallets') return 'Wallets & Bags';
+    if (c === 'keys') return 'Keys';
+    if (c === 'clothing') return 'Clothing & Wearables';
+    if (c === 'documents') return 'Documents & IDs';
+    if (c === 'other') return 'General Item';
+    return cat.charAt(0).toUpperCase() + cat.slice(1);
+  }
+
+  // Pre-fetch and render questions for a category
+  async function fetchAndRenderCategoryQuestions(categoryKey) {
+    if (!categoryKey) return;
+    const cleanCat = categoryKey.toLowerCase().trim();
+
+    if (instantChoiceState.loadedCategory === cleanCat && instantChoiceState.questions.length > 0) {
+      renderDynamicQuestions(instantChoiceState.questions);
+      return;
+    }
+
+    instantChoiceState.isLoading = true;
+    if (dynamicLoadingEl) dynamicLoadingEl.style.display = 'flex';
+    if (dynamicContainerEl) dynamicContainerEl.style.display = 'none';
+
+    if (step2SubTitleEl) {
+      step2SubTitleEl.textContent = `Smart questions tailored specifically for ${formatCategoryName(cleanCat)} (${reportType === 'found' ? 'Found' : 'Lost'}).`;
+    }
+
+    let questions = null;
+
+    if (window.FlaskAIService && typeof window.FlaskAIService.startReportSession === 'function') {
+      try {
+        const sessionPromise = window.FlaskAIService.startReportSession({
+          category: cleanCat,
+          report_type: reportType,
+          input_mode: 'instant_choice'
+        });
+        const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 3500));
+        const res = await Promise.race([sessionPromise, timeoutPromise]);
+        if (res && res.success && Array.isArray(res.questions) && res.questions.length > 0) {
+          questions = res.questions;
+        }
+      } catch (err) {
+        console.info('[InstantChoice] Falling back to instant smart category template:', err.message);
+      }
+    }
+
+    if (!questions || questions.length === 0) {
+      let matchedKey = 'other';
+      for (const k of Object.keys(SMART_CLIENT_QUESTIONS)) {
+        if (cleanCat.includes(k) || k.includes(cleanCat)) {
+          matchedKey = k;
+          break;
+        }
+      }
+      questions = SMART_CLIENT_QUESTIONS[matchedKey] || SMART_CLIENT_QUESTIONS['other'];
+    }
+
+    instantChoiceState.questions = questions;
+    instantChoiceState.loadedCategory = cleanCat;
+    instantChoiceState.isLoading = false;
+
+    renderDynamicQuestions(questions);
+
+    if (dynamicLoadingEl) dynamicLoadingEl.style.display = 'none';
+    if (dynamicContainerEl) dynamicContainerEl.style.display = 'flex';
+  }
+
+  // Dynamically render question cards
+  function renderDynamicQuestions(questions) {
+    if (!dynamicContainerEl) return;
+    dynamicContainerEl.innerHTML = '';
+
+    questions.forEach((q) => {
+      const card = document.createElement('div');
+      card.className = `dynamic-question-card ${q.private ? 'is-private' : ''}`;
+      card.setAttribute('data-qid', q.id);
+
+      const header = document.createElement('div');
+      header.className = 'dynamic-question-header';
+
+      const title = document.createElement('div');
+      title.className = 'dynamic-question-title';
+      title.innerHTML = `${escapeHtml(q.question)} ${q.required ? '<span style="color:#ef4444; margin-left:3px;" title="Required">*</span>' : ''}`;
+      header.appendChild(title);
+
+      if (q.private) {
+        const badge = document.createElement('div');
+        badge.className = 'dynamic-question-badge-private';
+        badge.innerHTML = '🔒 Private — Claim Verification Only';
+        header.appendChild(badge);
+      }
+
+      card.appendChild(header);
+
+      if (q.private) {
+        const hint = document.createElement('div');
+        hint.style.fontSize = '0.78rem';
+        hint.style.color = 'var(--muted, #78716C)';
+        hint.style.marginBottom = '0.65rem';
+        hint.textContent = 'This detail is shielded and will only be used to verify the genuine owner during claim requests.';
+        card.appendChild(hint);
+      }
+
+      // Input Controls
+      if (q.type === 'choice' || (Array.isArray(q.choices) && q.choices.length > 0)) {
+        const pillsGroup = document.createElement('div');
+        pillsGroup.className = 'pills-group';
+        pillsGroup.setAttribute('data-group', q.id);
+
+        const currentAns = instantChoiceState.answers[q.id];
+
+        // Other text input
+        const otherInput = document.createElement('input');
+        otherInput.type = 'text';
+        otherInput.className = 'dynamic-question-input-text dynamic-other-input';
+        otherInput.placeholder = 'Please specify custom ' + (q.id.replace(/_/g, ' ') || 'detail') + '...';
+        otherInput.style.display = 'none';
+        otherInput.style.marginTop = '0.65rem';
+
+        q.choices.forEach(choice => {
+          const pill = document.createElement('span');
+          pill.className = 'choice-pill';
+          pill.textContent = choice;
+          pill.setAttribute('data-value', choice);
+
+          if (currentAns && (currentAns === choice || (choice.toLowerCase().includes('other') && !q.choices.includes(currentAns)))) {
+            pill.classList.add('selected');
+            if (choice.toLowerCase().includes('other')) {
+              otherInput.style.display = 'block';
+              otherInput.value = currentAns !== choice ? currentAns : '';
+            }
+          }
+
+          pill.addEventListener('click', () => {
+            pillsGroup.querySelectorAll('.choice-pill').forEach(p => p.classList.remove('selected'));
+            pill.classList.add('selected');
+            card.classList.remove('error-pulse');
+
+            if (choice.toLowerCase().includes('other')) {
+              otherInput.style.display = 'block';
+              otherInput.focus();
+              instantChoiceState.answers[q.id] = otherInput.value.trim() || choice;
+            } else {
+              otherInput.style.display = 'none';
+              instantChoiceState.answers[q.id] = choice;
+            }
+          });
+
+          pillsGroup.appendChild(pill);
+        });
+
+        otherInput.addEventListener('input', (e) => {
+          instantChoiceState.answers[q.id] = e.target.value.trim() || 'Other';
+          card.classList.remove('error-pulse');
+        });
+
+        card.appendChild(pillsGroup);
+        card.appendChild(otherInput);
+
+      } else if (q.type === 'yes_no') {
+        const pillsGroup = document.createElement('div');
+        pillsGroup.className = 'pills-group';
+        pillsGroup.setAttribute('data-group', q.id);
+
+        const currentAns = instantChoiceState.answers[q.id];
+        const yesNoOptions = ['Yes', 'No', 'Not sure'];
+
+        yesNoOptions.forEach(opt => {
+          const pill = document.createElement('span');
+          pill.className = 'choice-pill';
+          pill.textContent = opt;
+          pill.setAttribute('data-value', opt);
+
+          if (currentAns === opt) {
+            pill.classList.add('selected');
+          }
+
+          pill.addEventListener('click', () => {
+            pillsGroup.querySelectorAll('.choice-pill').forEach(p => p.classList.remove('selected'));
+            pill.classList.add('selected');
+            instantChoiceState.answers[q.id] = opt;
+            card.classList.remove('error-pulse');
+          });
+
+          pillsGroup.appendChild(pill);
+        });
+
+        card.appendChild(pillsGroup);
+
+      } else {
+        // Open text input
+        const textInput = document.createElement('input');
+        textInput.type = 'text';
+        textInput.className = 'dynamic-question-input-text';
+        textInput.setAttribute('data-qid', q.id);
+        textInput.placeholder = q.placeholder || (q.private ? 'e.g. Secret marking, wallpaper, or unique scratch...' : 'Type details here...');
+        textInput.value = instantChoiceState.answers[q.id] || '';
+
+        textInput.addEventListener('input', (e) => {
+          instantChoiceState.answers[q.id] = e.target.value;
+          if (e.target.value.trim()) {
+            card.classList.remove('error-pulse');
+          }
+        });
+
+        card.appendChild(textInput);
+      }
+
+      dynamicContainerEl.appendChild(card);
+    });
+  }
+
+  // Category Option Tiles click in Step 1
   document.querySelectorAll('.option-tile').forEach(tile => {
     tile.addEventListener('click', () => {
       const parent = tile.parentElement;
       parent.querySelectorAll('.option-tile').forEach(t => t.classList.remove('selected'));
       tile.classList.add('selected');
-      guidedState.category = tile.getAttribute('data-value') || tile.querySelector('.option-tile-label').textContent;
+      const val = tile.getAttribute('data-value') || tile.querySelector('.option-tile-label').textContent;
+      instantChoiceState.category = val.toLowerCase().trim();
+      
       const catSelect = document.getElementById('category');
-      if (catSelect && guidedState.category) {
-        catSelect.value = guidedState.category.toLowerCase();
+      if (catSelect && instantChoiceState.category) {
+        catSelect.value = instantChoiceState.category;
       }
+
+      // Pre-warm / fetch questions in background for instant transition
+      fetchAndRenderCategoryQuestions(instantChoiceState.category);
     });
   });
 
-  // Choice Pills click
-  document.querySelectorAll('.choice-pill').forEach(pill => {
-    pill.addEventListener('click', () => {
-      const group = pill.parentElement;
-      group.querySelectorAll('.choice-pill').forEach(p => p.classList.remove('selected'));
-      pill.classList.add('selected');
-      const attr = group.getAttribute('data-group');
-      if (attr) {
-        guidedState[attr] = pill.getAttribute('data-value') || pill.textContent.trim();
-      }
-    });
-  });
-
+  // Wizard Navigation
   if (btnNext) {
     btnNext.addEventListener('click', () => {
-      if (currentStep < totalSteps) {
-        currentStep++;
+      if (currentStep === 1) {
+        if (!instantChoiceState.category) {
+          if (window.ReuniteToast) {
+            window.ReuniteToast.warning('Category Required', 'Please choose an item category to continue.');
+          } else {
+            alert('Please select an item category to continue.');
+          }
+          const grid = document.querySelector('.option-tiles-grid');
+          if (grid) {
+            grid.style.transform = 'scale(1.02)';
+            setTimeout(() => { grid.style.transform = 'scale(1)'; }, 250);
+          }
+          return;
+        }
+
+        // Ensure questions are rendered for the selected category
+        if (instantChoiceState.loadedCategory !== instantChoiceState.category || instantChoiceState.questions.length === 0) {
+          fetchAndRenderCategoryQuestions(instantChoiceState.category);
+        }
+
+        currentStep = 2;
         updateWizardUI();
+
+      } else if (currentStep === 2) {
+        // Validate required questions
+        const missing = (instantChoiceState.questions || []).filter(q => {
+          if (!q.required) return false;
+          const val = instantChoiceState.answers[q.id];
+          return val === undefined || val === null || !String(val).trim();
+        });
+
+        if (missing.length > 0) {
+          const firstMissing = missing[0];
+          const card = dynamicContainerEl ? dynamicContainerEl.querySelector(`[data-qid="${firstMissing.id}"]`) : null;
+          if (card) {
+            card.classList.add('error-pulse');
+            card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            setTimeout(() => card.classList.remove('error-pulse'), 3000);
+          }
+
+          const qLabel = firstMissing.question.replace(/\*/g, '').trim();
+          if (window.ReuniteToast) {
+            window.ReuniteToast.warning('Answer Required', `Please answer: "${qLabel}"`);
+          } else {
+            alert(`Please answer required question: "${qLabel}"`);
+          }
+          return;
+        }
+
+        currentStep = 3;
+        updateWizardUI();
+
+        const whereInput = document.getElementById('guidedWhere');
+        if (whereInput) {
+          setTimeout(() => whereInput.focus(), 150);
+        }
+
       } else {
         submitGuidedReport();
       }
@@ -192,69 +507,208 @@ document.addEventListener('DOMContentLoaded', () => {
     if (btnNext) {
       btnNext.textContent = currentStep === totalSteps ? 'Process & Extract Features' : 'Next Step →';
     }
+
+    const mode2Card = document.querySelector('.guided-wizard-card') || document.getElementById('mode2Container');
+    if (mode2Card) {
+      mode2Card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
   }
 
+  // Synthesize answers into canonical Digital DNA & review card
   async function submitGuidedReport() {
     const whereInput = document.getElementById('guidedWhere');
     const whenInput = document.getElementById('guidedWhen');
-    const emailInput = document.getElementById('guidedEmail');
-    const verificationInput = document.getElementById('guidedVerification');
 
-    if (whereInput) guidedState.where = whereInput.value;
-    if (whenInput) guidedState.when = whenInput.value;
-    if (emailInput) guidedState.email = emailInput.value;
-    if (verificationInput) guidedState.verification = verificationInput.value;
+    if (whereInput) instantChoiceState.where = whereInput.value.trim();
+    if (whenInput) instantChoiceState.when = whenInput.value.trim();
 
-    const brandDisplay = (guidedState.brand && guidedState.brand !== 'unknown') ? `Brand: ${guidedState.brand}. ` : '';
-    const colorDisplay = (guidedState.color && guidedState.color !== 'unknown') ? `${guidedState.color} ` : '';
-    const summaryText = `${colorDisplay}${guidedState.category || 'item'}. Condition: ${guidedState.condition || 'good'}. ${brandDisplay}`.trim();
-    
+    // Harvest answers
+    const answers = { ...instantChoiceState.answers };
+    const category = instantChoiceState.category || 'other';
+
+    const color = answers['color'] || answers['cover_color'] || '';
+    const brand = answers['brand'] || answers['device_brand'] || answers['key_brand'] || '';
+    const model = answers['model'] || '';
+    const condition = answers['screen_condition'] || answers['condition'] || 'Good';
+    const subType = answers['device_type'] || answers['wallet_type'] || answers['key_type'] || answers['clothing_type'] || answers['document_type'] || answers['item_title'] || formatCategoryName(category);
+
+    const titleParts = [color, brand, model || subType].filter(Boolean);
+    const itemTitle = titleParts.length > 0 ? titleParts.join(' ') : formatCategoryName(category);
+
+    // Build human readable summary
+    const summaryLines = [
+      `${itemTitle} (${formatCategoryName(category)}).`,
+      brand ? `Brand: ${brand}.` : '',
+      model ? `Model: ${model}.` : '',
+      color ? `Color: ${color}.` : '',
+      condition ? `Condition: ${condition}.` : '',
+      instantChoiceState.where ? `Reported Location: ${instantChoiceState.where}.` : '',
+      instantChoiceState.when ? `Date / Time: ${instantChoiceState.when}.` : ''
+    ].filter(Boolean);
+
+    // Add extra answers as traits
+    Object.entries(answers).forEach(([k, v]) => {
+      if (['color', 'cover_color', 'brand', 'device_brand', 'key_brand', 'model', 'screen_condition', 'condition'].includes(k)) return;
+      if (v && typeof v === 'string' && v.trim() && v.toLowerCase() !== 'unknown' && v.toLowerCase() !== 'not sure') {
+        const cleanKey = k.replace(/_/g, ' ');
+        summaryLines.push(`${cleanKey.charAt(0).toUpperCase() + cleanKey.slice(1)}: ${v.trim()}.`);
+      }
+    });
+
+    const summaryText = summaryLines.join(' ');
+
     if (btnNext && window.setButtonLoading) {
       window.setButtonLoading(btnNext, true, 'Synthesizing Digital DNA...');
     }
 
-    const meta = {
-      title: `${colorDisplay}${guidedState.category || 'Item'}`.trim(),
-      where: guidedState.where || '',
-      when: guidedState.when || '',
-      verification: guidedState.verification || '',
-      brand: guidedState.brand || '',
-      color: guidedState.color || ''
-    };
-
     const thinkingContainer = document.querySelector('.guided-wizard-card') || document.getElementById('mode2Container');
-    const thinkingHandle = window.Orbi && thinkingContainer ? window.Orbi.showThinking(thinkingContainer, { caption: 'Extracting details...', size: 44, delay: 300 }) : null;
+    const thinkingHandle = window.Orbi && thinkingContainer ? window.Orbi.showThinking(thinkingContainer, { caption: 'Synthesizing Digital DNA...', size: 44, delay: 200 }) : null;
+
+    const meta = {
+      title: itemTitle,
+      category: formatCategoryName(category),
+      where: instantChoiceState.where || '',
+      when: instantChoiceState.when || '',
+      brand: brand,
+      color: color,
+      condition: condition,
+      model: model,
+      description: summaryText
+    };
 
     try {
       let dna = null;
-      if (window.FlaskAIService) {
-        const aiResult = await window.FlaskAIService.submitReportToFlask({
-          description: summaryText,
-          meta: meta
-        });
-        if (aiResult && aiResult.digital_dna) {
-          dna = aiResult.digital_dna;
-        } else {
-          dna = window.FlaskAIService.extractClientDna(summaryText, meta);
+
+      // 1. Try AI microservice /report/normalize
+      if (window.FlaskAIService && typeof window.FlaskAIService.normalizeReport === 'function') {
+        try {
+          const normResult = await window.FlaskAIService.normalizeReport({
+            report_data: {
+              ...answers,
+              category: category,
+              location: instantChoiceState.where,
+              time: instantChoiceState.when,
+              additional_text: summaryText
+            },
+            source: 'instant_choice',
+            category: category,
+            report_type: reportType
+          });
+
+          if (normResult && normResult.success && normResult.data) {
+            const nd = normResult.data;
+            const attrMap = nd.attributes || {};
+
+            // Extract visible features
+            const visibleList = [];
+            if (Array.isArray(nd.visible_features)) {
+              nd.visible_features.forEach(f => {
+                if (typeof f === 'string') visibleList.push(f);
+                else if (f && f.value) visibleList.push(`${f.type || 'Feature'}: ${f.value}`);
+              });
+            }
+
+            // Extract private verification
+            let privMarks = '';
+            let privSecret = '';
+            if (Array.isArray(nd.private_features)) {
+              nd.private_features.forEach(pf => {
+                const text = pf.value || '';
+                if (/wallpaper|mark|sticker|engrav|color|tag|initial/i.test(pf.type || '')) {
+                  privMarks = privMarks ? `${privMarks}; ${text}` : text;
+                } else {
+                  privSecret = privSecret ? `${privSecret}; ${text}` : text;
+                }
+              });
+            }
+
+            dna = {
+              object_type: nd.object_type || itemTitle,
+              category: formatCategoryName(category),
+              attributes: {
+                Brand: attrMap['brand'] || brand || 'Unbranded',
+                Model: attrMap['model'] || model || 'Standard',
+                Color: attrMap['color'] || color || 'Neutral',
+                Material: attrMap['material'] || answers['material'] || 'Standard',
+                Condition: attrMap['condition'] || condition || 'Good',
+                "Date / Time": instantChoiceState.when || new Date().toISOString().split('T')[0],
+                "Reported Location": instantChoiceState.where || 'Campus'
+              },
+              location: nd.location || instantChoiceState.where || 'Campus',
+              visible_features: visibleList.length > 0 ? visibleList : [itemTitle, color, brand].filter(Boolean),
+              private_verification: {
+                serial: attrMap['serial'] || '',
+                marks: privMarks,
+                secret_contents: privSecret
+              }
+            };
+          }
+        } catch (normErr) {
+          console.info('[InstantChoice] Normalizer call fallback to smart client DNA synthesis:', normErr.message);
         }
       }
 
+      // 2. Resilient Smart Client DNA Extractor
+      if (!dna) {
+        const visibleFeatures = [];
+        let privMarks = '';
+        let privSecret = '';
+
+        instantChoiceState.questions.forEach(q => {
+          const val = answers[q.id];
+          if (!val || typeof val !== 'string' || !val.trim() || val.toLowerCase() === 'unknown' || val.toLowerCase() === 'not sure') return;
+          
+          if (q.private) {
+            if (/wallpaper|mark|scratch|sticker|badge|initial/i.test(q.id)) {
+              privMarks = privMarks ? `${privMarks}; ${val.trim()}` : val.trim();
+            } else {
+              privSecret = privSecret ? `${privSecret}; ${val.trim()}` : val.trim();
+            }
+          } else if (!['brand', 'model', 'color', 'device_type', 'wallet_type', 'key_type', 'clothing_type', 'document_type', 'item_title'].includes(q.id)) {
+            visibleFeatures.push(`${q.question.replace(/\*/g, '').replace(/\?/g, '').trim()}: ${val.trim()}`);
+          }
+        });
+
+        dna = {
+          object_type: itemTitle,
+          category: formatCategoryName(category),
+          attributes: {
+            Brand: brand || 'Unbranded',
+            Model: model || 'Standard',
+            Color: color || 'Neutral',
+            Material: answers['material'] || 'Standard',
+            Condition: condition,
+            "Date / Time": instantChoiceState.when || new Date().toISOString().split('T')[0],
+            "Reported Location": instantChoiceState.where || 'Campus'
+          },
+          location: instantChoiceState.where || 'Campus',
+          visible_features: visibleFeatures.length > 0 ? visibleFeatures : [itemTitle, color, brand].filter(Boolean),
+          private_verification: {
+            serial: '',
+            marks: privMarks,
+            secret_contents: privSecret
+          }
+        };
+      }
+
+      // 3. Hand off to AI Review Card
       if (typeof window.transitionToReview === 'function') {
         window.transitionToReview(dna, {
-          title: meta.title,
+          title: itemTitle,
           description: summaryText,
-          where: meta.where,
-          when: meta.when,
-          verification: meta.verification
+          where: instantChoiceState.where,
+          when: instantChoiceState.when,
+          verification: dna.private_verification?.marks || dna.private_verification?.secret_contents || ''
         });
       } else {
         showSuccessState(summaryText, { ...meta, dna });
       }
+
     } catch (e) {
-      console.error('Error extracting DNA from guided state:', e);
-      const dna = window.FlaskAIService ? window.FlaskAIService.extractClientDna(summaryText, meta) : null;
+      console.error('[InstantChoice] Error synthesizing DNA:', e);
+      const fallbackDna = window.FlaskAIService ? window.FlaskAIService.extractClientDna(summaryText, meta) : null;
       if (typeof window.transitionToReview === 'function') {
-        window.transitionToReview(dna, {
+        window.transitionToReview(fallbackDna, {
           title: meta.title,
           description: summaryText,
           where: meta.where,
@@ -262,12 +716,10 @@ document.addEventListener('DOMContentLoaded', () => {
           verification: meta.verification
         });
       } else {
-        showSuccessState(summaryText, { ...meta, dna });
+        showSuccessState(summaryText, { ...meta, dna: fallbackDna });
       }
     } finally {
-      if (thinkingHandle) {
-        thinkingHandle.dismiss();
-      }
+      if (thinkingHandle) thinkingHandle.dismiss();
       if (btnNext && window.setButtonLoading) {
         window.setButtonLoading(btnNext, false);
       }

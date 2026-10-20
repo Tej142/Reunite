@@ -58,17 +58,17 @@
           </div>
         </div>
 
-        <!-- Option 2: Guided Choice -->
+        <!-- Option 2: Instant Choice -->
         <div class="mode-card" data-mode="mode2" id="tabMode2">
           <div class="mode-card-header">
             <div class="mode-icon">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
             </div>
-            <span class="mode-badge">Step-by-Step</span>
+            <span class="mode-badge">⚡ Instant AI</span>
           </div>
           <div>
-            <div class="mode-card-title">Guided Choice</div>
-            <div class="mode-card-desc">Interactive visual wizard for quick category, color, and location selection.</div>
+            <div class="mode-card-title">Instant Choice</div>
+            <div class="mode-card-desc">Dynamic AI questionnaire tailored specifically to your item category.</div>
           </div>
         </div>
 
@@ -241,45 +241,45 @@
           </div>
         </div>
 
-        <!-- Step 2: Key Attributes -->
+        <!-- Step 2: Dynamic Category Questions -->
         <div class="wizard-step-content" data-step="2" style="display: none;">
           <div class="wizard-step-title">Step 2: Key visual traits &amp; identification</div>
-          <div class="wizard-step-sub">Select brand, color, and condition to help AI match finder reports accurately.</div>
+          <div class="wizard-step-sub" id="step2SubTitle">Smart questions tailored specifically to your chosen category.</div>
 
-          <label>Brand / Manufacturer</label>
-          <div class="pills-group" data-group="brand">
-            <span class="choice-pill">Dell</span>
-            <span class="choice-pill">Lenovo</span>
-            <span class="choice-pill">HP</span>
-            <span class="choice-pill">Apple</span>
-            <span class="choice-pill">Samsung</span>
-            <span class="choice-pill">Asus</span>
-            <span class="choice-pill">Acer</span>
-            <span class="choice-pill">Other</span>
-            <span class="choice-pill" data-value="unknown">I don't know / Not sure</span>
+          <!-- Dynamic Questions Loading State -->
+          <div id="dynamicQuestionsLoading" class="dynamic-questions-loading" style="display: none;">
+            <div class="dynamic-spinner"></div>
+            <span>Synthesizing smart category questions with AI...</span>
           </div>
 
-          <label style="margin-top: 1.5rem;">Primary Color</label>
-          <div class="pills-group" data-group="color">
-            <span class="choice-pill">Black</span>
-            <span class="choice-pill">Brown</span>
-            <span class="choice-pill">Blue</span>
-            <span class="choice-pill">Silver / Grey</span>
-            <span class="choice-pill">Red / Pink</span>
-            <span class="choice-pill">White / Beige</span>
-            <span class="choice-pill">Gold / Yellow</span>
-            <span class="choice-pill">Green</span>
-            <span class="choice-pill">Multi-Color / Pattern</span>
-            <span class="choice-pill" data-value="unknown">I don't know / Not sure</span>
+          <!-- Dynamic Questions Container -->
+          <div id="dynamicQuestionsContainer" class="dynamic-questions-container">
+            <!-- Dynamically populated based on chosen category -->
           </div>
 
-          <label style="margin-top: 1.5rem;">Physical Condition</label>
-          <div class="pills-group" data-group="condition">
-            <span class="choice-pill">Like New / Mint</span>
-            <span class="choice-pill">Slight Scuffs</span>
-            <span class="choice-pill">Worn / Used</span>
-            <span class="choice-pill">Damaged / Cracked</span>
-            <span class="choice-pill" data-value="unknown">Not sure</span>
+          <!-- Fallback static template (used if no dynamic container or JS fallback) -->
+          <div id="staticStep2Fallback" style="display: none;">
+            <label>Brand / Manufacturer</label>
+            <div class="pills-group" data-group="brand">
+              <span class="choice-pill">Apple</span>
+              <span class="choice-pill">Samsung</span>
+              <span class="choice-pill">Dell</span>
+              <span class="choice-pill">HP</span>
+              <span class="choice-pill">Lenovo</span>
+              <span class="choice-pill">Other</span>
+              <span class="choice-pill" data-value="unknown">I don't know / Not sure</span>
+            </div>
+
+            <label style="margin-top: 1.5rem;">Primary Color</label>
+            <div class="pills-group" data-group="color">
+              <span class="choice-pill">Black</span>
+              <span class="choice-pill">Brown</span>
+              <span class="choice-pill">Blue</span>
+              <span class="choice-pill">Silver / Grey</span>
+              <span class="choice-pill">White / Beige</span>
+              <span class="choice-pill">Other</span>
+              <span class="choice-pill" data-value="unknown">I don't know / Not sure</span>
+            </div>
           </div>
         </div>
 

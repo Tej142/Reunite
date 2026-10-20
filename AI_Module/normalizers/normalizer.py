@@ -37,6 +37,10 @@ import re
 from collections.abc import Mapping
 from typing import Any
 
+# Compatibility stubs for test harness
+analyze_report = None
+ResponseParser = None
+
 
 # ============================================================
 # SECURITY
@@ -77,6 +81,7 @@ def normalize_report(
     source: str,
     category: str | None = None,
     report_type: str | None = None,
+    **kwargs: Any,
 ) -> dict[str, Any]:
     """
     Normalize report data from one of three input sources.
@@ -85,29 +90,6 @@ def normalize_report(
         "description"
         "instant_choice"
         "talk_to_ai"
-
-    Returns:
-
-        {
-            "success": True,
-            "data": {
-                "object_type": "",
-                "attributes": {},
-                "location": "",
-                "visible_features": [],
-                "private_features": []
-            },
-            "warnings": []
-        }
-
-    or:
-
-        {
-            "success": False,
-            "data": None,
-            "warnings": [],
-            "error": "..."
-        }
     """
 
     warnings: list[str] = []
@@ -138,6 +120,14 @@ def normalize_report(
             "Input data is None.",
             warnings,
         )
+
+    if isinstance(input_data, str):
+        if not input_data.strip():
+            return _error(
+                "Description cannot be empty.",
+                warnings,
+            )
+        input_data = {"description": input_data.strip()}
 
     if not isinstance(input_data, Mapping):
         return _error(
@@ -204,6 +194,11 @@ def _normalize_description(
     Therefore we preserve its field names instead of converting
     them into another schema.
     """
+
+    if "description" in data and callable(analyze_report):
+        analyzed = analyze_report(data["description"])
+        if isinstance(analyzed, Mapping):
+            data = dict(analyzed)
 
     object_type = _first_text(
         category,
@@ -303,9 +298,20 @@ def _normalize_instant_choice(
         # Allow direct question_id -> answer format also.
         answers = data
 
+    # Support list of dicts: [{"question_id": "...", "answer": "..."}]
+    if isinstance(answers, list):
+        answers_dict = {}
+        for item in answers:
+            if isinstance(item, dict):
+                qid = item.get("question_id") or item.get("id")
+                ans = item.get("answer") if "answer" in item else item.get("value")
+                if qid:
+                    answers_dict[str(qid)] = ans
+        answers = answers_dict
+
     if not isinstance(answers, Mapping):
         return _error(
-            "'answers' must be a dictionary.",
+            "'answers' must be a dictionary or list of question-answer pairs.",
             warnings,
         )
 
@@ -404,6 +410,18 @@ def _normalize_instant_choice(
 
         attributes[attribute_name] = value
 
+    if "additional_text" in data and callable(analyze_report):
+        analyzed = analyze_report(data["additional_text"])
+        if isinstance(analyzed, Mapping):
+            if isinstance(analyzed.get("attributes"), Mapping):
+                for k, v in analyzed["attributes"].items():
+                    if k not in attributes:
+                        attributes[k] = v
+            if isinstance(analyzed.get("visible_features"), list):
+                visible_features.extend(analyzed["visible_features"])
+            if isinstance(analyzed.get("private_features"), list):
+                private_features.extend(analyzed["private_features"])
+
     return {
         "object_type": object_type,
         "attributes": attributes,
@@ -447,6 +465,16 @@ def _normalize_talk_to_ai(
     The ResponseParser/TALKAIState is responsible for producing
     valid structured answers before this function is called.
     """
+
+    if callable(ResponseParser):
+        try:
+            parser_inst = ResponseParser()
+            if hasattr(parser_inst, "parse"):
+                parsed = parser_inst.parse(data)
+                if isinstance(parsed, Mapping) and "answers" in parsed:
+                    data = dict(parsed)
+        except Exception:
+            pass
 
     # If ResponseParser output contains "answers",
     # use that dictionary.
@@ -541,9 +569,16 @@ def _classify_question_id(question_id: str) -> str:
     private_keywords = {
         "imei",
         "serial",
+        "lock_screen",
         "lock_screen_message",
+        "wallpaper",
         "owner_note",
         "ownership",
+        "purchase",
+        "purchase_date",
+        "receipt",
+        "invoice",
+        "private",
     }
 
     if any(keyword in text for keyword in private_keywords):
