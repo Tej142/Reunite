@@ -1315,19 +1315,24 @@ function runRealtimeMatchmaking($insertedId, $reportType, $category, $title, $de
                             if (!empty($uEmail) && filter_var($uEmail, FILTER_VALIDATE_EMAIL) && function_exists('sendBrevoEmail')) {
                                 $nLink = "item.php?type=found&id=" . $foundId . ($matchId ? "&match_id=" . $matchId : "");
                                 $emailSubj = "Reunite: Verified Match Detected for Your Lost Item!";
-                                $emailHtml = "<div style='font-family:sans-serif;max-width:550px;margin:0 auto;padding:24px;background:#ffffff;border:1px solid #e2e8f0;border-radius:12px;'>"
-                                    . "<h2 style='color:#0d9488;margin-top:0;'>High-Confidence Match Found!</h2>"
-                                    . "<p>Hi <strong>" . htmlspecialchars($uRow['full_name'] ?? 'Student') . "</strong>,</p>"
-                                    . "<p>Our matchmaking engine has detected a high-confidence match for your reported lost item:</p>"
-                                    . "<div style='background:#f8fafc;padding:14px;border-left:4px solid #0d9488;margin:16px 0;border-radius:4px;'>"
-                                    . "<p style='margin:4px 0;'><strong>Your Lost Item:</strong> " . htmlspecialchars($lostTitle) . "</p>"
-                                    . "<p style='margin:4px 0;'><strong>Matching Found Item:</strong> " . htmlspecialchars($foundTitle) . "</p>"
-                                    . "<p style='margin:4px 0;color:#0d9488;font-weight:bold;'>Match Confidence: " . $scoreDisplay . "</p>"
-                                    . ($eval['why_matched_summary'] ? "<p style='margin:4px 0;font-size:13px;color:#64748b;'><strong>Match Signals:</strong> " . htmlspecialchars($eval['why_matched_summary']) . "</p>" : "")
+                                $emailHtml = "<!DOCTYPE html><html lang='en'><head><meta charset='UTF-8'><title>Match Found</title></head><body style='margin:0;padding:0;background-color:#F8FAFC;font-family:-apple-system,BlinkMacSystemFont,\"Segoe UI\",Roboto,sans-serif;color:#1E293B;'>"
+                                    . "<table role='presentation' width='100%' cellspacing='0' cellpadding='0' style='background-color:#F8FAFC;padding:40px 16px;'><tr><td align='center'>"
+                                    . "<table role='presentation' width='100%' style='max-width:520px;background-color:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.05);' cellspacing='0' cellpadding='0'>"
+                                    . "<tr><td style='padding:28px 36px 20px 36px;border-bottom:1px solid #F1F5F9;'><span style='font-size:19px;font-weight:700;color:#C4622D;'>Reunite</span><span style='margin-left:8px;font-size:12px;color:#64748B;'>Campus Lost &amp; Found</span></td></tr>"
+                                    . "<tr><td style='padding:32px 36px;'>"
+                                    . "<h1 style='margin:0 0 16px 0;font-size:20px;font-weight:600;color:#0F172A;'>Match detected for your lost item</h1>"
+                                    . "<p style='margin:0 0 16px 0;font-size:15px;line-height:1.6;color:#334155;'>Hello <strong>" . htmlspecialchars($uRow['full_name'] ?? 'Student') . "</strong>,</p>"
+                                    . "<p style='margin:0 0 20px 0;font-size:15px;line-height:1.6;color:#334155;'>Our AI matching engine has detected a potential match for your reported lost item:</p>"
+                                    . "<div style='background-color:#F8FAFC;border:1px solid #E2E8F0;border-radius:8px;padding:16px 20px;margin:20px 0;'>"
+                                    . "<p style='margin:0 0 8px 0;font-size:14px;color:#334155;'><strong>Your Item:</strong> " . htmlspecialchars($lostTitle) . "</p>"
+                                    . "<p style='margin:0 0 8px 0;font-size:14px;color:#334155;'><strong>Found Item:</strong> " . htmlspecialchars($foundTitle) . "</p>"
+                                    . "<p style='margin:0;font-size:14px;color:#C4622D;font-weight:600;'>Match Confidence: " . $scoreDisplay . "</p>"
+                                    . ($eval['why_matched_summary'] ? "<p style='margin:8px 0 0 0;font-size:12px;color:#64748B;'><strong>Signals:</strong> " . htmlspecialchars($eval['why_matched_summary']) . "</p>" : "")
                                     . "</div>"
-                                    . "<p style='margin-top:20px;'><a href='https://reunite.site.je/" . $nLink . "' style='display:inline-block;padding:10px 20px;background:#0d9488;color:#ffffff;text-decoration:none;border-radius:6px;font-weight:bold;'>View Match Details</a></p>"
-                                    . "<hr style='margin:25px 0 15px 0;border:none;border-top:1px solid #e2e8f0;'>"
-                                    . "<p style='font-size:12px;color:#94a3b8;margin:0;'>Reunite - Campus Lost and Found Platform</p></div>";
+                                    . "<table role='presentation' cellspacing='0' cellpadding='0' style='margin:28px 0 16px 0;'><tr><td style='border-radius:6px;background-color:#C4622D;'><a href='https://reunite.site.je/" . $nLink . "' target='_blank' style='display:inline-block;padding:13px 28px;font-size:14px;font-weight:600;color:#FFFFFF;text-decoration:none;border-radius:6px;'>View Match Details &rarr;</a></td></tr></table>"
+                                    . "</td></tr>"
+                                    . "<tr><td style='padding:20px 36px 24px 36px;background-color:#F8FAFC;border-top:1px solid #F1F5F9;'><p style='margin:0;font-size:12px;color:#94A3B8;text-align:center;'>This is an automated notification from Reunite &bull; Campus Lost &amp; Found Platform.</p></td></tr>"
+                                    . "</table></td></tr></table></body></html>";
                                 @sendBrevoEmail($uEmail, $uRow['full_name'], $emailSubj, $emailHtml);
                             }
                         }
@@ -1343,19 +1348,24 @@ function runRealtimeMatchmaking($insertedId, $reportType, $category, $title, $de
                             if (!empty($fEmail) && filter_var($fEmail, FILTER_VALIDATE_EMAIL) && function_exists('sendBrevoEmail')) {
                                 $nLink = "item.php?type=found&id=" . $foundId . ($matchId ? "&match_id=" . $matchId : "");
                                 $emailSubj = "Reunite: Verified Match Alert for Item You Found!";
-                                $emailHtml = "<div style='font-family:sans-serif;max-width:550px;margin:0 auto;padding:24px;background:#ffffff;border:1px solid #e2e8f0;border-radius:12px;'>"
-                                    . "<h2 style='color:#0d9488;margin-top:0;'>Match Alert!</h2>"
-                                    . "<p>Hi <strong>" . htmlspecialchars($fRow['full_name'] ?? 'Student') . "</strong>,</p>"
-                                    . "<p>A student has reported a lost item that closely matches the item you found:</p>"
-                                    . "<div style='background:#f8fafc;padding:14px;border-left:4px solid #0d9488;margin:16px 0;border-radius:4px;'>"
-                                    . "<p style='margin:4px 0;'><strong>Found Item:</strong> " . htmlspecialchars($foundTitle) . "</p>"
-                                    . "<p style='margin:4px 0;'><strong>Matching Lost Report:</strong> " . htmlspecialchars($lostTitle) . "</p>"
-                                    . "<p style='margin:4px 0;color:#0d9488;font-weight:bold;'>Match Confidence: " . $scoreDisplay . "</p>"
-                                    . ($eval['why_matched_summary'] ? "<p style='margin:4px 0;font-size:13px;color:#64748b;'><strong>Match Signals:</strong> " . htmlspecialchars($eval['why_matched_summary']) . "</p>" : "")
+                                $emailHtml = "<!DOCTYPE html><html lang='en'><head><meta charset='UTF-8'><title>Match Alert</title></head><body style='margin:0;padding:0;background-color:#F8FAFC;font-family:-apple-system,BlinkMacSystemFont,\"Segoe UI\",Roboto,sans-serif;color:#1E293B;'>"
+                                    . "<table role='presentation' width='100%' cellspacing='0' cellpadding='0' style='background-color:#F8FAFC;padding:40px 16px;'><tr><td align='center'>"
+                                    . "<table role='presentation' width='100%' style='max-width:520px;background-color:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.05);' cellspacing='0' cellpadding='0'>"
+                                    . "<tr><td style='padding:28px 36px 20px 36px;border-bottom:1px solid #F1F5F9;'><span style='font-size:19px;font-weight:700;color:#C4622D;'>Reunite</span><span style='margin-left:8px;font-size:12px;color:#64748B;'>Campus Lost &amp; Found</span></td></tr>"
+                                    . "<tr><td style='padding:32px 36px;'>"
+                                    . "<h1 style='margin:0 0 16px 0;font-size:20px;font-weight:600;color:#0F172A;'>Match alert for item you found</h1>"
+                                    . "<p style='margin:0 0 16px 0;font-size:15px;line-height:1.6;color:#334155;'>Hello <strong>" . htmlspecialchars($fRow['full_name'] ?? 'Student') . "</strong>,</p>"
+                                    . "<p style='margin:0 0 20px 0;font-size:15px;line-height:1.6;color:#334155;'>A student has reported a lost item that closely matches the item you found on campus:</p>"
+                                    . "<div style='background-color:#F8FAFC;border:1px solid #E2E8F0;border-radius:8px;padding:16px 20px;margin:20px 0;'>"
+                                    . "<p style='margin:0 0 8px 0;font-size:14px;color:#334155;'><strong>Found Item:</strong> " . htmlspecialchars($foundTitle) . "</p>"
+                                    . "<p style='margin:0 0 8px 0;font-size:14px;color:#334155;'><strong>Matching Lost Report:</strong> " . htmlspecialchars($lostTitle) . "</p>"
+                                    . "<p style='margin:0;font-size:14px;color:#C4622D;font-weight:600;'>Match Confidence: " . $scoreDisplay . "</p>"
+                                    . ($eval['why_matched_summary'] ? "<p style='margin:8px 0 0 0;font-size:12px;color:#64748B;'><strong>Signals:</strong> " . htmlspecialchars($eval['why_matched_summary']) . "</p>" : "")
                                     . "</div>"
-                                    . "<p style='margin-top:20px;'><a href='https://reunite.site.je/" . $nLink . "' style='display:inline-block;padding:10px 20px;background:#0d9488;color:#ffffff;text-decoration:none;border-radius:6px;font-weight:bold;'>View Match Details</a></p>"
-                                    . "<hr style='margin:25px 0 15px 0;border:none;border-top:1px solid #e2e8f0;'>"
-                                    . "<p style='font-size:12px;color:#94a3b8;margin:0;'>Reunite - Campus Lost and Found Platform</p></div>";
+                                    . "<table role='presentation' cellspacing='0' cellpadding='0' style='margin:28px 0 16px 0;'><tr><td style='border-radius:6px;background-color:#C4622D;'><a href='https://reunite.site.je/" . $nLink . "' target='_blank' style='display:inline-block;padding:13px 28px;font-size:14px;font-weight:600;color:#FFFFFF;text-decoration:none;border-radius:6px;'>View Match Details &rarr;</a></td></tr></table>"
+                                    . "</td></tr>"
+                                    . "<tr><td style='padding:20px 36px 24px 36px;background-color:#F8FAFC;border-top:1px solid #F1F5F9;'><p style='margin:0;font-size:12px;color:#94A3B8;text-align:center;'>This is an automated notification from Reunite &bull; Campus Lost &amp; Found Platform.</p></td></tr>"
+                                    . "</table></td></tr></table></body></html>";
                                 @sendBrevoEmail($fEmail, $fRow['full_name'], $emailSubj, $emailHtml);
                             }
                         }

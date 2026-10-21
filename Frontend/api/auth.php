@@ -110,21 +110,53 @@ if ($action === 'send_otp') {
     // Generate 6-digit OTP
     $otp = generateEmailOtp($email);
 
-    // Branded HTML Email Template
+    // Professional, clean, modern OTP verification email
     $htmlEmail = '
-    <div style="max-width: 520px; margin: 0 auto; font-family: -apple-system, BlinkMacSystemFont, \'Segoe UI\', Roboto, sans-serif; background: #1C1917; color: #F5EDE6; border-radius: 16px; padding: 32px; border: 1px solid #332B25;">
-        <div style="text-align: center; margin-bottom: 24px;">
-            <h1 style="color: #C4622D; margin: 0; font-size: 26px; font-weight: 700; letter-spacing: -0.5px;">REUNITE TEAM</h1>
-            <p style="color: #A89F91; font-size: 14px; margin-top: 4px;">Student Account Verification</p>
-        </div>
-        <div style="background: #25201C; border-radius: 12px; padding: 24px; text-align: center; border: 1px solid #3D342D;">
-            <p style="margin: 0 0 16px; font-size: 15px; color: #E7DFD5;">Hello <strong>' . htmlspecialchars($name) . '</strong>,</p>
-            <p style="margin: 0 0 20px; font-size: 14px; color: #A89F91;">Use the 6-digit verification code below to confirm your email and create your Reunite account:</p>
-            <div style="font-size: 36px; font-weight: 800; letter-spacing: 8px; color: #C4622D; background: #141210; padding: 16px 24px; border-radius: 10px; display: inline-block; border: 1px dashed #C4622D; font-family: monospace;">' . $otp . '</div>
-            <p style="margin: 20px 0 0; font-size: 12px; color: #7A7267;">This code is valid for <strong>10 minutes</strong>. Do not share it with anyone.</p>
-        </div>
-        <p style="font-size: 12px; color: #7A7267; text-align: center; margin-top: 24px;">&copy; ' . date('Y') . ' REUNITE TEAM &bull; Campus Lost & Found Community</p>
-    </div>';
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>Your Verification Code</title>
+    </head>
+    <body style="margin: 0; padding: 0; background-color: #F8FAFC; font-family: -apple-system, BlinkMacSystemFont, \'Segoe UI\', Roboto, Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased; color: #1E293B;">
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color: #F8FAFC; padding: 40px 16px;">
+        <tr>
+          <td align="center">
+            <table role="presentation" width="100%" style="max-width: 520px; background-color: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 12px; overflow: hidden; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);" cellspacing="0" cellpadding="0">
+              <tr>
+                <td style="padding: 28px 36px 20px 36px; border-bottom: 1px solid #F1F5F9;">
+                  <span style="font-size: 19px; font-weight: 700; color: #C4622D; letter-spacing: -0.3px;">Reunite</span>
+                  <span style="display: inline-block; margin-left: 8px; font-size: 12px; color: #64748B; font-weight: 500;">Campus Lost &amp; Found</span>
+                </td>
+              </tr>
+              <tr>
+                <td style="padding: 32px 36px;">
+                  <h1 style="margin: 0 0 16px 0; font-size: 20px; font-weight: 600; color: #0F172A; line-height: 1.35;">Verify your email address</h1>
+                  <p style="margin: 0 0 16px 0; font-size: 15px; line-height: 1.6; color: #334155;">Hello ' . htmlspecialchars($name) . ',</p>
+                  <p style="margin: 0 0 24px 0; font-size: 15px; line-height: 1.6; color: #334155;">Use the 6-digit verification code below to confirm your email and complete your Reunite account registration:</p>
+                  
+                  <div style="background-color: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 8px; padding: 18px 24px; text-align: center; margin: 24px 0;">
+                    <span style="font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 32px; font-weight: 700; letter-spacing: 8px; color: #0F172A;">' . $otp . '</span>
+                  </div>
+
+                  <p style="margin: 0 0 8px 0; font-size: 13px; line-height: 1.6; color: #64748B;">This code is valid for <strong>10 minutes</strong>. For your security, do not share this code with anyone.</p>
+                </td>
+              </tr>
+              <tr>
+                <td style="padding: 20px 36px 24px 36px; background-color: #F8FAFC; border-top: 1px solid #F1F5F9;">
+                  <p style="margin: 0; font-size: 12px; line-height: 1.5; color: #94A3B8; text-align: center;">
+                    This is an automated security message from Reunite &bull; Campus Lost &amp; Found Platform.<br>
+                    Please do not reply directly to this email.
+                  </p>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+      </table>
+    </body>
+    </html>';
 
     $mailResult = sendBrevoEmail($email, $name, "Your Verification Code: $otp — REUNITE TEAM", $htmlEmail);
 
@@ -387,27 +419,64 @@ if ($action === 'send_reset_link') {
     $baseFrontendDir = dirname($scriptDir); // gets /Frontend or /pw/reunitel/Frontend
     $resetUrl = rtrim($protocol . $host . $baseFrontendDir, '/') . '/reset-password.php?token=' . urlencode($token);
 
-    // Branded HTML Email Template with prominent Reset Button
+    // Professional, clean, modern Password Reset HTML Email Template
     $htmlEmail = '
-    <div style="max-width: 540px; margin: 0 auto; font-family: -apple-system, BlinkMacSystemFont, \'Segoe UI\', Roboto, sans-serif; background: #1C1917; color: #F5EDE6; border-radius: 16px; padding: 32px; border: 1px solid #332B25;">
-        <div style="text-align: center; margin-bottom: 24px;">
-            <h1 style="color: #C4622D; margin: 0; font-size: 26px; font-weight: 700; letter-spacing: -0.5px;">REUNITE TEAM</h1>
-            <p style="color: #A89F91; font-size: 14px; margin-top: 4px;">Password Reset Request</p>
-        </div>
-        <div style="background: #25201C; border-radius: 12px; padding: 24px; text-align: center; border: 1px solid #3D342D;">
-            <p style="margin: 0 0 16px; font-size: 16px; color: #E7DFD5;">Hello <strong>' . htmlspecialchars($studentName) . '</strong>,</p>
-            <p style="margin: 0 0 24px; font-size: 14px; color: #A89F91; line-height: 1.5;">We received a request to reset the password for your Reunite account. Click the button below to create a new password:</p>
-            <div style="margin: 28px 0;">
-                <a href="' . htmlspecialchars($resetUrl) . '" style="background: #C4622D; color: #FFFFFF; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-weight: 600; font-size: 15px; display: inline-block; letter-spacing: 0.3px; box-shadow: 0 4px 12px rgba(196, 98, 45, 0.35);">Reset My Password &rarr;</a>
-            </div>
-            <p style="margin: 20px 0 0; font-size: 12px; color: #7A7267;">This reset link is valid for <strong>10 minutes</strong>. If you did not request this, you can safely ignore this email.</p>
-        </div>
-        <div style="margin-top: 20px; font-size: 12px; color: #7A7267; word-break: break-all; text-align: center;">
-            <p style="margin: 0 0 6px;">Button not working? Copy and paste this link into your browser:</p>
-            <a href="' . htmlspecialchars($resetUrl) . '" style="color: #C4622D; text-decoration: underline;">' . htmlspecialchars($resetUrl) . '</a>
-        </div>
-        <p style="font-size: 11px; color: #575047; text-align: center; margin-top: 24px;">&copy; ' . date('Y') . ' REUNITE TEAM &bull; Campus Lost & Found Community</p>
-    </div>';
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>Reset Your Password</title>
+    </head>
+    <body style="margin: 0; padding: 0; background-color: #F8FAFC; font-family: -apple-system, BlinkMacSystemFont, \'Segoe UI\', Roboto, Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased; color: #1E293B;">
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color: #F8FAFC; padding: 40px 16px;">
+        <tr>
+          <td align="center">
+            <table role="presentation" width="100%" style="max-width: 520px; background-color: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 12px; overflow: hidden; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);" cellspacing="0" cellpadding="0">
+              <tr>
+                <td style="padding: 28px 36px 20px 36px; border-bottom: 1px solid #F1F5F9;">
+                  <span style="font-size: 19px; font-weight: 700; color: #C4622D; letter-spacing: -0.3px;">Reunite</span>
+                  <span style="display: inline-block; margin-left: 8px; font-size: 12px; color: #64748B; font-weight: 500;">Campus Lost &amp; Found</span>
+                </td>
+              </tr>
+              <tr>
+                <td style="padding: 32px 36px;">
+                  <h1 style="margin: 0 0 16px 0; font-size: 20px; font-weight: 600; color: #0F172A; line-height: 1.35;">Password reset request</h1>
+                  <p style="margin: 0 0 16px 0; font-size: 15px; line-height: 1.6; color: #334155;">Hello ' . htmlspecialchars($studentName) . ',</p>
+                  <p style="margin: 0 0 24px 0; font-size: 15px; line-height: 1.6; color: #334155;">We received a request to reset the password for your Reunite account. Click the button below to choose a new password:</p>
+                  
+                  <table role="presentation" cellspacing="0" cellpadding="0" style="margin: 28px 0;">
+                    <tr>
+                      <td align="left" style="border-radius: 6px; background-color: #C4622D;">
+                        <a href="' . htmlspecialchars($resetUrl) . '" target="_blank" style="display: inline-block; padding: 13px 28px; font-size: 14px; font-weight: 600; color: #FFFFFF; text-decoration: none; border-radius: 6px; border: 1px solid #C4622D;">Reset Password</a>
+                      </td>
+                    </tr>
+                  </table>
+
+                  <p style="margin: 0 0 16px 0; font-size: 13px; line-height: 1.6; color: #64748B;">This link is valid for <strong>10 minutes</strong>. If you did not request a password reset, no action is needed and your account remains secure.</p>
+
+                  <hr style="border: none; border-top: 1px solid #F1F5F9; margin: 28px 0 20px 0;">
+
+                  <p style="margin: 0 0 6px 0; font-size: 12px; color: #94A3B8;">If the button above does not work, copy and paste this URL into your browser:</p>
+                  <p style="margin: 0; font-size: 12px; line-height: 1.5; word-break: break-all;">
+                    <a href="' . htmlspecialchars($resetUrl) . '" style="color: #C4622D; text-decoration: underline;">' . htmlspecialchars($resetUrl) . '</a>
+                  </p>
+                </td>
+              </tr>
+              <tr>
+                <td style="padding: 20px 36px 24px 36px; background-color: #F8FAFC; border-top: 1px solid #F1F5F9;">
+                  <p style="margin: 0; font-size: 12px; line-height: 1.5; color: #94A3B8; text-align: center;">
+                    This is an automated security message from Reunite &bull; Campus Lost &amp; Found Platform.<br>
+                    Please do not reply directly to this email.
+                  </p>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+      </table>
+    </body>
+    </html>';
 
     $mailResult = sendBrevoEmail($rawEmail, $studentName, "Reset Your Reunite Password", $htmlEmail);
 
