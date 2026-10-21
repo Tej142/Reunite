@@ -12,27 +12,44 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
-// Automatically load environment variables: .env.example (DB & linking credentials) + .env (API keys)
+// Automatically load environment variables: .env is the primary source of truth for all API keys
 (function() {
     $rootDir = dirname(__DIR__, 2);
-    $filesToLoad = [
-        $rootDir . '/.env.example',
-        $rootDir . '/.env'
-    ];
+    $examplePath = $rootDir . '/.env.example';
+    $envPath = $rootDir . '/.env';
 
-    foreach ($filesToLoad as $path) {
-        if (file_exists($path) && is_readable($path)) {
-            $lines = file($path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
-            foreach ($lines as $line) {
-                $line = trim($line);
-                if (empty($line) || strpos($line, '#') === 0 || strpos($line, ';') === 0) continue;
-                if (strpos($line, '=') !== false) {
-                    list($key, $val) = explode('=', $line, 2);
-                    $key = trim($key);
-                    $val = trim($val, " \t\n\r\0\x0B\"'");
-                    $_ENV[$key] = $val;
-                    putenv("$key=$val");
+    // 1. Load non-secret defaults from .env.example if present (never loads API keys)
+    if (file_exists($examplePath) && is_readable($examplePath)) {
+        $lines = file($examplePath, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+        foreach ($lines as $line) {
+            $line = trim($line);
+            if (empty($line) || strpos($line, '#') === 0 || strpos($line, ';') === 0) continue;
+            if (strpos($line, '=') !== false) {
+                list($key, $val) = explode('=', $line, 2);
+                $key = trim($key);
+                $val = trim($val, " \t\n\r\0\x0B\"'");
+                // Strictly guard: never load API keys from .env.example
+                if (stripos($key, 'KEY') !== false || stripos($key, 'SECRET') !== false || stripos($key, 'PASS') !== false) {
+                    continue;
                 }
+                $_ENV[$key] = $val;
+                putenv("$key=$val");
+            }
+        }
+    }
+
+    // 2. Load .env (All API keys, secrets, and overrides MUST come from .env only)
+    if (file_exists($envPath) && is_readable($envPath)) {
+        $lines = file($envPath, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+        foreach ($lines as $line) {
+            $line = trim($line);
+            if (empty($line) || strpos($line, '#') === 0 || strpos($line, ';') === 0) continue;
+            if (strpos($line, '=') !== false) {
+                list($key, $val) = explode('=', $line, 2);
+                $key = trim($key);
+                $val = trim($val, " \t\n\r\0\x0B\"'");
+                $_ENV[$key] = $val;
+                putenv("$key=$val");
             }
         }
     }
