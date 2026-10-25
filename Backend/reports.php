@@ -522,18 +522,11 @@ if ($action === 'list' || $method === 'GET') {
         }
     }
 
-    $adminViewer = !empty($_SESSION['admin_id']) || in_array(strtolower((string)($_SESSION['role'] ?? $_SESSION['user_role'] ?? '')), ['admin','moderator','superadmin'], true);
-    if (!$adminViewer) {
-        $reports = array_values(array_filter($reports, function ($row) { return strtolower((string)($row['report_type'] ?? '')) === 'lost'; }));
-        foreach ($reports as &$publicRow) {
-            $rawLocation = strtolower((string)($publicRow['location'] ?? ''));
-            $area = 'Campus area';
-            foreach (['library'=>'Library area','cafeteria'=>'Cafeteria area','canteen'=>'Cafeteria area','bus'=>'Near Bus Stand','auditorium'=>'Auditorium area','sports'=>'Sports complex area','parking'=>'Parking area','lab'=>'Lab area','block'=>'Academic block area'] as $needle=>$label) { if (strpos($rawLocation,$needle)!==false) { $area=$label; break; } }
-            $publicRow['title'] = 'Lost item'; $publicRow['description'] = 'A community member has reported a missing item.'; $publicRow['location'] = $area; $publicRow['image_path'] = '';
-            unset($publicRow['user_id']);
-        }
-        unset($publicRow);
+    // Strip private user_id before returning public reports
+    foreach ($reports as &$publicRow) {
+        unset($publicRow['user_id']);
     }
+    unset($publicRow);
     sendJsonResponse(true, "Reports loaded from database", [
         'count' => count($reports),
         'reports' => $reports
