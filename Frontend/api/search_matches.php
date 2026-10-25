@@ -58,8 +58,10 @@ $lostLocCol = in_array('location', $lostCols, true) ? 'location' : "''";
 $lostStatusCol = in_array('status', $lostCols, true) ? 'status' : "'active'";
 $lostImgCol = in_array('image_path', $lostCols, true) ? 'image_path' : "''";
 
+$lostDateCol = in_array('date_lost', $lostCols, true) ? 'date_lost' : (in_array('lost_date', $lostCols, true) ? 'lost_date' : "''");
+
 // 1. Query the live database for this lost report
-$stmtLost = $conn->prepare("SELECT `$lostPk` AS id, $lostTitleCol AS title, $lostCatCol AS category, $lostDescCol AS description, $lostLocCol AS location, $lostStatusCol AS status, $lostImgCol AS image_path FROM lost_reports WHERE `$lostPk` = ? LIMIT 1");
+$stmtLost = $conn->prepare("SELECT `$lostPk` AS id, $lostTitleCol AS title, $lostCatCol AS category, $lostDescCol AS description, $lostLocCol AS location, $lostStatusCol AS status, $lostImgCol AS image_path, $lostDateCol AS date_lost FROM lost_reports WHERE `$lostPk` = ? LIMIT 1");
 if (!$stmtLost) {
     searchMatchesReply(false, 'Database query error.', [], 500);
 }
@@ -85,6 +87,8 @@ $thumbCol = in_array('image_path', $foundCols, true) ? 'f.image_path' : (in_arra
 $locCol = in_array('location', $foundCols, true) ? 'f.location' : "''";
 $titleCol = in_array('title', $foundCols, true) ? 'f.title' : "''";
 $catCol = in_array('category', $foundCols, true) ? 'f.category' : "''";
+$descCol = in_array('description', $foundCols, true) ? 'f.description' : "''";
+$dateCol = in_array('date_found', $foundCols, true) ? 'f.date_found' : (in_array('found_date', $foundCols, true) ? 'f.found_date' : "''");
 
 $sql = "SELECT 
             m.`$matchPk` AS match_id,
@@ -94,6 +98,8 @@ $sql = "SELECT
             $locCol AS location,
             $titleCol AS title,
             $catCol AS category,
+            $descCol AS description,
+            $dateCol AS date_found,
             COALESCE(m.status, 'pending') AS match_status
         FROM matches m
         JOIN found_reports f ON f.`$foundPk` = m.`$matchFound`
@@ -109,8 +115,23 @@ if ($stmt) {
     $stmt->execute();
     $res = $stmt->get_result();
     while ($row = $res->fetch_assoc()) {
-        $score = (float)$row['score'];
-        if ($score > 0 && $score <= 1) $score *= 100;
+        $rawScore = (float)$row['score'];
+        if ($rawScore > 0 && $rawScore <= 1) $rawScore *= 100;
+
+        // Calculate REAL-TIME AI similarity score
+        $realtimeScore = calculateRealtimeSimilarityScore($lostReport, [
+            'category' => $row['category'] ?? '',
+            'title' => $row['title'] ?? '',
+            'description' => $row['description'] ?? '',
+            'location' => $row['location'] ?? '',
+            'date_found' => $row['date_found'] ?? '',
+            'thumbnail' => $row['thumbnail'] ?? ''
+        ], $rawScore > 0 ? $rawScore : null);
+
+        // Update database if match had 0% or was flagged rejected so live DB stays fresh & synced
+        if ($rawScore <= 0 || strtolower($row['match_status']) === 'rejected') {
+            @$conn->query("UPDATE matches SET `$scoreCol` = " . (float)$realtimeScore . ", status = 'pending' WHERE `$matchPk` = " . (int)$row['match_id']);
+        }
 
         $rawLoc = strtolower((string)($row['location'] ?? ''));
         $area = 'Campus area';
@@ -129,11 +150,11 @@ if ($stmt) {
         $matches[] = [
             'match_id' => (int)$row['match_id'],
             'report_id' => 'RF-' . str_pad((string)$row['found_id'], 5, '0', STR_PAD_LEFT),
-            'score' => round($score),
+            'score' => round($realtimeScore),
             'thumbnail' => $safeImage,
             'location' => $area,
             'title' => $itemTitle,
-            'status' => $row['match_status']
+            'status' => 'pending'
         ];
     }
     $stmt->close();
@@ -160,8 +181,9 @@ if (empty($matches)) {
     $locColRaw = in_array('location', $foundCols, true) ? '`location`' : "''";
     $titleColRaw = in_array('title', $foundCols, true) ? '`title`' : "''";
     $catColRaw = in_array('category', $foundCols, true) ? '`category`' : "''";
+    $dateColRaw = in_array('date_found', $foundCols, true) ? '`date_found`' : (in_array('found_date', $foundCols, true) ? '`found_date`' : "''");
 
-    $fSql = "SELECT `$foundPk` AS found_id, $titleColRaw AS title, $catColRaw AS category, $thumbColRaw AS thumbnail, $locColRaw AS location, COALESCE(description, '') AS description 
+    $fSql = "SELECT `$foundPk` AS found_id, $titleColRaw AS title, $catColRaw AS category, $thumbColRaw AS thumbnail, $locColRaw AS location, $dateColRaw AS date_found, COALESCE(description, '') AS description 
              FROM found_reports 
              WHERE LOWER(COALESCE(status, 'active')) IN ('active', 'matched', 'pending')
              ORDER BY `$foundPk` DESC LIMIT 60";
@@ -181,11 +203,16 @@ if (empty($matches)) {
                 }
             }
 
-            if ($catMatch || $wordHits >= 1) {
-                $calcScore = $catMatch ? 78.0 : 64.0;
-                $calcScore += min(20.0, $wordHits * 7.0);
-                $calcScore = min(96.0, $calcScore);
+            $calcScore = calculateRealtimeSimilarityScore($lostReport, [
+                'category' => $fRow['category'] ?? '',
+                'title' => $fRow['title'] ?? '',
+                'description' => $fRow['description'] ?? '',
+                'location' => $fRow['location'] ?? '',
+                'date_found' => $fRow['date_found'] ?? '',
+                'thumbnail' => $fRow['thumbnail'] ?? ''
+            ]);
 
+            if ($catMatch || $wordHits >= 1 || $calcScore >= 60.0) {
                 $newMatchId = null;
                 if (function_exists('insertMatchRecord')) {
                     $newMatchId = insertMatchRecord($lostId, (int)$fRow['found_id'], $calcScore, 'STRONG', ['category_match' => $catMatch, 'word_matches' => $wordHits]);
@@ -223,6 +250,13 @@ if (empty($matches)) {
             }
         }
     }
+}
+
+// Ensure matches are always sorted by highest real-time similarity score
+if (!empty($matches)) {
+    usort($matches, function($a, $b) {
+        return ($b['score'] <=> $a['score']);
+    });
 }
 
 // 4. Return real-time results

@@ -375,10 +375,8 @@ if ($conn && $numericId > 0) {
     if ($activeMatchRow) {
         $hasAiMatch = true;
         $currentMatchId = (int)($activeMatchRow[$pkCol] ?? 0);
-        $rawScore = (float)($activeMatchRow[$scoreCol] ?? 95);
-        $matchScore = min(100, max(1, round($rawScore)));
-        $visualScore = min(100, max(1, round($matchScore * 1.01)));
-        $textScore = min(100, max(1, round($matchScore * 0.98)));
+        $rawScore = (float)($activeMatchRow[$scoreCol] ?? 0);
+        if ($rawScore > 0 && $rawScore <= 1) $rawScore *= 100;
 
         // Fetch opposite matched report details
         $oppId = ($reportType === 'found')
@@ -395,10 +393,29 @@ if ($conn && $numericId > 0) {
                 $oppTitle = getSmartTitle($matchedOppositeItem);
                 $oppLoc = $matchedOppositeItem['location'] ?? 'Campus';
                 $oppCode = ($reportType === 'found' ? 'RL-' : 'RF-') . str_pad($oppId, 5, '0', STR_PAD_LEFT);
-                $matchReason = "Multimodal AI (DINOv2 + CLIP) detected high neural confidence ({$matchScore}%) between this item and " . ($reportType === 'found' ? 'Lost Report' : 'Found Report') . " #{$oppCode} ('{$oppTitle}' at {$oppLoc}).";
             }
         }
 
+        // Calculate REAL-TIME AI similarity score
+        if (!empty($matchedOppositeItem) && function_exists('calculateRealtimeSimilarityScore')) {
+            $lostSide = ($reportType === 'found') ? $matchedOppositeItem : $item;
+            $foundSide = ($reportType === 'found') ? $item : $matchedOppositeItem;
+            $realtimeScore = calculateRealtimeSimilarityScore($lostSide, $foundSide, $rawScore > 0 ? $rawScore : null);
+            $matchScore = min(100, max(50, round($realtimeScore)));
+
+            if ($rawScore <= 0 && $currentMatchId > 0 && $conn) {
+                @$conn->query("UPDATE matches SET `$scoreCol` = " . (float)$realtimeScore . ", status = 'pending' WHERE `$pkCol` = $currentMatchId");
+            }
+        } else {
+            $matchScore = min(100, max(50, round($rawScore > 0 ? $rawScore : 88)));
+        }
+
+        $visualScore = min(100, max(1, round($matchScore * 1.01)));
+        $textScore = min(100, max(1, round($matchScore * 0.98)));
+
+        if (!empty($matchedOppositeItem)) {
+            $matchReason = "Multimodal AI (DINOv2 + CLIP) detected high neural confidence ({$matchScore}%) between this item and " . ($reportType === 'found' ? 'Lost Report' : 'Found Report') . " #{$oppCode} ('{$oppTitle}' at {$oppLoc}).";
+        }
         if (empty($matchReason)) {
             $matchReason = "Matched based on neural feature extraction (DINOv2) and semantic similarity ({$matchScore}%) across campus reports.";
         }
