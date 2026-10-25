@@ -338,7 +338,17 @@ function renderResults() {
   if (!resultsGrid) return;
 
   let filtered = ITEMS_DATABASE.filter(item => {
-    if (currentTypeFilter !== 'all' && item.type !== currentTypeFilter) return false;
+    const st = String(item.status || '').toLowerCase();
+    const isReunited = (st === 'claimed' || st === 'reunited' || st === 'closed' || st === 'returned' || st === 'recovered');
+
+    if (currentTypeFilter === 'lost') {
+      if (item.type !== 'lost' || isReunited) return false;
+    } else if (currentTypeFilter === 'reunited') {
+      if (!isReunited) return false;
+    } else if (currentTypeFilter === 'found') {
+      if (item.type !== 'found' || isReunited) return false;
+    }
+
     if (currentCategory !== 'all' && item.category !== currentCategory) return false;
     if (currentLocation !== 'all' && !item.location.toLowerCase().includes(currentLocation.toLowerCase())) return false;
     if (currentSearchQuery) {
@@ -366,8 +376,11 @@ function renderResults() {
   currentFilteredItems = filtered;
 
   if (resultsCount) {
-    const typeLabel = currentTypeFilter === 'found' ? 'found' : currentTypeFilter === 'lost' ? 'lost' : 'community';
-    resultsCount.innerHTML = `Showing <strong class="results-count-strong">${filtered.length}</strong> ${typeLabel} item${filtered.length === 1 ? '' : 's'}`;
+    let typeLabel = 'community items';
+    if (currentTypeFilter === 'lost') typeLabel = 'lost items';
+    else if (currentTypeFilter === 'reunited') typeLabel = 'reunited items';
+    else if (currentTypeFilter === 'found') typeLabel = 'found items';
+    resultsCount.innerHTML = `Showing <strong class="results-count-strong">${filtered.length}</strong> ${typeLabel}`;
   }
 
   if (filtered.length === 0) {
@@ -420,7 +433,8 @@ function renderResults() {
     ` : '';
 
     const isFound = item.type === 'found';
-    const isReunited = item.status === 'claimed' || item.status === 'reunited' || item.status === 'closed';
+    const st = String(item.status || '').toLowerCase();
+    const isReunited = (st === 'claimed' || st === 'reunited' || st === 'closed' || st === 'returned' || st === 'recovered');
 
     let badgeClass = 'badge-found';
     let badgeLabel = 'Found Item';
