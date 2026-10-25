@@ -2886,6 +2886,32 @@
   40%, 80% { transform: translateX(5px); }
 }
 
+/* Instant Choice Photo Zone */
+.instant-choice-photo-zone {
+  border: 1.5px dashed var(--border, #E7E3DC);
+  border-radius: 0.85rem;
+  padding: 1.25rem;
+  text-align: center;
+  cursor: pointer;
+  background: var(--bg, #FAF8F5);
+  transition: all 0.2s ease;
+}
+
+.instant-choice-photo-zone:hover {
+  border-color: var(--accent, #C4622D);
+  background: var(--white, #ffffff);
+}
+
+[data-theme="dark"] .instant-choice-photo-zone {
+  background: #181310;
+  border-color: var(--border, #2C2520);
+}
+
+[data-theme="dark"] .instant-choice-photo-zone:hover {
+  border-color: var(--accent, #C4622D);
+  background: #201A15;
+}
+
 /* 9. Accessibility & Reduced Motion */
 @media (prefers-reduced-motion: reduce) {
   .btn-attach-photo.pulse-highlight {

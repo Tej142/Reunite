@@ -289,13 +289,32 @@
           <div class="wizard-step-sub">Provide location details to narrow search radius.</div>
 
           <div class="field">
-            <label for="guidedWhere">Found Location</label>
-            <input type="text" id="guidedWhere" placeholder="e.g. Union Square Park bench, or Subway Line 4" />
+            <label for="guidedWhere">Found Location <span style="color:#ef4444;" title="Required">*</span></label>
+            <input type="text" id="guidedWhere" placeholder="e.g. Union Square Park bench, Library 2nd Floor, or Campus Canteen" required />
           </div>
 
           <div class="field">
             <label for="guidedWhen">Approximate Time</label>
-            <input type="text" id="guidedWhen" placeholder="e.g. Today around 2:30 PM" />
+            <input type="text" id="guidedWhen" placeholder="e.g. Today around 2:30 PM, or Yesterday morning" />
+          </div>
+
+          <div class="field" style="margin-top: 1.25rem;">
+            <label>Photo <span class="opt">— optional, helps confirm ownership faster</span></label>
+            <div class="instant-choice-photo-zone" id="instantChoicePhotoZone">
+              <input type="file" id="guidedPhotoInput" accept="image/*" style="display: none;" />
+              <div id="guidedPhotoPrompt" style="display: flex; flex-direction: column; align-items: center; gap: 0.4rem;">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--accent, #C4622D)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
+                <div style="font-size: 0.875rem; font-weight: 500; color: var(--ink);">Attach a photo of the item <span style="color: var(--muted); font-size: 0.8rem;">(Click to browse)</span></div>
+                <div style="font-size: 0.75rem; color: var(--muted);">JPG, PNG, or WebP up to 10MB</div>
+              </div>
+              <div id="guidedPhotoPreview" style="display: none; align-items: center; justify-content: center; gap: 0.75rem;">
+                <img id="guidedPhotoThumb" src="" alt="Item photo preview" style="width: 56px; height: 56px; object-fit: cover; border-radius: 0.5rem; border: 1px solid var(--border);" />
+                <div style="text-align: left;">
+                  <div id="guidedPhotoName" style="font-size: 0.825rem; font-weight: 600; color: var(--ink); max-width: 200px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"></div>
+                  <button type="button" id="btnRemoveGuidedPhoto" style="background: none; border: none; color: #ef4444; font-size: 0.75rem; cursor: pointer; padding: 0; margin-top: 2px;">Remove photo</button>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 

@@ -99,13 +99,49 @@ document.addEventListener('DOMContentLoaded', () => {
           aiReviewContainer.style.display = 'none';
           if (selector) selector.style.display = 'block';
           if (aiBanner) aiBanner.style.display = 'block';
-          const activeContainer = document.getElementById('mode1Container');
-          if (activeContainer) activeContainer.classList.add('active');
-          containers.forEach(c => {
-            if (c.id === 'mode1Container') c.style.display = 'block';
-          });
-          if (lostForm) lostForm.style.display = 'block';
-          lostForm.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+          if (rawData.sourceMode === 'mode2') {
+            const m2 = document.getElementById('mode2Container');
+            containers.forEach(c => {
+              if (c.id === 'mode2Container') {
+                c.classList.add('active');
+                c.style.display = 'block';
+              } else {
+                c.classList.remove('active');
+                c.style.display = 'none';
+              }
+            });
+            document.querySelectorAll('.mode-card').forEach(c => {
+              if (c.getAttribute('data-mode') === 'mode2') c.classList.add('active');
+              else c.classList.remove('active');
+            });
+            if (m2) m2.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          } else if (rawData.sourceMode === 'mode3') {
+            const m3 = document.getElementById('mode3Container');
+            containers.forEach(c => {
+              if (c.id === 'mode3Container') {
+                c.classList.add('active');
+                c.style.display = 'block';
+              } else {
+                c.classList.remove('active');
+                c.style.display = 'none';
+              }
+            });
+            document.querySelectorAll('.mode-card').forEach(c => {
+              if (c.getAttribute('data-mode') === 'mode3') c.classList.add('active');
+              else c.classList.remove('active');
+            });
+            if (m3) m3.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          } else {
+            const activeContainer = document.getElementById('mode1Container');
+            if (activeContainer) activeContainer.classList.add('active');
+            containers.forEach(c => {
+              if (c.id === 'mode1Container') c.style.display = 'block';
+              else c.style.display = 'none';
+            });
+            if (lostForm) lostForm.style.display = 'block';
+            lostForm.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }
         },
         onConfirm: async (confirmedDna) => {
           const confirmBtn = aiReviewFormWrap.querySelector('#btnConfirmDna');

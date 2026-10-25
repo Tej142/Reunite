@@ -25,8 +25,10 @@ document.addEventListener('DOMContentLoaded', () => {
       modeContainers.forEach(container => {
         if (container.id === `${selectedMode}Container`) {
           container.classList.add('active');
+          container.style.display = 'block';
         } else {
           container.classList.remove('active');
+          container.style.display = 'none';
         }
       });
 
@@ -161,7 +163,8 @@ document.addEventListener('DOMContentLoaded', () => {
     loadedCategory: null,
     isLoading: false,
     where: '',
-    when: ''
+    when: '',
+    photoFile: null
   };
 
   const stepDots = document.querySelectorAll('.wizard-step-dot');
@@ -184,54 +187,38 @@ document.addEventListener('DOMContentLoaded', () => {
     return cat.charAt(0).toUpperCase() + cat.slice(1);
   }
 
-  // Pre-fetch and render questions for a category
-  async function fetchAndRenderCategoryQuestions(categoryKey) {
+  // Instant synchronous question lookup & rendering (0ms delay)
+  function getCategoryQuestions(categoryKey) {
+    if (!categoryKey) return SMART_CLIENT_QUESTIONS['other'];
+    const cleanCat = categoryKey.toLowerCase().trim();
+    for (const k of Object.keys(SMART_CLIENT_QUESTIONS)) {
+      if (cleanCat.includes(k) || k.includes(cleanCat)) {
+        return SMART_CLIENT_QUESTIONS[k];
+      }
+    }
+    return SMART_CLIENT_QUESTIONS['other'];
+  }
+
+  function renderCategoryQuestionsInstant(categoryKey) {
     if (!categoryKey) return;
     const cleanCat = categoryKey.toLowerCase().trim();
-
-    if (instantChoiceState.loadedCategory === cleanCat && instantChoiceState.questions.length > 0) {
-      renderDynamicQuestions(instantChoiceState.questions);
-      return;
-    }
-
-    instantChoiceState.isLoading = true;
-    if (dynamicLoadingEl) dynamicLoadingEl.style.display = 'flex';
-    if (dynamicContainerEl) dynamicContainerEl.style.display = 'none';
 
     if (step2SubTitleEl) {
       step2SubTitleEl.textContent = `Smart questions tailored specifically for ${formatCategoryName(cleanCat)} (${reportType === 'found' ? 'Found' : 'Lost'}).`;
     }
 
-    let questions = null;
-
-    if (window.FlaskAIService && typeof window.FlaskAIService.startReportSession === 'function') {
-      try {
-        const sessionPromise = window.FlaskAIService.startReportSession({
-          category: cleanCat,
-          report_type: reportType,
-          input_mode: 'instant_choice'
-        });
-        const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 3500));
-        const res = await Promise.race([sessionPromise, timeoutPromise]);
-        if (res && res.success && Array.isArray(res.questions) && res.questions.length > 0) {
-          questions = res.questions;
-        }
-      } catch (err) {
-        console.info('[InstantChoice] Falling back to instant smart category template:', err.message);
-      }
+    // If category changed, clear previous category-specific answers
+    if (instantChoiceState.loadedCategory && instantChoiceState.loadedCategory !== cleanCat) {
+      const preservedWhere = instantChoiceState.where;
+      const preservedWhen = instantChoiceState.when;
+      const preservedPhoto = instantChoiceState.photoFile;
+      instantChoiceState.answers = {};
+      instantChoiceState.where = preservedWhere;
+      instantChoiceState.when = preservedWhen;
+      instantChoiceState.photoFile = preservedPhoto;
     }
 
-    if (!questions || questions.length === 0) {
-      let matchedKey = 'other';
-      for (const k of Object.keys(SMART_CLIENT_QUESTIONS)) {
-        if (cleanCat.includes(k) || k.includes(cleanCat)) {
-          matchedKey = k;
-          break;
-        }
-      }
-      questions = SMART_CLIENT_QUESTIONS[matchedKey] || SMART_CLIENT_QUESTIONS['other'];
-    }
-
+    const questions = getCategoryQuestions(cleanCat);
     instantChoiceState.questions = questions;
     instantChoiceState.loadedCategory = cleanCat;
     instantChoiceState.isLoading = false;
@@ -401,8 +388,8 @@ document.addEventListener('DOMContentLoaded', () => {
         catSelect.value = instantChoiceState.category;
       }
 
-      // Pre-warm / fetch questions in background for instant transition
-      fetchAndRenderCategoryQuestions(instantChoiceState.category);
+      // Render questions immediately with zero delay
+      renderCategoryQuestionsInstant(instantChoiceState.category);
     });
   });
 
@@ -426,7 +413,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Ensure questions are rendered for the selected category
         if (instantChoiceState.loadedCategory !== instantChoiceState.category || instantChoiceState.questions.length === 0) {
-          fetchAndRenderCategoryQuestions(instantChoiceState.category);
+          renderCategoryQuestionsInstant(instantChoiceState.category);
         }
 
         currentStep = 2;
@@ -514,6 +501,49 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  // Guided photo attachment setup
+  const photoZone = document.getElementById('instantChoicePhotoZone');
+  const photoInput = document.getElementById('guidedPhotoInput');
+  const photoPrompt = document.getElementById('guidedPhotoPrompt');
+  const photoPreview = document.getElementById('guidedPhotoPreview');
+  const photoThumb = document.getElementById('guidedPhotoThumb');
+  const photoName = document.getElementById('guidedPhotoName');
+  const btnRemovePhoto = document.getElementById('btnRemoveGuidedPhoto');
+
+  if (photoZone && photoInput) {
+    photoZone.addEventListener('click', (e) => {
+      if (e.target === btnRemovePhoto || (btnRemovePhoto && btnRemovePhoto.contains(e.target))) return;
+      photoInput.click();
+    });
+
+    photoInput.addEventListener('change', (e) => {
+      const file = e.target.files && e.target.files[0];
+      if (!file) return;
+
+      instantChoiceState.photoFile = file;
+      if (photoName) photoName.textContent = file.name;
+
+      const reader = new FileReader();
+      reader.onload = (re) => {
+        if (photoThumb) photoThumb.src = re.target.result;
+        if (photoPrompt) photoPrompt.style.display = 'none';
+        if (photoPreview) photoPreview.style.display = 'flex';
+      };
+      reader.readAsDataURL(file);
+    });
+
+    if (btnRemovePhoto) {
+      btnRemovePhoto.addEventListener('click', (e) => {
+        e.stopPropagation();
+        instantChoiceState.photoFile = null;
+        photoInput.value = '';
+        if (photoThumb) photoThumb.src = '';
+        if (photoPreview) photoPreview.style.display = 'none';
+        if (photoPrompt) photoPrompt.style.display = 'flex';
+      });
+    }
+  }
+
   // Synthesize answers into canonical Digital DNA & review card
   async function submitGuidedReport() {
     const whereInput = document.getElementById('guidedWhere');
@@ -521,6 +551,29 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (whereInput) instantChoiceState.where = whereInput.value.trim();
     if (whenInput) instantChoiceState.when = whenInput.value.trim();
+
+    // Check location
+    if (!instantChoiceState.where) {
+      if (whereInput) {
+        whereInput.focus();
+        whereInput.style.borderColor = '#ef4444';
+        whereInput.style.boxShadow = '0 0 0 3px rgba(239, 68, 68, 0.2)';
+        setTimeout(() => {
+          whereInput.style.borderColor = '';
+          whereInput.style.boxShadow = '';
+        }, 3000);
+      }
+      if (window.ReuniteToast) {
+        window.ReuniteToast.warning('Location Required', `Please enter where the item was ${reportType === 'found' ? 'found' : 'lost'} (e.g. Library, IT Lab, Campus).`);
+      } else {
+        alert(`Please enter where the item was ${reportType === 'found' ? 'found' : 'lost'}.`);
+      }
+      return;
+    }
+
+    if (!instantChoiceState.when) {
+      instantChoiceState.when = 'Recent / Today';
+    }
 
     // Harvest answers
     const answers = { ...instantChoiceState.answers };
@@ -542,13 +595,13 @@ document.addEventListener('DOMContentLoaded', () => {
       model ? `Model: ${model}.` : '',
       color ? `Color: ${color}.` : '',
       condition ? `Condition: ${condition}.` : '',
-      instantChoiceState.where ? `Reported Location: ${instantChoiceState.where}.` : '',
-      instantChoiceState.when ? `Date / Time: ${instantChoiceState.when}.` : ''
+      `Reported Location: ${instantChoiceState.where}.`,
+      `Date / Time: ${instantChoiceState.when}.`
     ].filter(Boolean);
 
     // Add extra answers as traits
     Object.entries(answers).forEach(([k, v]) => {
-      if (['color', 'cover_color', 'brand', 'device_brand', 'key_brand', 'model', 'screen_condition', 'condition'].includes(k)) return;
+      if (['color', 'cover_color', 'brand', 'device_brand', 'key_brand', 'model', 'screen_condition', 'condition', 'where', 'when'].includes(k)) return;
       if (v && typeof v === 'string' && v.trim() && v.toLowerCase() !== 'unknown' && v.toLowerCase() !== 'not sure') {
         const cleanKey = k.replace(/_/g, ' ');
         summaryLines.push(`${cleanKey.charAt(0).toUpperCase() + cleanKey.slice(1)}: ${v.trim()}.`);
@@ -562,161 +615,91 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     const thinkingContainer = document.querySelector('.guided-wizard-card') || document.getElementById('mode2Container');
-    const thinkingHandle = window.Orbi && thinkingContainer ? window.Orbi.showThinking(thinkingContainer, { caption: 'Synthesizing Digital DNA...', size: 44, delay: 200 }) : null;
-
-    const meta = {
-      title: itemTitle,
-      category: formatCategoryName(category),
-      where: instantChoiceState.where || '',
-      when: instantChoiceState.when || '',
-      brand: brand,
-      color: color,
-      condition: condition,
-      model: model,
-      description: summaryText
-    };
+    const thinkingHandle = window.Orbi && thinkingContainer ? window.Orbi.showThinking(thinkingContainer, { caption: 'Synthesizing Digital DNA...', size: 44, delay: 100 }) : null;
 
     try {
-      let dna = null;
+      // Extract visible search tags & private verification keys
+      const visibleFeatures = [];
+      let privMarks = '';
+      let privSecret = '';
+      let privSerial = answers['serial'] || '';
 
-      // 1. Try AI microservice /report/normalize
-      if (window.FlaskAIService && typeof window.FlaskAIService.normalizeReport === 'function') {
-        try {
-          const normResult = await window.FlaskAIService.normalizeReport({
-            report_data: {
-              ...answers,
-              category: category,
-              location: instantChoiceState.where,
-              time: instantChoiceState.when,
-              additional_text: summaryText
-            },
-            source: 'instant_choice',
-            category: category,
-            report_type: reportType
-          });
+      (instantChoiceState.questions || []).forEach(q => {
+        const val = answers[q.id];
+        if (!val || typeof val !== 'string' || !val.trim() || val.toLowerCase() === 'unknown' || val.toLowerCase() === 'not sure') return;
 
-          if (normResult && normResult.success && normResult.data) {
-            const nd = normResult.data;
-            const attrMap = nd.attributes || {};
-
-            // Extract visible features
-            const visibleList = [];
-            if (Array.isArray(nd.visible_features)) {
-              nd.visible_features.forEach(f => {
-                if (typeof f === 'string') visibleList.push(f);
-                else if (f && f.value) visibleList.push(`${f.type || 'Feature'}: ${f.value}`);
-              });
-            }
-
-            // Extract private verification
-            let privMarks = '';
-            let privSecret = '';
-            if (Array.isArray(nd.private_features)) {
-              nd.private_features.forEach(pf => {
-                const text = pf.value || '';
-                if (/wallpaper|mark|sticker|engrav|color|tag|initial/i.test(pf.type || '')) {
-                  privMarks = privMarks ? `${privMarks}; ${text}` : text;
-                } else {
-                  privSecret = privSecret ? `${privSecret}; ${text}` : text;
-                }
-              });
-            }
-
-            dna = {
-              object_type: nd.object_type || itemTitle,
-              category: formatCategoryName(category),
-              attributes: {
-                Brand: attrMap['brand'] || brand || 'Unbranded',
-                Model: attrMap['model'] || model || 'Standard',
-                Color: attrMap['color'] || color || 'Neutral',
-                Material: attrMap['material'] || answers['material'] || 'Standard',
-                Condition: attrMap['condition'] || condition || 'Good',
-                "Date / Time": instantChoiceState.when || new Date().toISOString().split('T')[0],
-                "Reported Location": instantChoiceState.where || 'Campus'
-              },
-              location: nd.location || instantChoiceState.where || 'Campus',
-              visible_features: visibleList.length > 0 ? visibleList : [itemTitle, color, brand].filter(Boolean),
-              private_verification: {
-                serial: attrMap['serial'] || '',
-                marks: privMarks,
-                secret_contents: privSecret
-              }
-            };
+        if (q.private) {
+          if (/serial|imei|id_number/i.test(q.id)) {
+            privSerial = privSerial ? `${privSerial}; ${val.trim()}` : val.trim();
+          } else if (/wallpaper|mark|scratch|sticker|badge|initial/i.test(q.id)) {
+            privMarks = privMarks ? `${privMarks}; ${val.trim()}` : val.trim();
+          } else {
+            privSecret = privSecret ? `${privSecret}; ${val.trim()}` : val.trim();
           }
-        } catch (normErr) {
-          console.info('[InstantChoice] Normalizer call fallback to smart client DNA synthesis:', normErr.message);
+        } else if (!['brand', 'model', 'color', 'device_type', 'wallet_type', 'key_type', 'clothing_type', 'document_type', 'item_title'].includes(q.id)) {
+          visibleFeatures.push(`${q.question.replace(/\*/g, '').replace(/\?/g, '').trim()}: ${val.trim()}`);
         }
+      });
+
+      if (visibleFeatures.length === 0) {
+        if (subType && subType !== formatCategoryName(category)) visibleFeatures.push(subType);
+        if (color) visibleFeatures.push(`Color: ${color}`);
+        if (brand) visibleFeatures.push(`Brand: ${brand}`);
       }
 
-      // 2. Resilient Smart Client DNA Extractor
-      if (!dna) {
-        const visibleFeatures = [];
-        let privMarks = '';
-        let privSecret = '';
+      // Canonical Digital DNA structure
+      const dna = {
+        object_type: itemTitle,
+        category: formatCategoryName(category),
+        attributes: {
+          Brand: brand || 'Unbranded',
+          Model: model || subType || 'Standard',
+          Color: color || 'Neutral',
+          Material: answers['material'] || 'Standard',
+          Condition: condition,
+          "Date / Time": instantChoiceState.when,
+          "Reported Location": instantChoiceState.where,
+          "Serial Number": privSerial,
+          "Distinguishing Marks": privMarks,
+          "Private Verification Keys": privSecret
+        },
+        location: instantChoiceState.where,
+        visible_features: visibleFeatures,
+        private_verification: {
+          serial: privSerial,
+          marks: privMarks,
+          secret_contents: privSecret
+        }
+      };
 
-        instantChoiceState.questions.forEach(q => {
-          const val = answers[q.id];
-          if (!val || typeof val !== 'string' || !val.trim() || val.toLowerCase() === 'unknown' || val.toLowerCase() === 'not sure') return;
-          
-          if (q.private) {
-            if (/wallpaper|mark|scratch|sticker|badge|initial/i.test(q.id)) {
-              privMarks = privMarks ? `${privMarks}; ${val.trim()}` : val.trim();
-            } else {
-              privSecret = privSecret ? `${privSecret}; ${val.trim()}` : val.trim();
-            }
-          } else if (!['brand', 'model', 'color', 'device_type', 'wallet_type', 'key_type', 'clothing_type', 'document_type', 'item_title'].includes(q.id)) {
-            visibleFeatures.push(`${q.question.replace(/\*/g, '').replace(/\?/g, '').trim()}: ${val.trim()}`);
-          }
-        });
+      // Brief 250ms pleasant synthesis pause so the user perceives AI intelligence
+      await new Promise(r => setTimeout(r, 250));
 
-        dna = {
-          object_type: itemTitle,
-          category: formatCategoryName(category),
-          attributes: {
-            Brand: brand || 'Unbranded',
-            Model: model || 'Standard',
-            Color: color || 'Neutral',
-            Material: answers['material'] || 'Standard',
-            Condition: condition,
-            "Date / Time": instantChoiceState.when || new Date().toISOString().split('T')[0],
-            "Reported Location": instantChoiceState.where || 'Campus'
-          },
-          location: instantChoiceState.where || 'Campus',
-          visible_features: visibleFeatures.length > 0 ? visibleFeatures : [itemTitle, color, brand].filter(Boolean),
-          private_verification: {
-            serial: '',
-            marks: privMarks,
-            secret_contents: privSecret
-          }
-        };
-      }
-
-      // 3. Hand off to AI Review Card
+      // Hand off to AI Review Card
       if (typeof window.transitionToReview === 'function') {
         window.transitionToReview(dna, {
           title: itemTitle,
           description: summaryText,
           where: instantChoiceState.where,
           when: instantChoiceState.when,
-          verification: dna.private_verification?.marks || dna.private_verification?.secret_contents || ''
+          verification: privMarks || privSecret || privSerial || '',
+          sourceMode: 'mode2',
+          imageFile: instantChoiceState.photoFile || null
         });
       } else {
-        showSuccessState(summaryText, { ...meta, dna });
+        showSuccessState(summaryText, {
+          title: itemTitle,
+          category: formatCategoryName(category),
+          where: instantChoiceState.where,
+          when: instantChoiceState.when,
+          dna
+        });
       }
 
     } catch (e) {
       console.error('[InstantChoice] Error synthesizing DNA:', e);
-      const fallbackDna = window.FlaskAIService ? window.FlaskAIService.extractClientDna(summaryText, meta) : null;
-      if (typeof window.transitionToReview === 'function') {
-        window.transitionToReview(fallbackDna, {
-          title: meta.title,
-          description: summaryText,
-          where: meta.where,
-          when: meta.when,
-          verification: meta.verification
-        });
-      } else {
-        showSuccessState(summaryText, { ...meta, dna: fallbackDna });
+      if (window.ReuniteToast) {
+        window.ReuniteToast.error('Synthesis Issue', 'Could not synthesize report traits. Please try again.');
       }
     } finally {
       if (thinkingHandle) thinkingHandle.dismiss();
