@@ -19,8 +19,8 @@ if (!empty($_GET['item']) || !empty($_GET['id']) || !empty($_GET['item_id']) || 
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>Reunite — Search Lost &amp; Found Items</title>
-  <meta name="description" content="Search across all found items, lost reports, and community listings on campus with instant filters and AI smart matching." />
+  <title>Reunite — Community Board</title>
+  <meta name="description" content="Reunite Community Board — Browse active lost reports, campus listings, and recent reunions across all campus hubs." />
   <script>
     (function(){
       var t = localStorage.getItem('reunite_theme');
@@ -42,9 +42,9 @@ if (!empty($_GET['item']) || !empty($_GET['id']) || !empty($_GET['item_id']) || 
 
   <!-- ── Hero ── -->
   <section class="search-hero">
-    <h1>Find <em>Items</em></h1>
+    <h1>Community <em>Board</em></h1>
     <p class="search-hero-sub">
-      Search reported items across campus hubs or use AI Smart Match<br>to find what you're looking for.
+      Browse active lost reports, campus listings, and community sightings across all campus hubs.
     </p>
 
       <!-- Search Bar -->
@@ -56,9 +56,9 @@ if (!empty($_GET['item']) || !empty($_GET['id']) || !empty($_GET['item_id']) || 
         type="text"
         id="searchInput"
         class="search-input"
-        placeholder="Search by keyword, brand, or location..."
+        placeholder="Search community reports by keyword, brand, or location..."
         autocomplete="off"
-        aria-label="Search items"
+        aria-label="Search community reports"
       />
       <span id="searchBarSpinner" class="search-bar-spinner" aria-hidden="true"></span>
       <button type="button" id="clearSearchBtn" class="btn-clear-search" title="Clear" aria-label="Clear search">
