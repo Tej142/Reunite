@@ -65,12 +65,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
       if (matches.length > 0) {
         grid.innerHTML = matches.map((item, index) => {
-          let imgSrc = item.thumbnail || '';
+          let imgSrc = (item.thumbnail || '').trim();
           if (imgSrc && !imgSrc.startsWith('http') && !imgSrc.startsWith('/') && !imgSrc.startsWith('../')) {
             imgSrc = '../' + imgSrc;
           }
-          const image = imgSrc ? `<img src="${escapeHtml(imgSrc)}" alt="Privacy-safe item thumbnail" loading="lazy" onerror="this.style.display='none'; if(this.nextElementSibling) this.nextElementSibling.style.display='flex';" /><div class="thumb-fallback" style="display:none; width:100%; height:100%; align-items:center; justify-content:center;">${placeholder}</div>` : placeholder;
-          return `<article class="search-match-card"><div class="search-match-thumb">${image}</div><div class="search-match-info"><span class="search-match-tag">POSSIBLE MATCH</span><small>Match ${String(index+1).padStart(2,'0')}</small><h4>Possible found item</h4><p>Approximate area</p><div class="search-match-meta"><span>⌖ ${escapeHtml(item.location || 'Campus area')}</span><span class="search-match-score">AI similarity ${Number(item.score) || 0}%</span></div><a href="item.php?type=found&id=${encodeURIComponent(item.report_id)}&match_id=${encodeURIComponent(item.match_id)}">Start ownership check</a></div></article>`;
+          const image = imgSrc
+            ? `<img src="${escapeHtml(imgSrc)}" alt="Found item photo" onerror="this.style.display='none'; if(this.nextElementSibling) this.nextElementSibling.style.display='flex';" /><div class="thumb-fallback" style="display:none; width:100%; height:100%; align-items:center; justify-content:center;">${placeholder}</div>`
+            : `<div class="thumb-fallback" style="display:flex; width:100%; height:100%; align-items:center; justify-content:center;">${placeholder}</div>`;
+          const displayTitle = (item.title && item.title !== 'Possible found item' && item.title !== 'Found Item') ? item.title : 'Possible found item';
+          return `<article class="search-match-card"><div class="search-match-thumb">${image}</div><div class="search-match-info"><span class="search-match-tag">POSSIBLE MATCH</span><small>Match ${String(index+1).padStart(2,'0')}</small><h4>${escapeHtml(displayTitle)}</h4><p>Approximate area</p><div class="search-match-meta"><span>⌖ ${escapeHtml(item.location || 'Campus area')}</span><span class="search-match-score">AI similarity ${Number(item.score) || 0}%</span></div><a href="item.php?type=found&id=${encodeURIComponent(item.report_id)}&match_id=${encodeURIComponent(item.match_id)}">Start ownership check</a></div></article>`;
         }).join('');
       } else {
         grid.innerHTML = '';

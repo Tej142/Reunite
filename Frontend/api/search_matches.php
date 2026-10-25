@@ -124,13 +124,15 @@ if ($stmt) {
             $safeImage = ltrim($cand, '/\\');
         }
 
+        $itemTitle = (!empty($row['title']) && $row['title'] !== 'Found Item') ? $row['title'] : (!empty($row['category']) ? $row['category'] : 'Found Belonging');
+
         $matches[] = [
             'match_id' => (int)$row['match_id'],
             'report_id' => 'RF-' . str_pad((string)$row['found_id'], 5, '0', STR_PAD_LEFT),
             'score' => round($score),
             'thumbnail' => $safeImage,
             'location' => $area,
-            'title' => $row['title'] ?? 'Possible found item',
+            'title' => $itemTitle,
             'status' => $row['match_status']
         ];
     }
@@ -154,7 +156,12 @@ if (empty($matches)) {
     }
     $tokens = array_keys($tokens);
 
-    $fSql = "SELECT `$foundPk` AS found_id, $titleCol AS title, $catCol AS category, $thumbCol AS thumbnail, $locCol AS location, COALESCE(description, '') AS description 
+    $thumbColRaw = in_array('image_path', $foundCols, true) ? '`image_path`' : (in_array('privacy_thumbnail_path', $foundCols, true) ? '`privacy_thumbnail_path`' : "''");
+    $locColRaw = in_array('location', $foundCols, true) ? '`location`' : "''";
+    $titleColRaw = in_array('title', $foundCols, true) ? '`title`' : "''";
+    $catColRaw = in_array('category', $foundCols, true) ? '`category`' : "''";
+
+    $fSql = "SELECT `$foundPk` AS found_id, $titleColRaw AS title, $catColRaw AS category, $thumbColRaw AS thumbnail, $locColRaw AS location, COALESCE(description, '') AS description 
              FROM found_reports 
              WHERE LOWER(COALESCE(status, 'active')) IN ('active', 'matched', 'pending')
              ORDER BY `$foundPk` DESC LIMIT 60";
@@ -210,7 +217,7 @@ if (empty($matches)) {
                     'score' => round($calcScore),
                     'thumbnail' => $safeImage,
                     'location' => $area,
-                    'title' => $fRow['title'] ?? 'Possible found item',
+                    'title' => (!empty($fRow['title']) && $fRow['title'] !== 'Found Item') ? $fRow['title'] : (!empty($fRow['category']) ? $fRow['category'] : 'Found Belonging'),
                     'status' => 'pending'
                 ];
             }

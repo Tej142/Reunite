@@ -270,33 +270,11 @@ if ($conn && $numericId > 0) {
     }
 }
 
-// ── 3. Demo Preview (Only used if explicitly requested with 'DEMO-' prefix) ──
-$demoCatalog = [
-    'DEMO-RF-00002' => [
-        'id' => 2,
-        'report_type' => 'found',
-        'category' => 'Wearables & Watches',
-        'title' => 'Peter England Classic Wristwatch',
-        'description' => 'Black dial with silver roman numerals, polished metallic stainless steel mesh strap. Found placed carefully on desk #4 in Computer Science Lab 2 near keyboard.',
-        'location' => 'Computer Lab 2, Tech Block',
-        'report_date' => date('Y-m-d', strtotime('-4 hours')),
-        'image_path' => 'https://images.unsplash.com/photo-1524805444758-089113d48a6d?w=900&h=700&fit=contain&auto=format',
-        'status' => 'active',
-        'created_at' => date('Y-m-d H:i:s', strtotime('-4 hours')),
-        'dna' => [
-            'brand' => 'Peter England',
-            'color' => 'Black & Silver',
-            'model' => 'Analog Classic Series',
-            'strap' => 'Stainless Steel Mesh',
-            'dial' => 'Black with Roman Numerals',
-            'markings' => 'Micro-scratches on clasp'
-        ]
-    ]
-];
-
-if (!$item && str_starts_with($formattedId, 'DEMO-') && isset($demoCatalog[$formattedId])) {
-    $item = $demoCatalog[$formattedId];
+// ── 3. Check report exists in database ──────────────────────────
+if (!$item) {
+    $item = null;
 }
+
 
 // ── 4. Retrieve Digital DNA Traits from DB ───────────────────────
 $dnaDetails = $item['dna'] ?? [];
@@ -440,7 +418,8 @@ if ($item && $reportType === 'found') {
         if (!$activeMatchRow || $matchFoundId !== $numericId) {
             $item = null;
         } elseif (!$isFounder && (!$logged_in || $currentUserId < 1)) {
-            $item = null;
+            header("Location: login.php?redirect=" . urlencode($_SERVER['REQUEST_URI'] ?? 'item.php'));
+            exit;
         } elseif (!$isFounder) {
             $isPrivateMatchedView = true;
         }
@@ -456,9 +435,7 @@ if ($item && $reportType === 'lost' && !$isPrivateMatchedView) {
         $sourceLocation = strtolower((string)($item['location'] ?? ''));
         $safeArea = 'Campus area';
         foreach (['library'=>'Library area','cafeteria'=>'Cafeteria area','canteen'=>'Cafeteria area','bus'=>'Near Bus Stand','auditorium'=>'Auditorium area','sports'=>'Sports complex area','parking'=>'Parking area','lab'=>'Lab area','block'=>'Academic block area'] as $needle=>$label) { if (strpos($sourceLocation,$needle)!==false) { $safeArea=$label; break; } }
-        $item['title'] = 'Lost item'; $item['description'] = 'A community member has reported a missing item.'; $item['location'] = $safeArea; $item['image_path'] = '';
-        $dnaDetails = [];
-        $isPublicMaskedView = true;
+        $item['location'] = $safeArea;
         $matchReason = 'A public-safe community report.';
     }
 }
@@ -466,12 +443,8 @@ if ($isPrivateMatchedView && $item) {
     $sourceLocation = strtolower((string)($item['location'] ?? ''));
     $safeArea = 'Campus area';
     foreach (['library'=>'Library area','cafeteria'=>'Cafeteria area','canteen'=>'Cafeteria area','bus'=>'Near Bus Stand','auditorium'=>'Auditorium area','sports'=>'Sports complex area','parking'=>'Parking area','lab'=>'Lab area','block'=>'Academic block area'] as $needle=>$label) { if (strpos($sourceLocation,$needle)!==false) { $safeArea=$label; break; } }
-    $item['title'] = 'Possible found item'; $item['description'] = 'Some identifying details are hidden until ownership is verified.'; $item['location'] = $safeArea; $item['image_path'] = '';
-    if (in_array('privacy_thumbnail_path', $foundCols, true)) {
-        $safeThumbStmt = $conn->prepare("SELECT privacy_thumbnail_path FROM found_reports WHERE `$foundIdCol` = ? LIMIT 1");
-        if ($safeThumbStmt) { $safeThumbStmt->bind_param('i', $numericId); $safeThumbStmt->execute(); $safeThumbRow=$safeThumbStmt->get_result()->fetch_assoc(); $safeThumbStmt->close(); $candidateThumb=(string)($safeThumbRow['privacy_thumbnail_path'] ?? ''); if (preg_match('/^media_vault\/safe_thumbnails\/[A-Za-z0-9._-]+$/', $candidateThumb)) $item['image_path']=$candidateThumb; }
-    }
-    $dnaDetails = []; $matchReason = 'A stored match was found for your Lost Report. Submit proof to begin the existing ownership review.';
+    $item['location'] = $safeArea;
+    $matchReason = 'A stored match was found for your Lost Report. Review the item photo and submit proof to claim it.';
 }
 // ── 6. Prepare Item Presentation Variables ────────────────────────
 
@@ -480,10 +453,11 @@ $smartTitle = getSmartTitle($item);
 if ($item && empty($item['status'])) {
     $item['status'] = 'active';
 }
-$imgSrc = !empty($item['image_path']) ? $item['image_path'] : 'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=900&h=700&fit=contain&auto=format';
+$imgSrc = !empty($item['image_path']) ? $item['image_path'] : 'assets/placeholder.jpg';
 if (!empty($item['image_path']) && !str_starts_with($item['image_path'], 'http') && !str_starts_with($item['image_path'], '/') && !str_starts_with($item['image_path'], '../')) {
     $imgSrc = '../' . $item['image_path'];
 }
+
 
 $isFound = ($item && ($item['report_type'] === 'found' || ($item['type'] ?? '') === 'found'));
 $isReunited = ($item && in_array(strtolower($item['status'] ?? ''), ['claimed', 'reunited', 'closed']));
@@ -675,7 +649,7 @@ if ($conn && $numericId > 0) {
     if ($simQ && $simQ->num_rows > 0) {
         while ($simRow = $simQ->fetch_assoc()) {
             $simId = 'RF-' . str_pad($simRow['id'], 5, '0', STR_PAD_LEFT);
-            $simImg = !empty($simRow['image_path']) ? $simRow['image_path'] : 'https://images.unsplash.com/photo-1584438784894-089d6a62b8fa?w=500&h=350&fit=crop&auto=format';
+            $simImg = !empty($simRow['image_path']) ? $simRow['image_path'] : 'assets/placeholder.jpg';
             if (!empty($simRow['image_path']) && !str_starts_with($simImg, 'http') && !str_starts_with($simImg, '/') && !str_starts_with($simImg, '../')) {
                 $simImg = '../' . $simImg;
             }
@@ -780,7 +754,7 @@ if ($conn && $numericId > 0) {
             alt="<?php echo htmlspecialchars($smartTitle); ?>" 
             class="item-main-photo" 
             loading="eager"
-            onerror="this.src='https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=900&h=700&fit=contain&auto=format';"
+            onerror="this.src='assets/placeholder.jpg';"
           />
           <span class="item-stage-badge <?php echo $badgeClass; ?>"><?php echo $badgeLabel; ?></span>
           <button type="button" class="btn-stage-zoom" onclick="event.stopPropagation(); openItemLightbox('<?php echo htmlspecialchars($imgSrc); ?>', '<?php echo htmlspecialchars($smartTitle); ?>')" aria-label="Open image zoom lightbox">
