@@ -111,8 +111,8 @@ $is_profile = ($current_page === 'profile.php');
     <?php if (!$is_auth_page): ?>
       <div class="nav-links">
         <?php if ($logged_in): ?>
-          <a href="search.php" id="navLinkSearch" class="<?php echo $is_search ? 'active' : ''; ?>">Search Items</a>
-          <a href="home.php#board" id="navLinkBoard" class="<?php echo ($is_home && empty($_GET['tab'])) ? 'active' : ''; ?>">Community board</a>
+          <a href="home.php#search-items" id="navLinkSearch" class="<?php echo ($is_home && empty($_GET['tab'])) ? 'active' : ''; ?>">Search Items</a>
+          <a href="search.php" id="navLinkBoard" class="<?php echo $is_search ? 'active' : ''; ?>">Community board</a>
           <a href="home.php#how" id="navLinkHow" class="">How it works</a>
         <?php endif; ?>
       </div>
@@ -305,11 +305,11 @@ if ($logged_in && isset($conn) && $conn) {
             <span style="font-size:0.75rem;color:var(--muted);">View Profile &amp; Settings</span>
           </div>
         </a>
-        <a href="search.php" class="mobile-nav-link <?php echo $is_search ? 'active-mobile' : ''; ?>">
+        <a href="home.php#search-items" id="mobNavLinkSearch" class="mobile-nav-link <?php echo ($is_home && empty($_GET['tab'])) ? 'active-mobile' : ''; ?>">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
           <span>Search Items</span>
         </a>
-        <a href="home.php#board" id="mobNavLinkBoard" class="mobile-nav-link <?php echo ($is_home && empty($_GET['tab'])) ? 'active-mobile' : ''; ?>">
+        <a href="search.php" id="mobNavLinkBoard" class="mobile-nav-link <?php echo $is_search ? 'active-mobile' : ''; ?>">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></svg>
           <span>Community Board</span>
         </a>
@@ -331,45 +331,59 @@ if ($logged_in && isset($conn) && $conn) {
         const notifBtn = document.getElementById('navNotifBtn');
         const notifDropdown = document.getElementById('navNotifDropdown');
 
+        const navLinkSearch = document.getElementById('navLinkSearch');
         const navLinkBoard = document.getElementById('navLinkBoard');
         const navLinkHow = document.getElementById('navLinkHow');
+        const mobNavLinkSearch = document.getElementById('mobNavLinkSearch');
         const mobNavLinkBoard = document.getElementById('mobNavLinkBoard');
         const mobNavLinkHow = document.getElementById('mobNavLinkHow');
 
-        // Dynamic active state handler for home sections (#board vs #how)
+        // Dynamic active state handler for home sections (#search-items vs #how)
         function updateHomeNavActive() {
           const isHome = window.location.pathname.endsWith('home.php') || window.location.pathname.endsWith('/home') || (window.location.pathname.endsWith('/') && document.getElementById('how'));
           if (!isHome) return;
 
           const hash = window.location.hash;
           if (hash === '#how') {
-            if (navLinkBoard) navLinkBoard.classList.remove('active');
+            if (navLinkSearch) navLinkSearch.classList.remove('active');
             if (navLinkHow) navLinkHow.classList.add('active');
-            if (mobNavLinkBoard) mobNavLinkBoard.classList.remove('active-mobile');
+            if (mobNavLinkSearch) mobNavLinkSearch.classList.remove('active-mobile');
             if (mobNavLinkHow) mobNavLinkHow.classList.add('active-mobile');
           } else {
             if (navLinkHow) navLinkHow.classList.remove('active');
-            if (navLinkBoard) navLinkBoard.classList.add('active');
+            if (navLinkSearch) navLinkSearch.classList.add('active');
             if (mobNavLinkHow) mobNavLinkHow.classList.remove('active-mobile');
-            if (mobNavLinkBoard) mobNavLinkBoard.classList.add('active-mobile');
+            if (mobNavLinkSearch) mobNavLinkSearch.classList.add('active-mobile');
           }
         }
 
-        // Link click listeners for instantaneous feedback
+        // Link click listeners for instantaneous feedback and smooth scrolling
         if (navLinkHow) {
-          navLinkHow.addEventListener('click', function() {
-            if (navLinkBoard) navLinkBoard.classList.remove('active');
-            navLinkHow.classList.add('active');
-            if (mobNavLinkBoard) mobNavLinkBoard.classList.remove('active-mobile');
-            if (mobNavLinkHow) mobNavLinkHow.classList.add('active-mobile');
+          navLinkHow.addEventListener('click', function(e) {
+            const isHome = window.location.pathname.endsWith('home.php') || window.location.pathname.endsWith('/home') || (window.location.pathname.endsWith('/') && document.getElementById('how'));
+            if (isHome) {
+              const howSec = document.getElementById('how');
+              if (howSec) {
+                e.preventDefault();
+                howSec.scrollIntoView({ behavior: 'smooth' });
+                history.pushState(null, null, '#how');
+                updateHomeNavActive();
+              }
+            }
           });
         }
-        if (navLinkBoard) {
-          navLinkBoard.addEventListener('click', function() {
-            if (navLinkHow) navLinkHow.classList.remove('active');
-            navLinkBoard.classList.add('active');
-            if (mobNavLinkHow) mobNavLinkHow.classList.remove('active-mobile');
-            if (mobNavLinkBoard) mobNavLinkBoard.classList.add('active-mobile');
+        if (navLinkSearch) {
+          navLinkSearch.addEventListener('click', function(e) {
+            const isHome = window.location.pathname.endsWith('home.php') || window.location.pathname.endsWith('/home') || (window.location.pathname.endsWith('/') && document.getElementById('search-items'));
+            if (isHome) {
+              const searchSec = document.getElementById('search-items');
+              if (searchSec) {
+                e.preventDefault();
+                searchSec.scrollIntoView({ behavior: 'smooth' });
+                history.pushState(null, null, '#search-items');
+                updateHomeNavActive();
+              }
+            }
           });
         }
 
@@ -380,24 +394,28 @@ if ($logged_in && isset($conn) && $conn) {
         // Scroll-spy observer for home page sections
         if (typeof IntersectionObserver !== 'undefined') {
           const howSec = document.getElementById('how');
-          const boardSec = document.getElementById('board');
-          if (howSec && boardSec) {
+          const searchSec = document.getElementById('search-items');
+          if (howSec && searchSec) {
             const observer = new IntersectionObserver((entries) => {
               entries.forEach(entry => {
                 if (entry.isIntersecting) {
                   if (entry.target.id === 'how') {
-                    if (navLinkBoard) navLinkBoard.classList.remove('active');
+                    if (navLinkSearch) navLinkSearch.classList.remove('active');
                     if (navLinkHow) navLinkHow.classList.add('active');
-                  } else if (entry.target.id === 'board' && window.scrollY < (howSec.offsetTop - 200)) {
+                    if (mobNavLinkSearch) mobNavLinkSearch.classList.remove('active-mobile');
+                    if (mobNavLinkHow) mobNavLinkHow.classList.add('active-mobile');
+                  } else if (entry.target.id === 'search-items') {
                     if (navLinkHow) navLinkHow.classList.remove('active');
-                    if (navLinkBoard) navLinkBoard.classList.add('active');
+                    if (navLinkSearch) navLinkSearch.classList.add('active');
+                    if (mobNavLinkHow) mobNavLinkHow.classList.remove('active-mobile');
+                    if (mobNavLinkSearch) mobNavLinkSearch.classList.add('active-mobile');
                   }
                 }
               });
             }, { rootMargin: '-20% 0px -60% 0px', threshold: 0.1 });
 
             observer.observe(howSec);
-            observer.observe(boardSec);
+            observer.observe(searchSec);
           }
         }
 

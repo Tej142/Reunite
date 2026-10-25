@@ -38,7 +38,7 @@ $is_user_logged = function_exists('is_logged_in') ? is_logged_in() : (isset($_SE
           <li><a href="search.php">Search Directory</a></li>
           <li><a href="report-lost-item.php">Report Missing Item</a></li>
           <li><a href="report-found-item.php">Upload Found Item</a></li>
-          <li><a href="home.php#board">Community Feed</a></li>
+          <li><a href="search.php">Community Board</a></li>
         </ul>
       </div>
 
