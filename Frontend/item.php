@@ -439,7 +439,7 @@ if ($item && $reportType === 'found') {
         $lostOwnerId = (int)($matchedOppositeItem['user_id'] ?? 0);
         if (!$activeMatchRow || $matchFoundId !== $numericId) {
             $item = null;
-        } elseif (!$isFounder && (!$logged_in || $currentUserId < 1 || ($lostOwnerId > 0 && $lostOwnerId !== $currentUserId && empty($_SESSION['role']) && empty($_SESSION['admin_id'])))) {
+        } elseif (!$isFounder && (!$logged_in || $currentUserId < 1)) {
             $item = null;
         } elseif (!$isFounder) {
             $isPrivateMatchedView = true;
@@ -513,10 +513,14 @@ if ($conn && $numericId > 0 && $isFound && !$isPrivateMatchedView) {
 // Ownership and Match roles:
 // 1. Is the current user the person whose lost report matched this found item?
 $isMatchedLostOwner = false;
-if ($logged_in && !empty($currentUserId) && $matchedOppositeItem && $isFound) {
-    $matchedLostUserId = (int)($matchedOppositeItem['user_id'] ?? 0);
-    if ($matchedLostUserId > 0 && $matchedLostUserId === (int)$currentUserId) {
+if ($logged_in && !empty($currentUserId) && $isFound) {
+    if (!empty($paramMatchId) || $isPrivateMatchedView) {
         $isMatchedLostOwner = true;
+    } elseif ($matchedOppositeItem) {
+        $matchedLostUserId = (int)($matchedOppositeItem['user_id'] ?? 0);
+        if ($matchedLostUserId > 0 && $matchedLostUserId === (int)$currentUserId) {
+            $isMatchedLostOwner = true;
+        }
     }
 }
 

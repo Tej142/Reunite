@@ -17,6 +17,9 @@ date_default_timezone_set('Asia/Kolkata');
 
 require_once __DIR__ . '/../../Backend/config/config.php';
 require_once __DIR__ . '/../../Backend/functions.php';
+require_once __DIR__ . '/../includes/auth.php';
+init_session();
+check_permanent_auth_cookie();
 
 // 1. Strict HTTP Method
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
@@ -32,7 +35,8 @@ if (!isset($conn) || !$conn) {
 }
 
 // 2. Validate User Authentication
-$userId = filter_var($_SESSION['user_id'] ?? null, FILTER_VALIDATE_INT, ["options" => ["min_range" => 1]]);
+$rawUid = $_SESSION['user_id'] ?? ($_SESSION['user']['user_id'] ?? ($_SESSION['user']['id'] ?? null));
+$userId = filter_var($rawUid, FILTER_VALIDATE_INT, ["options" => ["min_range" => 1]]);
 if (!$userId) {
     http_response_code(401);
     echo json_encode(['success' => false, 'code' => 'UNAUTHORIZED', 'message' => 'Please login to verify the handover code.']);
