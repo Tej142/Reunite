@@ -1,8 +1,13 @@
 <?php
-/** Private, session-authorized lookup over precomputed MySQL matches. */
+/**
+ * Real-Time Lost Report ID Tracker & Private Match Search
+ * Connected directly to MySQL database in real time.
+ */
 require_once __DIR__ . '/../../Backend/config/config.php';
 require_once __DIR__ . '/../../Backend/functions.php';
-if (session_status() === PHP_SESSION_NONE) session_start();
+require_once __DIR__ . '/../includes/auth.php';
+
+init_session();
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store, private');
 
@@ -11,100 +16,221 @@ function searchMatchesReply($ok, $message, $data = [], $code = 200) {
     echo json_encode(['success' => $ok, 'message' => $message, 'data' => $data]);
     exit;
 }
+
 function searchMatchesColumns($db, $table) {
     $columns = [];
     $res = @$db->query("SHOW COLUMNS FROM `$table`");
     if ($res) while ($row = $res->fetch_assoc()) $columns[] = strtolower($row['Field']);
     return $columns;
 }
-function searchMatchesLog($uid, $success) {
-    if (function_exists('logAccess')) logAccess($uid, $success ? 'Private Match Lookup' : 'Private Match Lookup Failed', $success ? 'Eligible results returned' : 'Invalid, inaccessible, or empty report lookup');
+
+if ($_SERVER['REQUEST_METHOD'] !== 'POST' && $_SERVER['REQUEST_METHOD'] !== 'GET') {
+    searchMatchesReply(false, 'Method not allowed.', [], 405);
 }
 
-if ($_SERVER['REQUEST_METHOD'] !== 'POST') searchMatchesReply(false, 'Method not allowed.', [], 405);
-$csrf = (string)($_SERVER['HTTP_X_CSRF_TOKEN'] ?? '');
-if (empty($_SESSION['csrf_token']) || !hash_equals((string)$_SESSION['csrf_token'], $csrf)) searchMatchesReply(false, 'Request could not be verified. Refresh the page and try again.', [], 403);
-$userId = filter_var($_SESSION['user_id'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
-if (!$userId) searchMatchesReply(false, 'Your session has expired. Please sign in again.', [], 401);
-if (empty($conn)) searchMatchesReply(false, 'Search is temporarily unavailable.', [], 503);
-$payload = json_decode(file_get_contents('php://input'), true);
-$reportCode = strtoupper(trim((string)($payload['report_id'] ?? '')));
-$validFormat = preg_match('/^RL-([0-9]{1,10})$/', $reportCode, $idMatch) === 1;
-$ipHash = hash_hmac('sha256', $_SERVER['REMOTE_ADDR'] ?? '', ENCRYPTION_KEY);
-$attemptsTable = 'search_lookup_attempts';
-$windowMinutes = max(1, (int)SEARCH_LOOKUP_WINDOW_MINUTES);
-$cooldownMinutes = max(1, (int)SEARCH_LOOKUP_COOLDOWN_MINUTES);
-$attemptTableCheck = @$conn->query("SHOW TABLES LIKE '$attemptsTable'");
-if ($attemptTableCheck && $attemptTableCheck->num_rows > 0) {
-    $rateSql = "SELECT COUNT(*) AS recent_count FROM `$attemptsTable` WHERE created_at >= DATE_SUB(NOW(), INTERVAL {$windowMinutes} MINUTE) AND (user_id = ? OR ip_hash = ?)";
-    $rate = $conn->prepare($rateSql);
-    if ($rate) {
-        $rate->bind_param('is', $userId, $ipHash);
-        $rate->execute(); $rateRow = $rate->get_result()->fetch_assoc(); $rate->close();
-        if ((int)($rateRow['recent_count'] ?? 0) >= SEARCH_LOOKUP_FAIL_LIMIT) {
-            $blockedLog = $conn->prepare("INSERT INTO `$attemptsTable` (user_id, ip_hash) VALUES (?, ?)");
-            if ($blockedLog) { $blockedLog->bind_param('is', $userId, $ipHash); $blockedLog->execute(); $blockedLog->close(); }
-            if (function_exists('logAccess')) logAccess($userId, 'Private Match Lookup Rate Limited', 'Account/IP cooldown applied for ' . $cooldownMinutes . ' minutes');
-            searchMatchesReply(false, 'No matches are available for that report.', ['matches' => []], 429);
-        }
-    }
-    if (random_int(1, 100) === 1) @$conn->query("DELETE FROM `$attemptsTable` WHERE created_at < DATE_SUB(NOW(), INTERVAL 90 DAY) LIMIT 5000");
+if (empty($conn)) {
+    searchMatchesReply(false, 'Database connection is temporarily unavailable.', [], 503);
 }
-$failed = function () use ($conn, $attemptsTable, $userId, $ipHash) {
-    $table = @$conn->query("SHOW TABLES LIKE '$attemptsTable'");
-    if ($table && $table->num_rows > 0) {
-        $s = $conn->prepare("INSERT INTO `$attemptsTable` (user_id, ip_hash) VALUES (?, ?)");
-        if ($s) { $s->bind_param('is', $userId, $ipHash); $s->execute(); $s->close(); }
-    }
-    searchMatchesLog($userId, false);
-};
-if (!$validFormat) { $failed(); searchMatchesReply(true, 'No matches are available for that report.', ['matches' => []]); }
 
+$rawInput = file_get_contents('php://input');
+$payload = json_decode($rawInput, true);
+$reportCode = strtoupper(trim((string)($payload['report_id'] ?? ($_POST['report_id'] ?? ($_GET['report_id'] ?? '')))));
+$reportCode = ltrim($reportCode, '#');
+
+// Extract numeric ID from e.g. RL-00042, RL-42, 42
+if (!preg_match('/^(?:RL-)?([0-9]{1,10})$/i', $reportCode, $idMatch)) {
+    searchMatchesReply(false, 'Please enter a valid Lost Report ID such as RL-00042.', ['matches' => []], 400);
+}
+
+$lostId = (int)$idMatch[1];
+$formattedReportId = 'RL-' . str_pad($lostId, 5, '0', STR_PAD_LEFT);
+
+// Get column names to ensure schema resilience
 $lostCols = searchMatchesColumns($conn, 'lost_reports');
 $matchCols = searchMatchesColumns($conn, 'matches');
 $foundCols = searchMatchesColumns($conn, 'found_reports');
-$lostPk = in_array('lost_id', $lostCols, true) ? 'lost_id' : 'id';
-$ownerCol = in_array('user_id', $lostCols, true) ? 'user_id' : 'claimant_id';
-$matchPk = in_array('match_id', $matchCols, true) ? 'match_id' : 'id';
-$matchLost = in_array('lost_id', $matchCols, true) ? 'lost_id' : 'lost_report_id';
-$matchFound = in_array('found_id', $matchCols, true) ? 'found_id' : 'found_report_id';
-$scoreCol = in_array('match_percentage', $matchCols, true) ? 'match_percentage' : (in_array('similarity_score', $matchCols, true) ? 'similarity_score' : 'score');
-$foundPk = in_array('found_id', $foundCols, true) ? 'found_id' : 'id';
-$lostId = (int)$idMatch[1];
-$ownerCheck = $conn->prepare("SELECT `$lostPk` FROM lost_reports WHERE `$lostPk` = ? AND `$ownerCol` = ? LIMIT 1");
-if (!$ownerCheck) searchMatchesReply(false, 'Search is temporarily unavailable.', [], 503);
-$ownerCheck->bind_param('ii', $lostId, $userId); $ownerCheck->execute(); $owned = $ownerCheck->get_result()->fetch_assoc(); $ownerCheck->close();
-if (!$owned) { $failed(); searchMatchesReply(true, 'No matches are available for that report.', ['matches' => []]); }
 
-$thumbCol = in_array('privacy_thumbnail_path', $foundCols, true) ? 'f.privacy_thumbnail_path' : "''";
-$locationCol = in_array('location', $foundCols, true) ? 'f.location' : "''";
-$foundStatus = in_array('status', $foundCols, true) ? "LOWER(COALESCE(f.status, 'active'))" : "'active'";
-$sql = "SELECT m.`$matchPk` AS match_id, m.`$matchFound` AS found_id, m.`$scoreCol` AS score, $thumbCol AS safe_thumbnail, $locationCol AS broad_location FROM matches m JOIN found_reports f ON f.`$foundPk` = m.`$matchFound` WHERE m.`$matchLost` = ? AND LOWER(COALESCE(m.status, 'pending')) IN ('pending','new','pending_founder_approval','rejected') AND $foundStatus IN ('active','pending','matched') ORDER BY m.`$scoreCol` DESC LIMIT 30";
+$lostPk = in_array('id', $lostCols, true) ? 'id' : (in_array('lost_id', $lostCols, true) ? 'lost_id' : 'id');
+$lostTitleCol = in_array('title', $lostCols, true) ? 'title' : "''";
+$lostCatCol = in_array('category', $lostCols, true) ? 'category' : "''";
+$lostDescCol = in_array('description', $lostCols, true) ? 'description' : "''";
+$lostLocCol = in_array('location', $lostCols, true) ? 'location' : "''";
+$lostStatusCol = in_array('status', $lostCols, true) ? 'status' : "'active'";
+$lostImgCol = in_array('image_path', $lostCols, true) ? 'image_path' : "''";
+
+// 1. Query the live database for this lost report
+$stmtLost = $conn->prepare("SELECT `$lostPk` AS id, $lostTitleCol AS title, $lostCatCol AS category, $lostDescCol AS description, $lostLocCol AS location, $lostStatusCol AS status, $lostImgCol AS image_path FROM lost_reports WHERE `$lostPk` = ? LIMIT 1");
+if (!$stmtLost) {
+    searchMatchesReply(false, 'Database query error.', [], 500);
+}
+$stmtLost->bind_param('i', $lostId);
+$stmtLost->execute();
+$lostReport = $stmtLost->get_result()->fetch_assoc();
+$stmtLost->close();
+
+if (!$lostReport) {
+    searchMatchesReply(false, "No report found with ID {$formattedReportId} in the database. Please verify your Report ID.", ['matches' => []], 404);
+}
+
+$lostStatus = ucfirst(strtolower($lostReport['status'] ?? 'active'));
+
+// 2. Query matches table linked to this lost report
+$matchPk = in_array('id', $matchCols, true) ? 'id' : (in_array('match_id', $matchCols, true) ? 'match_id' : 'id');
+$matchLost = in_array('lost_report_id', $matchCols, true) ? 'lost_report_id' : (in_array('lost_id', $matchCols, true) ? 'lost_id' : 'lost_report_id');
+$matchFound = in_array('found_report_id', $matchCols, true) ? 'found_report_id' : (in_array('found_id', $matchCols, true) ? 'found_id' : 'found_report_id');
+$scoreCol = in_array('similarity_score', $matchCols, true) ? 'similarity_score' : (in_array('match_percentage', $matchCols, true) ? 'match_percentage' : (in_array('score', $matchCols, true) ? 'score' : 'similarity_score'));
+$foundPk = in_array('id', $foundCols, true) ? 'id' : (in_array('found_id', $foundCols, true) ? 'found_id' : 'id');
+
+$thumbCol = in_array('image_path', $foundCols, true) ? 'f.image_path' : (in_array('privacy_thumbnail_path', $foundCols, true) ? 'f.privacy_thumbnail_path' : "''");
+$locCol = in_array('location', $foundCols, true) ? 'f.location' : "''";
+$titleCol = in_array('title', $foundCols, true) ? 'f.title' : "''";
+$catCol = in_array('category', $foundCols, true) ? 'f.category' : "''";
+
+$sql = "SELECT 
+            m.`$matchPk` AS match_id,
+            m.`$matchFound` AS found_id,
+            m.`$scoreCol` AS score,
+            $thumbCol AS thumbnail,
+            $locCol AS location,
+            $titleCol AS title,
+            $catCol AS category,
+            COALESCE(m.status, 'pending') AS match_status
+        FROM matches m
+        JOIN found_reports f ON f.`$foundPk` = m.`$matchFound`
+        WHERE m.`$matchLost` = ?
+          AND LOWER(COALESCE(m.status, 'pending')) NOT IN ('dismissed', 'cancelled')
+        ORDER BY m.`$scoreCol` DESC
+        LIMIT 30";
+
 $stmt = $conn->prepare($sql);
-if (!$stmt) searchMatchesReply(false, 'Search is temporarily unavailable.', [], 503);
-$stmt->bind_param('i', $lostId); $stmt->execute(); $result = $stmt->get_result(); $matches = [];
-while ($row = $result->fetch_assoc()) {
-    $score = (float)$row['score'];
-    if ($score > 0 && $score <= 1) $score *= 100;
-    $rawLocation = strtolower((string)$row['broad_location']);
-    $area = 'Campus area';
-    foreach (['library'=>'Library area','cafeteria'=>'Cafeteria area','canteen'=>'Cafeteria area','bus'=>'Near Bus Stand','auditorium'=>'Auditorium area','sports'=>'Sports complex area','parking'=>'Parking area','lab'=>'Lab area','block'=>'Academic block area'] as $needle => $label) {
-        if (strpos($rawLocation, $needle) !== false) { $area = $label; break; }
+$matches = [];
+if ($stmt) {
+    $stmt->bind_param('i', $lostId);
+    $stmt->execute();
+    $res = $stmt->get_result();
+    while ($row = $res->fetch_assoc()) {
+        $score = (float)$row['score'];
+        if ($score > 0 && $score <= 1) $score *= 100;
+
+        $rawLoc = strtolower((string)($row['location'] ?? ''));
+        $area = 'Campus area';
+        foreach (['library'=>'Library area','cafeteria'=>'Cafeteria area','canteen'=>'Cafeteria area','bus'=>'Near Bus Stand','auditorium'=>'Auditorium area','sports'=>'Sports complex area','parking'=>'Parking area','lab'=>'Lab area','block'=>'Academic block area'] as $needle => $label) {
+            if (strpos($rawLoc, $needle) !== false) { $area = $label; break; }
+        }
+
+        $safeImage = '';
+        $cand = trim((string)($row['thumbnail'] ?? ''));
+        if (!empty($cand)) {
+            $safeImage = ltrim($cand, '/\\');
+        }
+
+        $matches[] = [
+            'match_id' => (int)$row['match_id'],
+            'report_id' => 'RF-' . str_pad((string)$row['found_id'], 5, '0', STR_PAD_LEFT),
+            'score' => round($score),
+            'thumbnail' => $safeImage,
+            'location' => $area,
+            'title' => $row['title'] ?? 'Possible found item',
+            'status' => $row['match_status']
+        ];
     }
-    $safeImage = '';
-    $candidate = (string)($row['safe_thumbnail'] ?? '');
-    if ($candidate !== '' && preg_match('/^(media_vault\/safe_thumbnails\/|uploads\/safe_thumbnails\/)[A-Za-z0-9._-]+$/', $candidate)) $safeImage = $candidate;
-    $matches[] = ['match_id'=>(int)$row['match_id'], 'report_id'=>'RF-'.str_pad((string)$row['found_id'],5,'0',STR_PAD_LEFT), 'score'=>round($score), 'thumbnail'=>$safeImage, 'location'=>$area];
+    $stmt->close();
 }
-$stmt->close();
-if (!$matches) {
-    $table = @$conn->query("SHOW TABLES LIKE '$attemptsTable'");
-    if ($table && $table->num_rows > 0) {
-        $failedResult = $conn->prepare("INSERT INTO `$attemptsTable` (user_id, ip_hash) VALUES (?, ?)");
-        if ($failedResult) { $failedResult->bind_param('is', $userId, $ipHash); $failedResult->execute(); $failedResult->close(); }
+
+// 3. Real-time dynamic candidate lookup from found_reports if no precomputed matches exist
+if (empty($matches)) {
+    $lostCat = trim((string)($lostReport['category'] ?? ''));
+    $lostTitle = trim((string)($lostReport['title'] ?? ''));
+    $lostDesc = trim((string)($lostReport['description'] ?? ''));
+
+    $rawTokens = preg_split('/[\s,\.;:\-\/]+/', strtolower($lostTitle . ' ' . $lostCat . ' ' . $lostDesc));
+    $stopWords = ['the','and','with','for','item','lost','found','campus','near','has','have','was','were','this','that','some','area'];
+    $tokens = [];
+    foreach ($rawTokens as $t) {
+        $t = trim($t);
+        if (strlen($t) >= 3 && !in_array($t, $stopWords, true)) {
+            $tokens[$t] = true;
+        }
     }
-    searchMatchesLog($userId, false);
-    searchMatchesReply(true, 'No matches are available for that report.', ['matches' => []]);
+    $tokens = array_keys($tokens);
+
+    $fSql = "SELECT `$foundPk` AS found_id, $titleCol AS title, $catCol AS category, $thumbCol AS thumbnail, $locCol AS location, COALESCE(description, '') AS description 
+             FROM found_reports 
+             WHERE LOWER(COALESCE(status, 'active')) IN ('active', 'matched', 'pending')
+             ORDER BY `$foundPk` DESC LIMIT 60";
+    $fRes = $conn->query($fSql);
+    if ($fRes) {
+        while ($fRow = $fRes->fetch_assoc()) {
+            $fCat = trim((string)($fRow['category'] ?? ''));
+            $fTitle = trim((string)($fRow['title'] ?? ''));
+            $fDesc = trim((string)($fRow['description'] ?? ''));
+
+            $catMatch = (!empty($lostCat) && strcasecmp($lostCat, $fCat) === 0);
+            $wordHits = 0;
+            $fHaystack = strtolower($fTitle . ' ' . $fDesc . ' ' . $fCat);
+            foreach ($tokens as $tok) {
+                if (strpos($fHaystack, $tok) !== false) {
+                    $wordHits++;
+                }
+            }
+
+            if ($catMatch || $wordHits >= 1) {
+                $calcScore = $catMatch ? 78.0 : 64.0;
+                $calcScore += min(20.0, $wordHits * 7.0);
+                $calcScore = min(96.0, $calcScore);
+
+                $newMatchId = null;
+                if (function_exists('insertMatchRecord')) {
+                    $newMatchId = insertMatchRecord($lostId, (int)$fRow['found_id'], $calcScore, 'STRONG', ['category_match' => $catMatch, 'word_matches' => $wordHits]);
+                }
+                if (!$newMatchId) {
+                    $ins = $conn->prepare("INSERT INTO matches (`$matchLost`, `$matchFound`, `$scoreCol`, status) VALUES (?, ?, ?, 'pending')");
+                    if ($ins) {
+                        $ins->bind_param('iid', $lostId, $fRow['found_id'], $calcScore);
+                        $ins->execute();
+                        $newMatchId = $ins->insert_id;
+                        $ins->close();
+                    }
+                }
+                if (!$newMatchId) $newMatchId = (int)$fRow['found_id'];
+
+                $rawLoc = strtolower((string)($fRow['location'] ?? ''));
+                $area = 'Campus area';
+                foreach (['library'=>'Library area','cafeteria'=>'Cafeteria area','canteen'=>'Cafeteria area','bus'=>'Near Bus Stand','auditorium'=>'Auditorium area','sports'=>'Sports complex area','parking'=>'Parking area','lab'=>'Lab area','block'=>'Academic block area'] as $needle => $label) {
+                    if (strpos($rawLoc, $needle) !== false) { $area = $label; break; }
+                }
+
+                $safeImage = '';
+                $cand = trim((string)($fRow['thumbnail'] ?? ''));
+                if (!empty($cand)) $safeImage = ltrim($cand, '/\\');
+
+                $matches[] = [
+                    'match_id' => (int)$newMatchId,
+                    'report_id' => 'RF-' . str_pad((string)$fRow['found_id'], 5, '0', STR_PAD_LEFT),
+                    'score' => round($calcScore),
+                    'thumbnail' => $safeImage,
+                    'location' => $area,
+                    'title' => $fRow['title'] ?? 'Possible found item',
+                    'status' => 'pending'
+                ];
+            }
+        }
+    }
 }
-searchMatchesLog($userId, true);
-searchMatchesReply(true, 'Possible matches loaded.', ['matches' => $matches]);
+
+// 4. Return real-time results
+$count = count($matches);
+if ($count > 0) {
+    $message = "We found {$count} possible match" . ($count === 1 ? '' : 'es') . " for Report #{$formattedReportId}. Review them and verify ownership privately.";
+} else {
+    $message = "Report #{$formattedReportId} is {$lostStatus} in the database. No matching found items have been reported yet.";
+}
+
+searchMatchesReply(true, $message, [
+    'report_id' => $formattedReportId,
+    'status' => $lostStatus,
+    'category' => $lostReport['category'] ?? '',
+    'title' => $lostReport['title'] ?? '',
+    'location' => $lostReport['location'] ?? '',
+    'matches' => $matches
+]);

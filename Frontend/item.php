@@ -439,7 +439,7 @@ if ($item && $reportType === 'found') {
         $lostOwnerId = (int)($matchedOppositeItem['user_id'] ?? 0);
         if (!$activeMatchRow || $matchFoundId !== $numericId) {
             $item = null;
-        } elseif (!$isFounder && (!$logged_in || $currentUserId < 1 || $lostOwnerId !== $currentUserId)) {
+        } elseif (!$isFounder && (!$logged_in || $currentUserId < 1 || ($lostOwnerId > 0 && $lostOwnerId !== $currentUserId && empty($_SESSION['role']) && empty($_SESSION['admin_id'])))) {
             $item = null;
         } elseif (!$isFounder) {
             $isPrivateMatchedView = true;
