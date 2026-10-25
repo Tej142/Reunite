@@ -524,7 +524,11 @@ if ($action === 'list' || $method === 'GET') {
 
     $adminViewer = !empty($_SESSION['admin_id']) || in_array(strtolower((string)($_SESSION['role'] ?? $_SESSION['user_role'] ?? '')), ['admin','moderator','superadmin'], true);
     if (!$adminViewer) {
-        $reports = array_values(array_filter($reports, function ($row) { return strtolower((string)($row['report_type'] ?? '')) === 'lost'; }));
+        $reports = array_values(array_filter($reports, function ($row) {
+            $isLost = strtolower((string)($row['report_type'] ?? '')) === 'lost';
+            $isReunited = in_array(strtolower((string)($row['status'] ?? '')), ['claimed','reunited','closed','returned','verified','recovered'], true);
+            return $isLost || $isReunited;
+        }));
     }
 
     // Strip private user_id before returning public reports

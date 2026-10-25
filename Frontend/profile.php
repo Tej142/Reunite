@@ -161,8 +161,29 @@ $userStats = [
 ];
 
 if ($userId && isset($conn) && $conn) {
+    $lostCols = [];
+    $lcRes = @$conn->query("SHOW COLUMNS FROM lost_reports");
+    if ($lcRes) while ($c = $lcRes->fetch_assoc()) $lostCols[] = strtolower($c['Field']);
+
+    $foundCols = [];
+    $fcRes = @$conn->query("SHOW COLUMNS FROM found_reports");
+    if ($fcRes) while ($c = $fcRes->fetch_assoc()) $foundCols[] = strtolower($c['Field']);
+
+    $mCols = [];
+    $mcRes = @$conn->query("SHOW COLUMNS FROM matches");
+    if ($mcRes) while ($c = $mcRes->fetch_assoc()) $mCols[] = strtolower($c['Field']);
+
+    $lostPk = in_array('lost_id', $lostCols) ? 'lost_id' : 'id';
+    $lostDate = in_array('date_lost', $lostCols) ? 'date_lost' : (in_array('created_at', $lostCols) ? 'created_at' : 'NOW()');
+    $lostOwner = in_array('user_id', $lostCols) ? 'user_id' : 'claimant_id';
+
+    $foundPk = in_array('found_id', $foundCols) ? 'found_id' : 'id';
+    $foundDate = in_array('date_found', $foundCols) ? 'date_found' : (in_array('created_at', $foundCols) ? 'created_at' : 'NOW()');
+    $foundOwner = in_array('finder_id', $foundCols) ? 'finder_id' : (in_array('user_id', $foundCols) ? 'user_id' : 'finder_id');
+
     // 1. Fetch lost reports
-    $lStmt = $conn->prepare("SELECT lost_id AS id, 'lost' as report_type, title, description, category, location, image_path, status, date_lost AS created_at FROM lost_reports WHERE user_id = ? ORDER BY lost_id DESC");
+    $lSql = "SELECT `$lostPk` AS id, 'lost' AS report_type, title, description, category, location, image_path, status, $lostDate AS created_at FROM lost_reports WHERE `$lostOwner` = ? ORDER BY `$lostPk` DESC";
+    $lStmt = $conn->prepare($lSql);
     if ($lStmt) {
         $lStmt->bind_param("i", $userId);
         $lStmt->execute();
@@ -170,7 +191,7 @@ if ($userId && isset($conn) && $conn) {
         while ($row = $res->fetch_assoc()) {
             $userReports[] = $row;
             $userStats['lost_count']++;
-            if (in_array(strtolower($row['status']), ['matched', 'recovered', 'claimed', 'closed', 'reunited', 'returned'])) {
+            if (in_array(strtolower($row['status'] ?? ''), ['matched', 'recovered', 'claimed', 'closed', 'reunited', 'returned'])) {
                 $userStats['reunited_items']++;
             }
         }
@@ -178,7 +199,8 @@ if ($userId && isset($conn) && $conn) {
     }
 
     // 2. Fetch found reports
-    $fStmt = $conn->prepare("SELECT found_id AS id, 'found' as report_type, title, description, category, location, image_path, status, date_found AS created_at FROM found_reports WHERE finder_id = ? ORDER BY found_id DESC");
+    $fSql = "SELECT `$foundPk` AS id, 'found' AS report_type, title, description, category, location, image_path, status, $foundDate AS created_at FROM found_reports WHERE `$foundOwner` = ? ORDER BY `$foundPk` DESC";
+    $fStmt = $conn->prepare($fSql);
     if ($fStmt) {
         $fStmt->bind_param("i", $userId);
         $fStmt->execute();
@@ -186,7 +208,7 @@ if ($userId && isset($conn) && $conn) {
         while ($row = $res->fetch_assoc()) {
             $userReports[] = $row;
             $userStats['found_count']++;
-            if (in_array(strtolower($row['status']), ['matched', 'returned', 'claimed', 'closed', 'reunited'])) {
+            if (in_array(strtolower($row['status'] ?? ''), ['matched', 'returned', 'claimed', 'closed', 'reunited'])) {
                 $userStats['reunited_items']++;
             }
         }
@@ -201,7 +223,14 @@ if ($userId && isset($conn) && $conn) {
     $userStats['reports_filed'] = count($userReports);
 
     // 3. Count AI matches linked to user's reports (lost or found)
-    $mStmt = $conn->prepare("SELECT COUNT(DISTINCT m.id) as match_cnt FROM matches m LEFT JOIN lost_reports lr ON m.lost_report_id = lr.lost_id LEFT JOIN found_reports fr ON m.found_report_id = fr.found_id WHERE (lr.user_id = ? OR fr.finder_id = ?) AND (m.status != 'rejected' AND (m.confidence_tier IS NULL OR m.confidence_tier != 'DISCARD'))");
+    $mLostCol = in_array('lost_id', $mCols) ? 'lost_id' : 'lost_report_id';
+    $mFoundCol = in_array('found_id', $mCols) ? 'found_id' : 'found_report_id';
+    $mPk = in_array('match_id', $mCols) ? 'match_id' : 'id';
+    $hasTier = in_array('confidence_tier', $mCols);
+    $tierClause = $hasTier ? "AND (m.confidence_tier IS NULL OR m.confidence_tier != 'DISCARD')" : "";
+
+    $mSql = "SELECT COUNT(DISTINCT m.`$mPk`) as match_cnt FROM matches m LEFT JOIN lost_reports lr ON m.`$mLostCol` = lr.`$lostPk` LEFT JOIN found_reports fr ON m.`$mFoundCol` = fr.`$foundPk` WHERE (lr.`$lostOwner` = ? OR fr.`$foundOwner` = ?) AND (m.status != 'rejected' $tierClause)";
+    $mStmt = $conn->prepare($mSql);
     if ($mStmt) {
         $mStmt->bind_param("ii", $userId, $userId);
         $mStmt->execute();
