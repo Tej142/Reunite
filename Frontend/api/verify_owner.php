@@ -154,6 +154,10 @@ try {
 
     mysqli_begin_transaction($conn);
     $transactionStarted = true;
+    // A user-row lock serializes claims from this account across different lost reports.
+    $accountLock = mysqli_prepare($conn, 'SELECT user_id FROM users WHERE user_id = ? FOR UPDATE');
+    if (!$accountLock) throw new Exception('Could not lock claimant account.');
+    mysqli_stmt_bind_param($accountLock, 'i', $userId); mysqli_stmt_execute($accountLock); mysqli_stmt_get_result($accountLock); mysqli_stmt_close($accountLock);
 
     // 8. Row lock and match verification
     $selectSql = "
@@ -214,6 +218,16 @@ try {
         exit;
     }
 
+    // Account-wide active claim cap (serialized by the users row lock above).
+    $accountClaimsSql = "SELECT COUNT(*) AS active_count FROM matches m JOIN lost_reports l ON m.`$lostCol` = l.`$lPk` WHERE l.`$lUserCol` = ? AND m.status IN ('pending_founder_approval','ready_for_handover','in_progress','approved')";
+    $accountClaimsStmt = mysqli_prepare($conn, $accountClaimsSql);
+    if (!$accountClaimsStmt) throw new Exception('Could not verify active claim quota.');
+    mysqli_stmt_bind_param($accountClaimsStmt, 'i', $userId); mysqli_stmt_execute($accountClaimsStmt);
+    $accountClaimsRow = mysqli_fetch_assoc(mysqli_stmt_get_result($accountClaimsStmt)); mysqli_stmt_close($accountClaimsStmt);
+    if ((int)($accountClaimsRow['active_count'] ?? 0) >= 2 && !in_array($matchData['status'], ['pending_founder_approval','ready_for_handover','in_progress','approved'], true)) {
+        http_response_code(429); echo json_encode(['success'=>false,'code'=>'ACCOUNT_ACTIVE_CLAIM_LIMIT','message'=>'You have reached the maximum of 2 active claims across your reports. Wait for a review, handover, rejection, cancellation, or expiry to free a slot.']);
+        mysqli_rollback($conn); exit;
+    }
     // Status check
     if (!in_array($matchData['status'], ['pending', 'rejected'])) {
         http_response_code(409);
@@ -225,11 +239,13 @@ try {
     // 10. Update matches record
     $proofCol = in_array('claim_details', $mCols) ? 'claim_details' : (in_array('owner_proof', $mCols) ? 'owner_proof' : 'claim_details');
     $hasProofImgCol = in_array('proof_image', $mCols);
+    $hasClaimSubmittedAt = in_array('claim_submitted_at', $mCols);
+    $claimTimeSql = $hasClaimSubmittedAt ? ', claim_submitted_at = NOW()' : '';
 
     if ($hasProofImgCol) {
         $uStmt = mysqli_prepare($conn, "
             UPDATE matches 
-            SET status = 'pending_founder_approval', `$proofCol` = ?, proof_image = COALESCE(?, proof_image)
+            SET status = 'pending_founder_approval', `$proofCol` = ?, proof_image = COALESCE(?, proof_image)$claimTimeSql
             WHERE `$pkCol` = ?
         ");
         if ($uStmt) {
@@ -240,7 +256,7 @@ try {
     } else {
         $uStmt = mysqli_prepare($conn, "
             UPDATE matches 
-            SET status = 'pending_founder_approval', `$proofCol` = ?
+            SET status = 'pending_founder_approval', `$proofCol` = ?$claimTimeSql
             WHERE `$pkCol` = ?
         ");
         if ($uStmt) {

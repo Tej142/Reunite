@@ -308,6 +308,12 @@ document.addEventListener('DOMContentLoaded', () => {
       setEl('metricFoundCount', data.database.found_count);
       setEl('metricDnaCount', data.database.dna_count);
       setEl('metricUsersCount', data.database.users_count);
+      const safeguardStats = data.database.safeguards || {};
+      setEl('metricFailedLookups', safeguardStats.failed_lookups_24h || 0);
+      setEl('metricReportCaps', safeguardStats.accounts_at_report_cap || 0);
+      setEl('metricClaimCaps', safeguardStats.accounts_at_claim_cap || 0);
+      setEl('metricOverdueReviews', safeguardStats.overdue_reviews || 0);
+      setEl('metricConfirmedFraud', safeguardStats.confirmed_fraud || 0);
 
       // Media Vault
       setEl('metricVaultFiles', data.media_vault.total_files);

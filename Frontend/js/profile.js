@@ -12,28 +12,40 @@ document.addEventListener('DOMContentLoaded', () => {
     notifications: document.getElementById('tabPanelNotifications')
   };
 
-  tabBtns.forEach(btn => {
-    btn.addEventListener('click', () => {
-      const tabId = btn.getAttribute('data-tab');
-      
-      // Update tab button active states
-      tabBtns.forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-
-      // Center active tab smoothly in scroll rail on mobile
-      if (typeof btn.scrollIntoView === 'function') {
-        btn.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
-      }
-
-      // Update tab panels
-      Object.keys(tabPanels).forEach(key => {
-        if (tabPanels[key]) {
-          tabPanels[key].classList.toggle('active', key === tabId);
-        }
-      });
-    });
+  const activateProfileTab = (tabId, smooth = false) => {
+    if (!tabPanels[tabId]) return;
+    tabBtns.forEach(b => b.classList.toggle('active', b.getAttribute('data-tab') === tabId));
+    Object.keys(tabPanels).forEach(key => tabPanels[key]?.classList.toggle('active', key === tabId));
+    const activeButton = Array.from(tabBtns).find(b => b.getAttribute('data-tab') === tabId);
+    if (activeButton && smooth) activeButton.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+  };
+  const applyLocation = () => {
+    const params = new URLSearchParams(window.location.search);
+    const hash = window.location.hash;
+    const requested = params.get('tab') || (hash === '#tabPanelActivity' || hash === '#tabPanelReports' ? 'activity' : 'personal');
+    activateProfileTab(requested, false);
+    const filter = params.get('filter');
+    if (requested === 'activity' && filter) {
+      const chip = document.querySelector(`.activity-chip[data-filter="${filter}"]`);
+      if (chip) chip.click();
+    }
+  };
+  tabBtns.forEach(btn => btn.addEventListener('click', () => {
+    const tabId = btn.getAttribute('data-tab');
+    activateProfileTab(tabId, true);
+    const url = new URL(window.location.href); url.searchParams.set('tab', tabId);
+    history.replaceState(null, '', url);
+  }));
+  window.addEventListener('hashchange', applyLocation);
+  queueMicrotask(applyLocation);
+  document.addEventListener('click', async event => {
+    const copyButton = event.target.closest('[data-copy-report]');
+    if (!copyButton) return;
+    const code = copyButton.getAttribute('data-copy-report');
+    try { await navigator.clipboard.writeText(code); copyButton.textContent = 'Copied'; }
+    catch (_) { window.prompt('Copy Report ID', code); }
+    setTimeout(() => { copyButton.textContent = 'Copy ID'; }, 1400);
   });
-
   // 2. Activity Feed Filter Chips
   const activityChips = document.querySelectorAll('.activity-chip');
   const reportCards = document.querySelectorAll('.user-report-card');
@@ -243,4 +255,3 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
 });
-

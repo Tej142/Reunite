@@ -225,6 +225,7 @@ if ($action === 'get_status') {
         'matches_count' => 0,
         'users_count' => 0,
         'logs_count' => 0,
+        'safeguards' => ['failed_lookups_24h'=>0,'accounts_at_report_cap'=>0,'accounts_at_claim_cap'=>0,'overdue_reviews'=>0,'confirmed_fraud'=>0],
         'connected' => ($conn && $conn->ping())
     ];
 
@@ -246,6 +247,16 @@ if ($action === 'get_status') {
 
         $q = $conn->query("SELECT COUNT(*) as c FROM access_logs");
         if ($q) $dbStats['logs_count'] = (int)$q->fetch_assoc()['c'];
+        $hasTable = function($name) use ($conn) { $safe = $conn->real_escape_string($name); $r = $conn->query("SHOW TABLES LIKE '$safe'"); return $r && $r->num_rows > 0; };
+        if ($hasTable('search_lookup_attempts')) { $r=$conn->query('SELECT COUNT(*) AS c FROM search_lookup_attempts WHERE created_at >= DATE_SUB(NOW(), INTERVAL 24 HOUR)'); if($r) $dbStats['safeguards']['failed_lookups_24h']=(int)$r->fetch_assoc()['c']; }
+        if ($hasTable('claim_review_events')) { $r=$conn->query('SELECT COUNT(*) AS c FROM claim_review_events WHERE fraud_confirmed=1'); if($r) $dbStats['safeguards']['confirmed_fraud']=(int)$r->fetch_assoc()['c']; }
+        if ($hasTable('matches')) {
+            $reviewCols=[]; $rc=$conn->query('SHOW COLUMNS FROM matches'); if($rc) while($col=$rc->fetch_assoc()) $reviewCols[]=strtolower($col['Field']); $reviewTime=in_array('claim_submitted_at',$reviewCols,true)?'claim_submitted_at':'created_at'; $r=$conn->query("SELECT COUNT(*) AS c FROM matches WHERE status='pending_founder_approval' AND `$reviewTime` < DATE_SUB(NOW(), INTERVAL 48 HOUR)"); if($r) $dbStats['safeguards']['overdue_reviews']=(int)$r->fetch_assoc()['c'];
+            $mCols=[]; $mc=$conn->query('SHOW COLUMNS FROM matches'); if($mc) while($col=$mc->fetch_assoc()) $mCols[]=strtolower($col['Field']);
+            $lostCol=in_array('lost_id',$mCols,true)?'lost_id':'lost_report_id'; $lostCols=[]; $lc=$conn->query('SHOW COLUMNS FROM lost_reports'); if($lc) while($col=$lc->fetch_assoc()) $lostCols[]=strtolower($col['Field']); $lostPk=in_array('lost_id',$lostCols,true)?'lost_id':'id'; $ownerCol=in_array('user_id',$lostCols,true)?'user_id':'claimant_id';
+            $r=$conn->query("SELECT COUNT(*) AS c FROM (SELECT l.`$ownerCol` AS owner_id FROM matches m JOIN lost_reports l ON l.`$lostPk`=m.`$lostCol` WHERE m.status IN ('pending_founder_approval','ready_for_handover','in_progress','approved') GROUP BY l.`$ownerCol` HAVING COUNT(*) >= 2) capped"); if($r) $dbStats['safeguards']['accounts_at_claim_cap']=(int)$r->fetch_assoc()['c'];
+        }
+        $r=$conn->query("SELECT COUNT(*) AS c FROM (SELECT user_id FROM lost_reports WHERE status IN ('active','pending','new') GROUP BY user_id HAVING COUNT(*) >= " . ACTIVE_UNREVIEWED_LOST_REPORT_LIMIT . ") capped"); if($r) $dbStats['safeguards']['accounts_at_report_cap']=(int)$r->fetch_assoc()['c'];
     }
 
     // Media Vault Scan

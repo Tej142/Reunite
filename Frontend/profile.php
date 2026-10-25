@@ -476,6 +476,8 @@ if ($userId && isset($conn) && $conn) {
                   <?php 
                     $repCode = ($rep['report_type'] === 'found' ? 'RF-' : 'RL-') . str_pad($rep['id'], 5, '0', STR_PAD_LEFT);
                   ?>
+                  <span class="report-code-pill" style="display:inline-flex;align-items:center;gap:.4rem;padding:.25rem .55rem;border:1px solid var(--border);border-radius:999px;color:var(--muted);font-size:.72rem;">ID: <?php echo htmlspecialchars($repCode); ?></span>
+                  <button type="button" class="btn-report-view" data-copy-report="<?php echo htmlspecialchars($repCode); ?>">Copy ID</button>
                   <a href="item.php?id=<?php echo $repCode; ?>" class="btn-report-view">View Details &rarr;</a>
                 </div>
               </div>

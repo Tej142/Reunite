@@ -296,3 +296,11 @@ Anyone with this link can access and test the full app from any device, anytime 
 
 *Reunite — Cloud Deployment Guide · September 2026*
 
+
+## Search Items rollout
+
+1. Apply `Backend/migrations/claim_v2_migration.sql` if it has not been applied, then apply `Backend/migrations/search_items_security.sql` to the same database. The second migration adds private lookup attempt logging, claim review events, safe thumbnail storage, and the expanded match status values. Do not rerun `Backend/schema.sql` against an existing database.
+2. Set `SEARCH_LOOKUP_FAIL_LIMIT`, `SEARCH_LOOKUP_WINDOW_MINUTES`, `SEARCH_LOOKUP_COOLDOWN_MINUTES`, and `ACTIVE_UNREVIEWED_LOST_REPORT_LIMIT` in the deployment environment. Defaults are 5 failures in 15 minutes, a 15-minute rolling cooldown, and 3 active Lost Reports per account. Administrator roles in the authenticated session can exceed the Lost Report cap; each override is logged.
+3. Schedule `php Backend/expire_pending_claims.php` from the project root every 5–15 minutes. It expires unanswered `pending_founder_approval` claims after 48 hours and records notifications/audit events. The script is CLI-only.
+4. The private homepage lookup requires an authenticated session and CSRF token. It checks Lost Report ownership and reads eligible rows already stored in `matches`; it does not call the AI matcher. A Found report appears only in that private results flow or to its founder. Public list/item views mask identifying details server-side.
+5. Found thumbnails are blurred copies when PHP GD supports the source image format. If thumbnail creation is unavailable, the private result uses a neutral placeholder.

@@ -427,6 +427,52 @@ if ($conn && $numericId > 0) {
     }
 }
 
+// Server-enforced report view permissions and field masking.
+$currentUserId = (int)($_SESSION['user_id'] ?? ($current_user['user_id'] ?? 0));
+$isPrivateMatchedView = false;
+$isPublicMaskedView = false;
+if ($item && $reportType === 'found') {
+    $isFounder = $logged_in && $currentUserId > 0 && $currentUserId === (int)($item['user_id'] ?? 0);
+    $reunitedFound = in_array(strtolower((string)($item['status'] ?? '')), ['claimed','reunited','closed','returned','handed_off','verified'], true);
+    if (!empty($paramMatchId)) {
+        $matchFoundId = (int)($activeMatchRow['found_report_id'] ?? $activeMatchRow['found_id'] ?? 0);
+        $lostOwnerId = (int)($matchedOppositeItem['user_id'] ?? 0);
+        if (!$activeMatchRow || $matchFoundId !== $numericId) {
+            $item = null;
+        } elseif (!$isFounder && (!$logged_in || $currentUserId < 1 || $lostOwnerId !== $currentUserId)) {
+            $item = null;
+        } elseif (!$isFounder) {
+            $isPrivateMatchedView = true;
+        }
+    } elseif (!$isFounder && !$reunitedFound) {
+        // Found reports are never a public catalogue; only their founder or reunited view is public.
+        $item = null;
+    }
+}
+if ($item && $reportType === 'lost' && !$isPrivateMatchedView) {
+    $isReportOwner = $logged_in && $currentUserId > 0 && $currentUserId === (int)($item['user_id'] ?? 0);
+    $isReunitedLost = in_array(strtolower((string)($item['status'] ?? '')), ['claimed','reunited','closed','returned','handed_off','verified'], true);
+    if (!$isReportOwner && !$isReunitedLost) {
+        $sourceLocation = strtolower((string)($item['location'] ?? ''));
+        $safeArea = 'Campus area';
+        foreach (['library'=>'Library area','cafeteria'=>'Cafeteria area','canteen'=>'Cafeteria area','bus'=>'Near Bus Stand','auditorium'=>'Auditorium area','sports'=>'Sports complex area','parking'=>'Parking area','lab'=>'Lab area','block'=>'Academic block area'] as $needle=>$label) { if (strpos($sourceLocation,$needle)!==false) { $safeArea=$label; break; } }
+        $item['title'] = 'Lost item'; $item['description'] = 'A community member has reported a missing item.'; $item['location'] = $safeArea; $item['image_path'] = '';
+        $dnaDetails = [];
+        $isPublicMaskedView = true;
+        $matchReason = 'A public-safe community report.';
+    }
+}
+if ($isPrivateMatchedView && $item) {
+    $sourceLocation = strtolower((string)($item['location'] ?? ''));
+    $safeArea = 'Campus area';
+    foreach (['library'=>'Library area','cafeteria'=>'Cafeteria area','canteen'=>'Cafeteria area','bus'=>'Near Bus Stand','auditorium'=>'Auditorium area','sports'=>'Sports complex area','parking'=>'Parking area','lab'=>'Lab area','block'=>'Academic block area'] as $needle=>$label) { if (strpos($sourceLocation,$needle)!==false) { $safeArea=$label; break; } }
+    $item['title'] = 'Possible found item'; $item['description'] = 'Some identifying details are hidden until ownership is verified.'; $item['location'] = $safeArea; $item['image_path'] = '';
+    if (in_array('privacy_thumbnail_path', $foundCols, true)) {
+        $safeThumbStmt = $conn->prepare("SELECT privacy_thumbnail_path FROM found_reports WHERE `$foundIdCol` = ? LIMIT 1");
+        if ($safeThumbStmt) { $safeThumbStmt->bind_param('i', $numericId); $safeThumbStmt->execute(); $safeThumbRow=$safeThumbStmt->get_result()->fetch_assoc(); $safeThumbStmt->close(); $candidateThumb=(string)($safeThumbRow['privacy_thumbnail_path'] ?? ''); if (preg_match('/^media_vault\/safe_thumbnails\/[A-Za-z0-9._-]+$/', $candidateThumb)) $item['image_path']=$candidateThumb; }
+    }
+    $dnaDetails = []; $matchReason = 'A stored match was found for your Lost Report. Submit proof to begin the existing ownership review.';
+}
 // ── 6. Prepare Item Presentation Variables ────────────────────────
 
 // Prepare item presentation variables
@@ -449,7 +495,7 @@ $isOwnItem = ($logged_in && !empty($currentUserId) && !empty($itemUserId) && (in
 
 // Check for existing claims in recovery_cases
 $existingClaim = null;
-if ($conn && $numericId > 0 && $isFound) {
+if ($conn && $numericId > 0 && $isFound && !$isPrivateMatchedView) {
     $rcCols = [];
     $rcRes = @$conn->query("SHOW COLUMNS FROM recovery_cases");
     if ($rcRes) {
@@ -937,7 +983,7 @@ if ($conn && $numericId > 0) {
     <div class="item-sections-stack">
 
       <!-- 1. AI Match Breakdown (Only shown when match is active or deep-linked) -->
-      <?php if ($hasAiMatch): ?>
+      <?php if ($hasAiMatch && !$isPrivateMatchedView && !$isPublicMaskedView): ?>
         <section class="ai-match-full-panel" aria-label="Multimodal AI Match Breakdown">
           <div class="ai-match-header-row">
             <div class="ai-match-title">
@@ -992,7 +1038,7 @@ if ($conn && $numericId > 0) {
       <?php endif; ?>
 
       <!-- 2. Description Card -->
-      <section class="item-section-card" aria-labelledby="headingDesc">
+      <?php if (!$isPrivateMatchedView): ?><section class="item-section-card" aria-labelledby="headingDesc">
         <h2 class="item-section-heading" id="headingDesc">
           <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
           <span>Description</span>
@@ -1002,6 +1048,7 @@ if ($conn && $numericId > 0) {
         </p>
       </section>
 
+      <?php endif; ?>
       <!-- 3. Distinguishing Details Section -->
       <?php if (!empty($dnaDetails)): ?>
         <section class="item-section-card" aria-labelledby="headingDetails">

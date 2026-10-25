@@ -615,6 +615,8 @@
                     <span>Reject Claim</span>
                 </button>
 
+                <button id="btnConfirmFraud" type="button" class="btn-founder-reject" title="Use only when intentional fraud is confirmed with a documented reason">Confirm Fraud</button>
+
                 <button id="btnApproveClaim"
                         type="button"
                         class="btn-founder-approve">
@@ -968,7 +970,16 @@
         });
     }
 
-    // REJECT CLAIM
+    // Routine proof rejection and confirmed fraud are separate actions.
+    let confirmedFraudReason = '';
+    const btnConfirmFraud = document.getElementById('btnConfirmFraud');
+    if (btnConfirmFraud) btnConfirmFraud.addEventListener('click', () => {
+        const reason = prompt('Document evidence supporting confirmed intentional fraud (at least 10 characters):');
+        if (!reason || reason.trim().length < 10) { showFeedbackMessage('A reason of at least 10 characters is required.', false); return; }
+        if (!confirm('Confirm intentional fraud based on this evidence? An audit record and possible account restriction will follow.')) return;
+        confirmedFraudReason = reason.trim();
+        if (btnRejectClaim) btnRejectClaim.click();
+    });
     if (btnRejectClaim) {
         btnRejectClaim.addEventListener('click', async () => {
             if (!approvalMatchId.value) {
@@ -977,7 +988,7 @@
             }
 
             const confirmed = confirm(
-                'Are you sure you want to decline this claim? The claimant will be placed on a 24-hour verification cooldown.'
+                confirmedFraudReason ? 'Confirm rejection as documented intentional fraud? This will apply the review policy.' : 'Decline this claim because the proof is insufficient or unclear? No fraud sanction will be applied. The claimant may clarify and retry if the match remains open.'
             );
             if (!confirmed) return;
 
@@ -985,6 +996,7 @@
             formData.append('match_id', approvalMatchId.value);
             formData.append('action', 'reject');
             formData.append('csrf_token', pageCsrfToken);
+            if (confirmedFraudReason) { formData.append('fraud_confirmed', '1'); formData.append('rejection_reason', confirmedFraudReason); }
 
             setFormLoadingState(true);
             if (approvalMessage) approvalMessage.classList.add('hidden');
@@ -1004,6 +1016,7 @@
                     throw new Error(data?.message || 'Failed to reject claim.');
                 }
 
+                confirmedFraudReason = '';
                 showFeedbackMessage(data.message || 'Claim rejected successfully.', true);
 
                 setTimeout(() => {

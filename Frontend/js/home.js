@@ -4,6 +4,7 @@ let isFetchingHome = true;
 
 async function fetchLiveHomeItems() {
   const grid = document.getElementById('itemsGrid');
+  if (!grid) return;
   if (grid && ITEMS.length === 0) {
     const orbiEl = window.Orbi ? window.Orbi.create({ state: 'loading', size: 48, label: 'Loading campus listings' }) : null;
     const orbiHtml = orbiEl ? orbiEl.outerHTML : '';
@@ -319,11 +320,10 @@ document.addEventListener('DOMContentLoaded', () => {
   document.addEventListener('visibilitychange', () => {
     if (!document.hidden) {
       fetchRealtimeHomeStats();
-      fetchLiveHomeItems();
+      if (document.getElementById('itemsGrid')) fetchLiveHomeItems();
     }
   });
   window.addEventListener('focus', () => {
     fetchRealtimeHomeStats();
   });
 });
-

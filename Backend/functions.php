@@ -47,6 +47,28 @@ function decryptData($data) {
     return $decrypted !== false ? $decrypted : $data;
 }
 
+/** Create a deliberately blurred, downsampled public thumbnail; keep the original untouched. */
+function createPrivacySafeThumbnail($sourcePath, $targetDir, $baseName = '') {
+    if (!extension_loaded('gd') || !function_exists('imagecreatetruecolor') || !is_file($sourcePath)) return null;
+    $info = @getimagesize($sourcePath); if (!$info) return null;
+    $mime = $info['mime'] ?? '';
+    if ($mime === 'image/jpeg') $src = @imagecreatefromjpeg($sourcePath);
+    elseif ($mime === 'image/png') $src = @imagecreatefrompng($sourcePath);
+    elseif ($mime === 'image/webp' && function_exists('imagecreatefromwebp')) $src = @imagecreatefromwebp($sourcePath);
+    else return null;
+    if (!$src) return null;
+    if (!is_dir($targetDir) && !@mkdir($targetDir, 0755, true)) { imagedestroy($src); return null; }
+    $baseName = preg_replace('/[^A-Za-z0-9_-]/', '', $baseName ?: ('safe_' . bin2hex(random_bytes(8))));
+    $small = imagecreatetruecolor(28, 28);
+    imagecopyresampled($small, $src, 0, 0, 0, 0, 28, 28, imagesx($src), imagesy($src));
+    $thumb = imagecreatetruecolor(420, 300);
+    imagecopyresampled($thumb, $small, 0, 0, 0, 0, 420, 300, 28, 28);
+    for ($blur = 0; $blur < 12; $blur++) @imagefilter($thumb, IMG_FILTER_GAUSSIAN_BLUR);
+    $filename = $baseName . '.jpg';
+    $saved = @imagejpeg($thumb, rtrim($targetDir, '/\\') . DIRECTORY_SEPARATOR . $filename, 72);
+    imagedestroy($src); imagedestroy($small); imagedestroy($thumb);
+    return $saved ? $filename : null;
+}
 /**
  * Production Image Optimizer: Auto-Rotates EXIF, Resizes to Max Bounding Box (1200px),
  * Strips GPS Metadata, and Compresses to WebP / High-Efficiency JPEG (82%)
@@ -1922,7 +1944,7 @@ function liftClaimantBan($userId) {
  */
 function getActiveClaimsCountForLostItem($lostId) {
     global $conn;
-    if (!$conn || !(int)$lostId) return 0;
+    if (!$conn || !(int)$lostId) return null;
     
     // Resolve columns for matches
     $mCols = [];
@@ -1930,7 +1952,7 @@ function getActiveClaimsCountForLostItem($lostId) {
     if ($res) while ($r = $res->fetch_assoc()) $mCols[] = strtolower($r['Field']);
     $lostCol = in_array('lost_id', $mCols) ? 'lost_id' : 'lost_report_id';
 
-    $stmt = @$conn->prepare("SELECT COUNT(*) as cnt FROM matches WHERE `$lostCol` = ? AND status IN ('pending_founder_approval', 'ready_for_handover')");
+    $stmt = @$conn->prepare("SELECT COUNT(*) as cnt FROM matches WHERE `$lostCol` = ? AND status IN ('pending_founder_approval', 'ready_for_handover', 'in_progress', 'approved')");
     if ($stmt) {
         $stmt->bind_param('i', $lostId);
         $stmt->execute();

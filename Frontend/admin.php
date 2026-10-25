@@ -273,6 +273,11 @@ $isAdmin = !empty($_SESSION['reunite_admin_auth']) && $_SESSION['reunite_admin_a
           </div>
 
           <div class="admin-metric-card">
+            <div class="admin-metric-header"><span>Search &amp; Claim Safeguards</span><span class="admin-badge info">24h / Current</span></div>
+            <div class="admin-metric-sub">Failed lookups (24h): <strong id="metricFailedLookups">0</strong> · Accounts at Lost Report cap: <strong id="metricReportCaps">0</strong> · Accounts at active claim cap: <strong id="metricClaimCaps">0</strong> · Overdue reviews: <strong id="metricOverdueReviews">0</strong> · Confirmed fraud: <strong id="metricConfirmedFraud">0</strong></div>
+          </div>
+
+          <div class="admin-metric-card">
             <div class="admin-metric-header">
               <span>Media Vault Storage</span>
               <span class="admin-badge warning">Local Vault</span>

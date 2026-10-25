@@ -50,6 +50,8 @@ if (!isClaimModuleActiveForUser($userId)) {
 $matchId = filter_input(INPUT_POST, 'match_id', FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]])
            ?: filter_var($_POST['match_id'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
 $action = strtolower(trim($_POST['action'] ?? ''));
+$rejectionReason = trim((string)($_POST['rejection_reason'] ?? ''));
+$fraudConfirmed = (string)($_POST['fraud_confirmed'] ?? '0') === '1';
 $returnType = strtolower(trim($_POST['return_type'] ?? $_POST['return_method'] ?? ''));
 $meetLocation = trim($_POST['meet_location'] ?? $_POST['meeting_location'] ?? '');
 $meetTime = trim($_POST['meet_time'] ?? $_POST['meeting_time'] ?? '');
@@ -154,12 +156,30 @@ try {
         mysqli_stmt_execute($rejectStmt);
         mysqli_stmt_close($rejectStmt);
 
-        // Apply strict 24-hour claim ban on claimant
-        setClaimantBan($claimantId, 24);
-
+        // A routine proof rejection does not imply fraud. Only an explicit reasoned fraud decision triggers escalation.
+        $rejectionReason = mb_substr($rejectionReason ?: 'Insufficient or unclear proof; the claimant may clarify and retry.', 0, 1000, 'UTF-8');
+        $sanctionHours = 0; $needsAdminReview = false;
+        if ($fraudConfirmed && mb_strlen($rejectionReason, 'UTF-8') >= 10) {
+            $priorFraud = 0;
+            $eventTable = @$conn->query("SHOW TABLES LIKE 'claim_review_events'");
+            if ($eventTable && $eventTable->num_rows > 0) {
+                $priorStmt = $conn->prepare('SELECT COUNT(*) AS total FROM claim_review_events WHERE claimant_id = ? AND fraud_confirmed = 1');
+                if ($priorStmt) { $priorStmt->bind_param('i',$claimantId); $priorStmt->execute(); $priorFraud=(int)($priorStmt->get_result()->fetch_assoc()['total'] ?? 0); $priorStmt->close(); }
+            }
+            if ($priorFraud === 0) $sanctionHours = 24;
+            elseif ($priorFraud === 1) $sanctionHours = 168;
+            else $needsAdminReview = true;
+            if ($sanctionHours > 0) setClaimantBan($claimantId, $sanctionHours);
+        } else { $fraudConfirmed = false; }
+        $eventTable = @$conn->query("SHOW TABLES LIKE 'claim_review_events'");
+        if ($eventTable && $eventTable->num_rows > 0) {
+            $eventStmt = $conn->prepare("INSERT INTO claim_review_events (match_id, claimant_id, actor_user_id, decision, reason, fraud_confirmed, sanction_hours) VALUES (?, ?, ?, 'rejected', ?, ?, ?)");
+            if ($eventStmt) { $eventStmt->bind_param('iiisii',$matchId,$claimantId,$userId,$rejectionReason,$fraudConfirmed,$sanctionHours); $eventStmt->execute(); $eventStmt->close(); }
+        }
+        if (function_exists('logAccess')) logAccess($userId, $fraudConfirmed ? 'Claim Fraud Confirmed' : 'Claim Proof Rejected', 'Match '.$matchId.'; reason recorded; sanction '.$sanctionHours.'h; admin_review '.($needsAdminReview?'yes':'no'));
         // Notify Claimant
         $notifTitle = "Claim Update: Verification Declined";
-        $notifMsg = "Your ownership proof for #RF-" . str_pad($foundId, 5, '0', STR_PAD_LEFT) . " was reviewed by the founder and declined. A 24-hour claim cooldown has been applied.";
+        $notifMsg = $fraudConfirmed ? "Your claim was rejected after confirmed fraud/abuse review. A {$sanctionHours}-hour restriction was applied." : "Your ownership proof for #RF-" . str_pad($foundId, 5, '0', STR_PAD_LEFT) . " was not sufficient or clear enough. You may clarify the proof and retry if the match remains open.";
         $notifLink = "search.php";
 
         if (function_exists('insertSystemNotification')) {
@@ -176,7 +196,7 @@ try {
         http_response_code(200);
         echo json_encode([
             'success' => true,
-            'message' => 'Claim rejected successfully. A 24-hour cooldown has been applied to the claimant.',
+            'message' => $fraudConfirmed ? ($needsAdminReview ? 'Confirmed fraud recorded and referred for administrator review.' : 'Confirmed fraud recorded; account restriction applied.') : 'Proof was rejected as insufficient or unclear. No fraud sanction was applied.',
             'status' => 'rejected'
         ]);
         exit;

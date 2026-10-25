@@ -136,9 +136,8 @@ if (!empty($_GET['item']) || !empty($_GET['id']) || !empty($_GET['item_id']) || 
         <label class="filter-group-label" for="typeSelect">Listing Type</label>
         <div class="filter-select-wrap">
           <select id="typeSelect" class="filter-select" aria-label="Filter by type">
-            <option value="all">All Listings</option>
-            <option value="found" selected>Found Items</option>
-            <option value="lost">Lost Reports</option>
+            <option value="all">All Community Reports</option>
+            <option value="lost" selected>Lost Reports</option>
             <option value="reunited">Reunited</option>
           </select>
           <svg class="select-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>

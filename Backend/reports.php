@@ -212,6 +212,11 @@ if (isset($conn) && $conn) {
 
 // ── 1. Create Report (Save to lost_reports or found_reports) ──
 if ($action === 'create' || ($method === 'POST' && ($action === '' || $action === 'new'))) {
+    $sessionUserId = filter_var($_SESSION['user_id'] ?? ($_SESSION['user']['user_id'] ?? null), FILTER_VALIDATE_INT, ['options'=>['min_range'=>1]]);
+    if (!$sessionUserId) sendJsonResponse(false, 'Please sign in to create a report.', [], 401);
+    $userId = (int)$sessionUserId;
+    $reportLimitTransaction = false;
+    $isAdminOverride = in_array(strtolower((string)($_SESSION['role'] ?? $_SESSION['user_role'] ?? '')), ['admin','moderator','superadmin'], true) || !empty($_SESSION['admin_id']);
     $reportType = strtolower(trim($data['report_type'] ?? $data['type'] ?? 'lost'));
     $title = trim($data['title'] ?? $data['item_name'] ?? '');
     $category = trim($data['category'] ?? 'General');
@@ -225,6 +230,7 @@ if ($action === 'create' || ($method === 'POST' && ($action === '' || $action ==
 
     // Handle Image Upload with High-Efficiency Resizing & Compression (Max 1200px, WebP / JPEG 82%)
     $imageWebPath = null;
+    $privacyThumbnailWebPath = null;
     if (isset($_FILES['image']) && $_FILES['image']['error'] === UPLOAD_ERR_OK) {
         $subFolder = ($reportType === 'found') ? 'found_reports' : 'lost_reports';
         $uploadDir = __DIR__ . '/../media_vault/' . $subFolder . '/';
@@ -250,7 +256,12 @@ if ($action === 'create' || ($method === 'POST' && ($action === '' || $action ==
             }
         }
     }
-
+    if ($reportType === 'found' && !empty($imageWebPath)) {
+        $originalImagePath = dirname(__DIR__) . '/' . ltrim($imageWebPath, '/\\');
+        $safeName = 'found_' . substr(hash('sha256', $imageWebPath), 0, 18);
+        $safeFile = createPrivacySafeThumbnail($originalImagePath, dirname(__DIR__) . '/media_vault/safe_thumbnails', $safeName);
+        if ($safeFile) $privacyThumbnailWebPath = 'media_vault/safe_thumbnails/' . $safeFile;
+    }
     $insertedId = null;
     $dnaId = null;
 
@@ -272,6 +283,19 @@ if ($action === 'create' || ($method === 'POST' && ($action === '' || $action ==
     }
 
     if ($conn) {
+        if ($reportType === 'lost') {
+            $conn->begin_transaction(); $reportLimitTransaction = true;
+            $userLock = $conn->prepare('SELECT user_id FROM users WHERE user_id = ? FOR UPDATE');
+            if (!$userLock) { $conn->rollback(); sendJsonResponse(false, 'Could not validate the active report limit.', [], 503); }
+            $userLock->bind_param('i', $userId); $userLock->execute(); $userRow = $userLock->get_result()->fetch_assoc(); $userLock->close();
+            if (!$userRow) { $conn->rollback(); sendJsonResponse(false, 'Please sign in to create a report.', [], 401); }
+            if (!$isAdminOverride) {
+                $capQuery = $conn->prepare("SELECT COUNT(*) AS active_count FROM lost_reports WHERE user_id = ? AND LOWER(COALESCE(status,'active')) IN ('active','pending','new')");
+                if (!$capQuery) { $conn->rollback(); sendJsonResponse(false, 'Could not validate the active report limit.', [], 503); }
+                $capQuery->bind_param('i', $userId); $capQuery->execute(); $capRow = $capQuery->get_result()->fetch_assoc(); $capQuery->close();
+                if ((int)($capRow['active_count'] ?? 0) >= ACTIVE_UNREVIEWED_LOST_REPORT_LIMIT) { $conn->rollback(); sendJsonResponse(false, 'You have reached the active Lost Report limit. Contact an administrator if you need another report reviewed.', ['code'=>'ACTIVE_LOST_REPORT_LIMIT','limit'=>ACTIVE_UNREVIEWED_LOST_REPORT_LIMIT], 429); }
+            } else { logAccess($userId, 'Lost Report Limit Override', 'Authorized administrator created a Lost Report above the account cap'); }
+        }
         $status = 'Pending'; // Valid enum in lost_reports & found_reports: ('Pending','active','Matched','Recovered','Returned','Closed')
         
         // Smart Temporal Resolution (Resolves "yesterday", "today morning", "2 days ago", etc.)
@@ -289,9 +313,12 @@ if ($action === 'create' || ($method === 'POST' && ($action === '' || $action ==
             $userCol = in_array('finder_id', $foundCols) ? 'finder_id' : 'user_id';
             $dateCol = in_array('date_found', $foundCols) ? 'date_found' : (in_array('found_date', $foundCols) ? 'found_date' : 'date_found');
 
-            $stmt = $conn->prepare("INSERT INTO found_reports ($userCol, category, title, description, location, $dateCol, found_time, image_path, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                        $hasSafeThumb = in_array('privacy_thumbnail_path', $foundCols, true);
+            if ($hasSafeThumb) $stmt = $conn->prepare("INSERT INTO found_reports ($userCol, category, title, description, location, $dateCol, found_time, image_path, privacy_thumbnail_path, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+            else $stmt = $conn->prepare("INSERT INTO found_reports ($userCol, category, title, description, location, $dateCol, found_time, image_path, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
             if ($stmt) {
-                $stmt->bind_param("issssssss", $userId, $category, $title, $description, $location, $reportDate, $reportTime, $imageWebPath, $status);
+                                if ($hasSafeThumb) $stmt->bind_param("isssssssss", $userId, $category, $title, $description, $location, $reportDate, $reportTime, $imageWebPath, $privacyThumbnailWebPath, $status);
+                else $stmt->bind_param("issssssss", $userId, $category, $title, $description, $location, $reportDate, $reportTime, $imageWebPath, $status);
                 if (!$stmt->execute()) {
                     $dbError = $stmt->error;
                 } else {
@@ -324,9 +351,12 @@ if ($action === 'create' || ($method === 'POST' && ($action === '' || $action ==
         }
 
         if (empty($insertedId)) {
+            if ($reportLimitTransaction) { $conn->rollback(); $reportLimitTransaction = false; }
             error_log("Database report insert failed: " . $dbError);
             sendJsonResponse(false, "Failed to persist report to database: " . ($dbError ?: 'Database connection error'), [], 500);
         }
+
+        if ($reportLimitTransaction) { $conn->commit(); $reportLimitTransaction = false; }
 
         // Save Digital DNA to digital_dna table if present
         if ($insertedId && !empty($dnaJson)) {
@@ -492,6 +522,18 @@ if ($action === 'list' || $method === 'GET') {
         }
     }
 
+    $adminViewer = !empty($_SESSION['admin_id']) || in_array(strtolower((string)($_SESSION['role'] ?? $_SESSION['user_role'] ?? '')), ['admin','moderator','superadmin'], true);
+    if (!$adminViewer) {
+        $reports = array_values(array_filter($reports, function ($row) { return strtolower((string)($row['report_type'] ?? '')) === 'lost'; }));
+        foreach ($reports as &$publicRow) {
+            $rawLocation = strtolower((string)($publicRow['location'] ?? ''));
+            $area = 'Campus area';
+            foreach (['library'=>'Library area','cafeteria'=>'Cafeteria area','canteen'=>'Cafeteria area','bus'=>'Near Bus Stand','auditorium'=>'Auditorium area','sports'=>'Sports complex area','parking'=>'Parking area','lab'=>'Lab area','block'=>'Academic block area'] as $needle=>$label) { if (strpos($rawLocation,$needle)!==false) { $area=$label; break; } }
+            $publicRow['title'] = 'Lost item'; $publicRow['description'] = 'A community member has reported a missing item.'; $publicRow['location'] = $area; $publicRow['image_path'] = '';
+            unset($publicRow['user_id']);
+        }
+        unset($publicRow);
+    }
     sendJsonResponse(true, "Reports loaded from database", [
         'count' => count($reports),
         'reports' => $reports
@@ -499,4 +541,3 @@ if ($action === 'list' || $method === 'GET') {
 }
 
 sendJsonResponse(false, "Invalid report action.", [], 400);
-

@@ -9,7 +9,7 @@ let ITEMS_DATABASE = [];
 
 // Active State
 let currentSearchQuery = '';
-let currentTypeFilter = 'found'; // Default to Found Items so only found items display on search
+let currentTypeFilter = 'lost'; // Public community search never lists private Found reports
 let currentCategory = 'all';
 let currentLocation = 'all';
 let currentSort = 'newest';

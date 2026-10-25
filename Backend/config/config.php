@@ -74,6 +74,12 @@ define('DB_PASS', get_config_val('DB_PASS', 'reunitePVBVC123'));
 define('DB_NAME', get_config_val('DB_NAME', 'if0_42705202_lost_connect_db'));
 define('DB_PORT', (int)get_config_val('DB_PORT', 3306));
 
+// Search and report-volume safeguards (override with .env values).
+define('SEARCH_LOOKUP_FAIL_LIMIT', max(1, (int)get_config_val('SEARCH_LOOKUP_FAIL_LIMIT', 5)));
+define('SEARCH_LOOKUP_WINDOW_MINUTES', max(1, (int)get_config_val('SEARCH_LOOKUP_WINDOW_MINUTES', 15)));
+define('SEARCH_LOOKUP_COOLDOWN_MINUTES', max(1, (int)get_config_val('SEARCH_LOOKUP_COOLDOWN_MINUTES', 15)));
+define('ACTIVE_UNREVIEWED_LOST_REPORT_LIMIT', max(1, (int)get_config_val('ACTIVE_UNREVIEWED_LOST_REPORT_LIMIT', 3)));
+
 // Encryption & Security Keys
 define('ENCRYPTION_KEY', get_config_val('APP_ENC_KEY', 'reunite_secret_encryption_key_2024'));
 define('ENCRYPTION_IV', substr(hash('sha256', 'reunite_iv_2024'), 0, 16));

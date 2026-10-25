@@ -136,6 +136,7 @@ $homeStats = get_reunite_home_stats($conn ?? null);
   </script>
   <link rel="stylesheet" href="css/variables.css?v=<?php echo time(); ?>" />
   <link rel="stylesheet" href="css/home.css?v=<?php echo time(); ?>" />
+  <link rel="stylesheet" href="css/private-search.css?v=<?php echo time(); ?>" />
 </head>
 <body>
 
@@ -245,28 +246,27 @@ $homeStats = get_reunite_home_stats($conn ?? null);
   </div>
 </section>
 
-<!-- ── Community Board ────────────────────────────────────────── -->
-<section class="board" id="board">
-  <div class="board-inner">
-
-    <div class="board-header">
-      <div>
-        <span class="section-eyebrow">Community board</span>
-        <h2 class="section-h2" style="margin-bottom:.5rem;">Active searches &amp; recent reunions</h2>
-        <p class="board-sub">Every item reported is analyzed and cross-referenced in real-time.</p>
-      </div>
-
-      <!-- Filter Pills -->
-      <div class="filter-pills">
-        <button class="filter-pill active" data-filter="all">All lost items</button>
-        <button class="filter-pill" data-filter="active">Active searches</button>
-        <button class="filter-pill" data-filter="matched">Reunited</button>
-      </div>
+<!-- ── Private Search Items ───────────────────────────────────── -->
+<section class="search-items-section" id="search-items">
+  <div class="search-items-heading">
+    <span class="search-items-eyebrow">PRIVATE MATCH SEARCH</span>
+    <h2>Find a possible match<br><em>for your lost item.</em></h2>
+    <p>Enter the Lost Report ID linked to your report. We’ll show possible matches found for that item—privately.</p>
+  </div>
+  <form class="search-items-form" id="privateMatchForm" novalidate>
+    <input type="hidden" id="privateSearchCsrf" value="<?php echo htmlspecialchars($_SESSION['csrf_token'] ?? '', ENT_QUOTES, 'UTF-8'); ?>" />
+    <label for="lostReportCode">Lost Report ID</label>
+    <div class="search-items-controls">
+      <input id="lostReportCode" name="report_id" type="text" placeholder="Example: RL-00042" autocomplete="off" maxlength="13" aria-describedby="privateSearchNote privateSearchMessage" />
+      <button type="submit" id="privateMatchSubmit">Show my matches <span aria-hidden="true">→</span></button>
     </div>
-
-    <!-- Items Grid (populated by js/home.js) -->
-    <div class="items-grid" id="itemsGrid"></div>
-
+    <div class="search-items-form-foot"><span id="privateSearchNote">Only you can view matches linked to your report. Found-item details stay hidden until ownership is verified.</span><a href="profile.php?tab=activity&filter=lost#tabPanelActivity">Where can I find my Report ID?</a></div>
+    <p id="privateSearchMessage" class="search-items-notice" role="status" aria-live="polite"></p>
+  </form>
+  <div class="search-items-results" id="privateMatchResults" hidden>
+    <div class="search-items-results-head"><div><h3>Possible matches for your report</h3><p id="privateMatchSummary"></p></div><span class="search-match-tag">Matches updated</span></div>
+    <div class="search-items-grid" id="privateMatchGrid"></div>
+    <div class="search-items-disclaimer">ⓘ A match score is only a clue—not proof of ownership. Found-item details stay private while the rightful owner is being verified.</div>
   </div>
 </section>
 
@@ -306,12 +306,13 @@ $homeStats = get_reunite_home_stats($conn ?? null);
     <div class="footer-links">
       <a href="report-found-item.php">Report Found Item</a>
       <a href="report-lost-item.php">Report Lost Item</a>
-      <a href="#board">Community Board</a>
+      <a href="search.php">Community Board</a>
       <a href="logout.php">Logout</a>
     </div>
   </div>
 </footer>
 
 <script src="js/home.js?v=<?php echo time(); ?>"></script>
+<script src="js/private-search.js?v=<?php echo time(); ?>"></script>
 </body>
 </html>
