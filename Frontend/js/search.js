@@ -142,7 +142,7 @@ function initDomElements() {
   } else if (typeSelect && typeSelect.value) {
     currentTypeFilter = typeSelect.value;
   } else {
-    currentTypeFilter = 'found';
+    currentTypeFilter = 'lost';
   }
 
   const paramCategory = urlParams.get('category');

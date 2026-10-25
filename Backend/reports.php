@@ -522,6 +522,11 @@ if ($action === 'list' || $method === 'GET') {
         }
     }
 
+    $adminViewer = !empty($_SESSION['admin_id']) || in_array(strtolower((string)($_SESSION['role'] ?? $_SESSION['user_role'] ?? '')), ['admin','moderator','superadmin'], true);
+    if (!$adminViewer) {
+        $reports = array_values(array_filter($reports, function ($row) { return strtolower((string)($row['report_type'] ?? '')) === 'lost'; }));
+    }
+
     // Strip private user_id before returning public reports
     foreach ($reports as &$publicRow) {
         unset($publicRow['user_id']);
