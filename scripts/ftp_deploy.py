@@ -39,6 +39,7 @@ FILES_TO_DEPLOY = [
     "Frontend/js/login.js",
     "tests/test_unified_login.php",
     "tests/test_manage_campus_admins.php",
+    "tests/provision_charan_admin.php",
     "campus_admin_credentials.json",
     "Backend/config/campus_admins.json",
 ]

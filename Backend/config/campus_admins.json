@@ -16,9 +16,10 @@
   },
   "master_admin": {
     "role": "master_admin",
-    "username": "admin",
-    "email": "admin@reunite.site",
-    "default_password": "pass",
+    "username": "charan",
+    "default_username": "admin",
+    "password": "pass",
+    "email": "charan@reunite.site",
     "campus_id": null,
     "campus_scope": "GLOBAL_ALL_CAMPUSES",
     "description": "Full unconstrained administrative authority over the entire platform, system HUD, cross-campus moderation, and campus provisioning.",
