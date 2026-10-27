@@ -137,7 +137,7 @@ $isAdmin = !empty($_SESSION['reunite_admin_auth']) && $_SESSION['reunite_admin_a
       </form>
 
       <div style="text-align:center; margin-top:14px; margin-bottom:10px;">
-        <a href="admin/login.php" style="color:var(--admin-accent, #0d9488); font-size:0.8125rem; text-decoration:none; font-weight:600; display:inline-flex; align-items:center; gap:5px;">
+        <a href="login.php?role=campus_admin" style="color:var(--admin-accent, #0d9488); font-size:0.8125rem; text-decoration:none; font-weight:600; display:inline-flex; align-items:center; gap:5px;">
           <span>Need Claim Verification Desk &amp; Command Center?</span>
           <span>Access Here &rarr;</span>
         </a>

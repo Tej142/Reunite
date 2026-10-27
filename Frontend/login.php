@@ -1,8 +1,18 @@
-<?php
 require_once __DIR__ . '/includes/auth.php';
+
+// If already authenticated as admin, go straight to Command Center
+if (is_admin()) {
+    header("Location: admin/index.php");
+    exit();
+} elseif (is_logged_in()) {
+    header("Location: home.php");
+    exit();
+}
 
 $initialRole = strtolower($_GET['role'] ?? ($_GET['tab'] ?? ''));
 $isCampusAdminInitial = ($initialRole === 'campus_admin' || $initialRole === 'admin' || isset($_GET['admin']));
+$isLoggedOut = isset($_GET['logged_out']) && $_GET['logged_out'] == '1';
+$errorParam = htmlspecialchars($_GET['error'] ?? '');
 ?>
 <!doctype html>
 <html lang="en">
@@ -69,6 +79,24 @@ $isCampusAdminInitial = ($initialRole === 'campus_admin' || $initialRole === 'ad
       <input type="hidden" id="loginRole" name="role" value="<?php echo $isCampusAdminInitial ? 'campus_admin' : 'student'; ?>">
 
       <!-- Top Dynamic Alert (Above College PIN / Username) -->
+      <?php if ($isLoggedOut): ?>
+      <div class="login-top-alert show success" id="loginTopAlert" role="alert">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="alert-icon">
+          <circle cx="12" cy="12" r="10"></circle>
+          <path d="M9 12l2 2 4-4"></path>
+        </svg>
+        <span id="loginTopAlertText">You have been signed out successfully.</span>
+      </div>
+      <?php elseif (!empty($errorParam)): ?>
+      <div class="login-top-alert show" id="loginTopAlert" role="alert">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="alert-icon">
+          <circle cx="12" cy="12" r="10"></circle>
+          <line x1="12" y1="8" x2="12" y2="12"></line>
+          <line x1="12" y1="16" x2="12.01" y2="16"></line>
+        </svg>
+        <span id="loginTopAlertText"><?php echo $errorParam; ?></span>
+      </div>
+      <?php else: ?>
       <div class="login-top-alert" id="loginTopAlert" role="alert">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="alert-icon">
           <circle cx="12" cy="12" r="10"></circle>
@@ -77,6 +105,7 @@ $isCampusAdminInitial = ($initialRole === 'campus_admin' || $initialRole === 'ad
         </svg>
         <span id="loginTopAlertText"></span>
       </div>
+      <?php endif; ?>
 
       <!-- College PIN or Admin Identifier -->
       <div class="field">

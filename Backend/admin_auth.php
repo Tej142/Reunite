@@ -36,9 +36,9 @@ if (isset($_GET['action']) && $_GET['action'] === 'logout') {
     setcookie('reunite_admin_session', '', time() - 86400, '/');
 
     if ($isApi) {
-        sendJsonResponse(true, "Admin session terminated successfully.", ['redirect' => '../Frontend/admin/login.php?logged_out=1']);
+        sendJsonResponse(true, "Admin session terminated successfully.", ['redirect' => '../Frontend/login.php?role=campus_admin&logged_out=1']);
     } else {
-        header("Location: ../Frontend/admin/login.php?logged_out=1");
+        header("Location: ../Frontend/login.php?role=campus_admin&logged_out=1");
         exit();
     }
 }
@@ -47,7 +47,7 @@ if ($_SERVER["REQUEST_METHOD"] !== "POST") {
     if ($isApi) {
         sendJsonResponse(false, "Method not allowed. Use POST.", [], 405);
     } else {
-        header("Location: ../../Frontend/admin/login.php");
+        header("Location: ../Frontend/login.php?role=campus_admin");
         exit();
     }
 }
@@ -59,7 +59,7 @@ if (empty($identifier) || empty($password)) {
     if ($isApi) {
         sendJsonResponse(false, "Please provide Admin identifier and password.", [], 400);
     } else {
-        header("Location: ../Frontend/admin/login.php?error=" . urlencode("Please provide identifier and password."));
+        header("Location: ../Frontend/login.php?role=campus_admin&error=" . urlencode("Please provide identifier and password."));
         exit();
     }
 }
@@ -157,7 +157,7 @@ if ($conn) {
                 if ($isApi) {
                     sendJsonResponse(false, "This administrator account is currently suspended.", [], 403);
                 } else {
-                    header("Location: ../Frontend/admin/login.php?error=" . urlencode("This administrator account is currently suspended."));
+                    header("Location: ../Frontend/login.php?role=campus_admin&error=" . urlencode("This administrator account is currently suspended."));
                     exit();
                 }
             }
@@ -201,6 +201,6 @@ if (
 if ($isApi) {
     sendJsonResponse(false, "Invalid administrator credentials. Access denied.", [], 401);
 } else {
-    header("Location: ../Frontend/admin/login.php?error=" . urlencode("Invalid administrator credentials. Access denied."));
+    header("Location: ../Frontend/login.php?role=campus_admin&error=" . urlencode("Invalid administrator credentials. Access denied."));
     exit();
 }

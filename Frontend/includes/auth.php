@@ -276,13 +276,12 @@ function is_admin() {
 function require_admin() {
     init_session();
     if (!is_admin()) {
-        // If accessed within the admin/ subdirectory, redirect to login.php
         $script = $_SERVER['SCRIPT_NAME'] ?? '';
         if (strpos($script, '/admin/') !== false) {
-            header("Location: login.php");
+            header("Location: ../login.php?role=campus_admin");
             exit();
         }
-        header("Location: ../admin.php");
+        header("Location: login.php?role=campus_admin");
         exit();
     }
 }

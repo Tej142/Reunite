@@ -168,7 +168,7 @@ function require_admin_role($allowedRoles = ['master_admin', 'campus_admin']) {
             exit;
         } else {
             $redirect = urlencode($_SERVER['REQUEST_URI'] ?? '/Frontend/admin/index.php');
-            header("Location: ../../Frontend/admin/login.php?redirect=" . $redirect);
+            header("Location: ../Frontend/login.php?role=campus_admin&redirect=" . $redirect);
             exit;
         }
     }

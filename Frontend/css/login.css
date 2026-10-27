@@ -77,9 +77,19 @@
   display: flex;
 }
 
+.login-top-alert.success {
+  background: rgba(34, 197, 94, 0.1);
+  border-color: rgba(34, 197, 94, 0.4);
+  color: #22C55E;
+}
+
 .login-top-alert .alert-icon {
   flex-shrink: 0;
   stroke: #EF4444;
+}
+
+.login-top-alert.success .alert-icon {
+  stroke: #22C55E;
 }
 
 @keyframes alertSlideDown {
