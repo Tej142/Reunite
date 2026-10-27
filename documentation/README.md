@@ -1,61 +1,15 @@
-# Reunite Platform — Technical Documentation
+# Reunite Platform — Core Code Modules for Documentation
 
-Welcome to the comprehensive technical documentation for the **Reunite Platform** — an AI-powered lost and found ecosystem engineered for educational institutions and multi-campus universities.
+This directory contains the primary production source code excerpts from across the **Reunite Platform**, organized by functional domain so they can be directly embedded into documentation and project reports.
 
 ---
 
-## 📚 Documentation Index
+## 💻 Code Reference Index
 
-| Module | Description | Core Files Covered |
+| File | Component | Primary Source Files Extracted |
 | :--- | :--- | :--- |
-| [**01. System Architecture**](01_SYSTEM_ARCHITECTURE.md) | High-level topology, multi-tier flow, directory structure, and technology stack. | `index.php`, `Backend/config/config.php`, `flask_server.py` |
-| [**02. Authentication & Security**](02_AUTHENTICATION_AND_SECURITY.md) | Unified login portal, role hierarchy, session-only security policy (zero cookies), and IDOR guards. | `Frontend/login.php`, `Backend/admin_auth.php`, `Backend/admin_scope.php`, `Frontend/includes/auth.php` |
-| [**03. AI Matching & Multi-Modal Engine**](03_AI_MATCHING_AND_MULTIMODAL_ENGINE.md) | ChromaDB vector engine, multi-modal embeddings, Digital DNA synthesis, and adaptive questionnaire. | `flask_server.py`, `AI_Module/database/chroma_manager.py`, `matches.py` |
-| [**04. Lost, Found & Claim Lifecycle**](04_LOST_FOUND_AND_CLAIM_LIFECYCLE.md) | End-to-end report pipeline, founder verification desk, OTP handshake, and physical handover protocols. | `Frontend/report-lost-item.php`, `Frontend/api/founder_approval.php`, `Frontend/api/verify_otp.php` |
-| [**05. Admin Command Center & API**](05_ADMIN_COMMAND_CENTER_AND_API.md) | Master & Campus Admin portals, live telemetry streaming, real-time campus synchronization, and API specs. | `Frontend/admin/index.php`, `Backend/admin_api.php`, `Frontend/admin/js/admin.js` |
-
----
-
-## ⚡ Quick Architecture Summary
-
-```
-                       ┌─────────────────────────┐
-                       │   Client Web Browser    │
-                       │ (Desktop / Tablet / App)│
-                       └────────────┬────────────┘
-                                    │ HTTPS (Port 443)
-                                    ▼
-                       ┌─────────────────────────┐
-                       │    Apache Web Server    │
-                       │   (PHP 8.2 Execution)   │
-                       └────────────┬────────────┘
-                                    │
-           ┌────────────────────────┴────────────────────────┐
-           │                                                 │
-           ▼                                                 ▼
-┌─────────────────────────┐                       ┌─────────────────────────┐
-│   Backend PHP Engine    │                       │  Python AI Microservice │
-│ - Unified Auth          │   REST / Webhooks     │ - Flask / WSGI          │
-│ - Admin Command Center  │◄─────────────────────►│ - ChromaDB Vectors      │
-│ - MySQL Relational DB   │                       │ - Multi-Modal Embeddings│
-│ - Telemetry Polling     │                       │ - Digital DNA Synthesis │
-└──────────┬──────────────┘                       └─────────────────────────┘
-           │
-           ▼
-┌─────────────────────────┐
-│     MySQL Database      │
-│  `lost_connect_db`      │
-│ - Admins, Users, Campuses│
-│ - Items, Matches, Claims│
-│ - Immutable Audit Logs  │
-└─────────────────────────┘
-```
-
----
-
-## 🚀 Environment & Deployment
-- **Live Production URL:** `https://reunite.site.je`
-- **AI Microservice (Render):** `https://reunite-ai-backend.onrender.com`
-- **Database Engine:** MySQL 8.x (`lost_connect_db`)
-- **PHP Version:** PHP 8.1+ / 8.2
-- **Vector Database:** ChromaDB 0.4+ / Python 3.10+
+| [**`01_DATABASE_AND_CONFIG_CODE.md`**](01_DATABASE_AND_CONFIG_CODE.md) | Database Connection & Relational Schema | `Backend/config/config.php`, `lost_connect_db` tables (`admins`, `campuses`, `users`, `claims`, `reports`) |
+| [**`02_AUTHENTICATION_AND_SECURITY_CODE.md`**](02_AUTHENTICATION_AND_SECURITY_CODE.md) | Unified Auth & Multi-Tenant Scoping | `Frontend/api/auth.php`, `Backend/admin_auth.php`, `Backend/admin_scope.php` |
+| [**`03_AI_MATCHING_AND_CHROMADB_CODE.md`**](03_AI_MATCHING_AND_CHROMADB_CODE.md) | ChromaDB Vectors & Multi-Modal Similarity | `AI_Module/database/chroma_manager.py`, `flask_server.py` |
+| [**`04_CLAIM_VERIFICATION_AND_OTP_CODE.md`**](04_CLAIM_VERIFICATION_AND_OTP_CODE.md) | Founder Approval & Handover OTP Handshake | `Frontend/api/founder_approval.php`, `Frontend/api/verify_otp.php` |
+| [**`05_ADMIN_COMMAND_CENTER_AND_TELEMETRY_CODE.md`**](05_ADMIN_COMMAND_CENTER_AND_TELEMETRY_CODE.md) | Real-Time Telemetry & Theme Engine | `Backend/admin_api.php`, `Frontend/admin/js/admin.js`, `Frontend/admin/css/admin.css` |
