@@ -37,6 +37,10 @@ $adminInitials = strtoupper(substr($adminName, 0, 1) . (strpos($adminName, ' ') 
   <!-- Admin Stylesheet -->
   <link rel="stylesheet" href="css/admin.css?v=<?= file_exists(__DIR__ . '/css/admin.css') ? filemtime(__DIR__ . '/css/admin.css') : time() ?>">
   <script>
+    (function(){
+      var theme = localStorage.getItem('reunite_admin_theme') || 'light';
+      document.documentElement.setAttribute('data-theme', theme);
+    })();
     window.REUNITE_ADMIN = {
       role: <?= json_encode($adminRole) ?>,
       isMasterAdmin: <?= json_encode($isMasterAdmin) ?>,
@@ -164,9 +168,14 @@ $adminInitials = strtoupper(substr($adminName, 0, 1) . (strpos($adminName, ' ') 
           <?php endif; ?>
         </div>
       </div>
-      <a href="../../Backend/admin_auth.php?action=logout" class="btn-sidebar-logout" title="Sign Out of Admin Portal">
-        <i class="fa-solid fa-arrow-right-from-bracket"></i>
-      </a>
+      <div style="display:flex; align-items:center; gap:6px;">
+        <button type="button" class="btn-sidebar-theme" id="btnSidebarThemeToggle" title="Switch Theme (Light / Dark)">
+          <i class="fa-solid fa-moon" id="sidebarThemeIcon"></i>
+        </button>
+        <a href="../../Backend/admin_auth.php?action=logout" class="btn-sidebar-logout" title="Sign Out of Admin Portal">
+          <i class="fa-solid fa-arrow-right-from-bracket"></i>
+        </a>
+      </div>
     </div>
   </aside>
 
@@ -211,6 +220,10 @@ $adminInitials = strtoupper(substr($adminName, 0, 1) . (strpos($adminName, ' ') 
 
         <button type="button" class="btn-live-toggle" id="btnSoundAlertToggle" title="Audio Alerts: ON (Click to toggle sound on new items/claims)">
           <i class="fa-solid fa-bell" id="soundAlertIcon"></i>
+        </button>
+
+        <button type="button" class="btn-theme-toggle" id="btnThemeToggle" title="Switch Theme (Light / Dark)">
+          <i class="fa-solid fa-moon" id="themeToggleIcon"></i>
         </button>
 
         <button type="button" class="btn-refresh" id="btnGlobalRefresh" title="Refresh Live Data Now">

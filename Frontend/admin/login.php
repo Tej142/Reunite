@@ -11,15 +11,36 @@ if (is_admin()) {
 $errorMsg = $_GET['error'] ?? '';
 ?>
 <!DOCTYPE html>
-<html lang="en" data-theme="dark">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Reunite Platform — Administrative Control Center</title>
+  <script>
+    (function(){
+      var theme = localStorage.getItem('reunite_admin_theme') || 'light';
+      document.documentElement.setAttribute('data-theme', theme);
+    })();
+  </script>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   <style>
-    :root {
+    :root,
+    [data-theme="light"] {
+      --bg: #F8FAFC;
+      --card-bg: #FFFFFF;
+      --surface: #F1F5F9;
+      --border: #E2E8F0;
+      --border-focus: #E06D38;
+      --accent: #E06D38;
+      --accent-hover: #C45524;
+      --accent-glow: rgba(224, 109, 56, 0.15);
+      --ink: #0F172A;
+      --muted: #64748B;
+      --card-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.08), 0 8px 10px -6px rgba(0, 0, 0, 0.04);
+    }
+
+    [data-theme="dark"] {
       --bg: #12100E;
       --card-bg: #1B1714;
       --surface: #221D18;
@@ -30,6 +51,7 @@ $errorMsg = $_GET['error'] ?? '';
       --accent-glow: rgba(224, 109, 56, 0.25);
       --ink: #F7F3EE;
       --muted: #A89D94;
+      --card-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -70,6 +92,33 @@ $errorMsg = $_GET['error'] ?? '';
       padding: 32px 28px;
       position: relative;
       z-index: 2;
+      box-shadow: var(--card-shadow);
+      transition: background 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
+    }
+
+    .btn-login-theme {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      color: var(--muted);
+      width: 36px;
+      height: 36px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      font-size: 0.9rem;
+      z-index: 10;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+    }
+    .btn-login-theme:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+      transform: translateY(-1px);
     }
 
     .admin-header {
@@ -255,6 +304,11 @@ $errorMsg = $_GET['error'] ?? '';
 </head>
 <body>
 
+  <!-- Theme Toggle Button -->
+  <button type="button" class="btn-login-theme" id="btnLoginTheme" title="Toggle Light / Dark Theme" onclick="toggleLoginTheme()">
+    <i class="fa-solid fa-moon" id="loginThemeIcon"></i>
+  </button>
+
   <div class="admin-login-card">
     <div class="admin-header">
       <div class="admin-badge">
@@ -369,6 +423,22 @@ $errorMsg = $_GET['error'] ?? '';
       document.body.appendChild(postForm);
       postForm.submit();
     });
+
+    function toggleLoginTheme() {
+      const current = document.documentElement.getAttribute('data-theme') || 'light';
+      const next = current === 'dark' ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', next);
+      localStorage.setItem('reunite_admin_theme', next);
+      updateLoginThemeIcon();
+    }
+    function updateLoginThemeIcon() {
+      const current = document.documentElement.getAttribute('data-theme') || 'light';
+      const icon = document.getElementById('loginThemeIcon');
+      if (icon) {
+        icon.className = current === 'dark' ? 'fa-solid fa-sun' : 'fa-solid fa-moon';
+      }
+    }
+    updateLoginThemeIcon();
   </script>
 
 </body>

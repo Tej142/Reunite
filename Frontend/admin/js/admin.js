@@ -11,6 +11,7 @@ let cachedAdmins = [];
 let selectedCampusId = '';
 
 document.addEventListener('DOMContentLoaded', () => {
+  initThemeEngine();
   initNavigation();
   initEventListeners();
   if (window.REUNITE_ADMIN?.isMasterAdmin) {
@@ -22,6 +23,54 @@ document.addEventListener('DOMContentLoaded', () => {
   }
   initRealtimeEngine();
 });
+
+/* ── Theme Engine (Default: Light / White Theme) ───────────────────── */
+function initThemeEngine() {
+  const savedTheme = localStorage.getItem('reunite_admin_theme') || 'light';
+  applyTheme(savedTheme);
+
+  const topToggle = document.getElementById('btnThemeToggle');
+  const sideToggle = document.getElementById('btnSidebarThemeToggle');
+
+  function handleToggle() {
+    const current = document.documentElement.getAttribute('data-theme') || 'light';
+    const next = current === 'dark' ? 'light' : 'dark';
+    applyTheme(next);
+    showToast(`Switched to ${next === 'dark' ? 'Dark' : 'Light'} theme`, 'info');
+  }
+
+  if (topToggle) topToggle.addEventListener('click', handleToggle);
+  if (sideToggle) sideToggle.addEventListener('click', handleToggle);
+}
+
+function applyTheme(theme) {
+  document.documentElement.setAttribute('data-theme', theme);
+  localStorage.setItem('reunite_admin_theme', theme);
+
+  const isDark = theme === 'dark';
+  const iconClass = isDark ? 'fa-sun' : 'fa-moon';
+  const labelText = isDark ? 'Switch to Light Theme' : 'Switch to Dark Theme';
+
+  const topIcon = document.getElementById('themeToggleIcon');
+  if (topIcon) {
+    topIcon.className = `fa-solid ${iconClass}`;
+  }
+  const topBtn = document.getElementById('btnThemeToggle');
+  if (topBtn) {
+    topBtn.title = labelText;
+    topBtn.setAttribute('aria-label', labelText);
+  }
+
+  const sideIcon = document.getElementById('sidebarThemeIcon');
+  if (sideIcon) {
+    sideIcon.className = `fa-solid ${iconClass}`;
+  }
+  const sideBtn = document.getElementById('btnSidebarThemeToggle');
+  if (sideBtn) {
+    sideBtn.title = labelText;
+    sideBtn.setAttribute('aria-label', labelText);
+  }
+}
 
 function getCampusParam() {
   return selectedCampusId ? `&campus_id=${encodeURIComponent(selectedCampusId)}` : '';

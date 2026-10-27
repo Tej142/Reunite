@@ -31,6 +31,7 @@ FILES_TO_DEPLOY = [
     "Backend/migrate_campus_admin.php",
     "Backend/migrations/campus_admin_migration.sql",
     "Frontend/admin/index.php",
+    "Frontend/admin/login.php",
     "Frontend/admin/css/admin.css",
     "Frontend/admin/js/admin.js",
     "Frontend/api/verify_otp.php",
