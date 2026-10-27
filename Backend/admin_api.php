@@ -524,21 +524,27 @@ if ($action === 'stats') {
         }
 
         // Lost
-        $q = $conn->query("SELECT COUNT(*) as tot, SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as act FROM lost_reports$lWhere");
+        $q = $conn->query("SELECT COUNT(*) as tot, 
+            SUM(CASE WHEN LOWER(status) IN ('pending', 'active', 'open', 'reported') THEN 1 ELSE 0 END) as act 
+            FROM lost_reports$lWhere");
         if ($q && $r = $q->fetch_assoc()) {
             $stats['total_lost'] = (int)($r['tot'] ?? 0);
             $stats['active_lost'] = (int)($r['act'] ?? 0);
         }
 
         // Found
-        $q = $conn->query("SELECT COUNT(*) as tot, SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as act FROM found_reports$fWhere");
+        $q = $conn->query("SELECT COUNT(*) as tot, 
+            SUM(CASE WHEN LOWER(status) IN ('pending', 'active', 'open', 'custody', 'in_custody') THEN 1 ELSE 0 END) as act 
+            FROM found_reports$fWhere");
         if ($q && $r = $q->fetch_assoc()) {
             $stats['total_found'] = (int)($r['tot'] ?? 0);
             $stats['active_found'] = (int)($r['act'] ?? 0);
         }
 
         // Matches
-        $q = $conn->query("SELECT COUNT(*) as tot, SUM(CASE WHEN status = 'verified' THEN 1 ELSE 0 END) as ver FROM matches$mWhere");
+        $q = $conn->query("SELECT COUNT(*) as tot, 
+            SUM(CASE WHEN LOWER(status) = 'verified' THEN 1 ELSE 0 END) as ver 
+            FROM matches$mWhere");
         if ($q && $r = $q->fetch_assoc()) {
             $stats['total_matches'] = (int)($r['tot'] ?? 0);
             $stats['verified_matches'] = (int)($r['ver'] ?? 0);
@@ -546,8 +552,8 @@ if ($action === 'stats') {
 
         // Recovery cases
         $q = $conn->query("SELECT COUNT(*) as tot, 
-            SUM(CASE WHEN status IN ('pending_verification', 'in_progress', 'pending') THEN 1 ELSE 0 END) as pend,
-            SUM(CASE WHEN status IN ('Completed', 'resolved', 'handed_off') THEN 1 ELSE 0 END) as res
+            SUM(CASE WHEN LOWER(status) IN ('pending_verification', 'in_progress', 'pending') THEN 1 ELSE 0 END) as pend,
+            SUM(CASE WHEN LOWER(status) IN ('completed', 'resolved', 'handed_off', 'archived') THEN 1 ELSE 0 END) as res
             FROM recovery_cases$cWhere");
         if ($q && $r = $q->fetch_assoc()) {
             $stats['pending_claims'] = (int)($r['pend'] ?? 0);
@@ -593,14 +599,17 @@ if ($action === 'realtime_telemetry') {
 
     if ($conn) {
         // Users
-        $q = $conn->query("SELECT COUNT(*) as tot, SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as act FROM users$uWhere");
+        $q = $conn->query("SELECT COUNT(*) as tot, SUM(CASE WHEN LOWER(status) = 'active' THEN 1 ELSE 0 END) as act FROM users$uWhere");
         if ($q && $r = $q->fetch_assoc()) {
             $stats['total_users'] = (int)($r['tot'] ?? 0);
             $stats['active_users'] = (int)($r['act'] ?? 0);
         }
 
         // Lost
-        $q = $conn->query("SELECT COUNT(*) as tot, SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as act, MAX(id) as max_id FROM lost_reports$lWhere");
+        $q = $conn->query("SELECT COUNT(*) as tot, 
+            SUM(CASE WHEN LOWER(status) IN ('pending', 'active', 'open', 'reported') THEN 1 ELSE 0 END) as act, 
+            MAX(lost_id) as max_id 
+            FROM lost_reports$lWhere");
         if ($q && $r = $q->fetch_assoc()) {
             $stats['total_lost'] = (int)($r['tot'] ?? 0);
             $stats['active_lost'] = (int)($r['act'] ?? 0);
@@ -608,7 +617,10 @@ if ($action === 'realtime_telemetry') {
         }
 
         // Found
-        $q = $conn->query("SELECT COUNT(*) as tot, SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as act, MAX(id) as max_id FROM found_reports$fWhere");
+        $q = $conn->query("SELECT COUNT(*) as tot, 
+            SUM(CASE WHEN LOWER(status) IN ('pending', 'active', 'open', 'custody', 'in_custody') THEN 1 ELSE 0 END) as act, 
+            MAX(found_id) as max_id 
+            FROM found_reports$fWhere");
         if ($q && $r = $q->fetch_assoc()) {
             $stats['total_found'] = (int)($r['tot'] ?? 0);
             $stats['active_found'] = (int)($r['act'] ?? 0);
@@ -616,7 +628,10 @@ if ($action === 'realtime_telemetry') {
         }
 
         // Matches
-        $q = $conn->query("SELECT COUNT(*) as tot, SUM(CASE WHEN status = 'verified' THEN 1 ELSE 0 END) as ver, MAX(id) as max_id FROM matches$mWhere");
+        $q = $conn->query("SELECT COUNT(*) as tot, 
+            SUM(CASE WHEN LOWER(status) = 'verified' THEN 1 ELSE 0 END) as ver, 
+            MAX(match_id) as max_id 
+            FROM matches$mWhere");
         if ($q && $r = $q->fetch_assoc()) {
             $stats['total_matches'] = (int)($r['tot'] ?? 0);
             $stats['verified_matches'] = (int)($r['ver'] ?? 0);
@@ -625,9 +640,9 @@ if ($action === 'realtime_telemetry') {
 
         // Claims / Recovery
         $q = $conn->query("SELECT COUNT(*) as tot, 
-            SUM(CASE WHEN status IN ('pending_verification', 'in_progress', 'pending') THEN 1 ELSE 0 END) as pend,
-            SUM(CASE WHEN status IN ('Completed', 'resolved', 'handed_off') THEN 1 ELSE 0 END) as res,
-            MAX(case_id) as max_id
+            SUM(CASE WHEN LOWER(status) IN ('pending_verification', 'in_progress', 'pending') THEN 1 ELSE 0 END) as pend,
+            SUM(CASE WHEN LOWER(status) IN ('completed', 'resolved', 'handed_off', 'archived') THEN 1 ELSE 0 END) as res,
+            MAX(id) as max_id 
             FROM recovery_cases$cWhere");
         if ($q && $r = $q->fetch_assoc()) {
             $stats['pending_claims'] = (int)($r['pend'] ?? 0);
@@ -643,12 +658,12 @@ if ($action === 'realtime_telemetry') {
 
         // Fetch last 3 recent platform events across the board for the live ticker
         $recentSql = "
-            (SELECT 'found' as event_type, item_name as title, campus_id, created_at FROM found_reports " . ($scope ? "WHERE campus_id = $scope" : "") . " ORDER BY id DESC LIMIT 2)
+            (SELECT 'found' as event_type, title, campus_id, date_found as event_date FROM found_reports " . ($scope ? "WHERE campus_id = $scope" : "") . " ORDER BY found_id DESC LIMIT 2)
             UNION ALL
-            (SELECT 'lost' as event_type, item_name as title, campus_id, created_at FROM lost_reports " . ($scope ? "WHERE campus_id = $scope" : "") . " ORDER BY id DESC LIMIT 2)
+            (SELECT 'lost' as event_type, title, campus_id, date_lost as event_date FROM lost_reports " . ($scope ? "WHERE campus_id = $scope" : "") . " ORDER BY lost_id DESC LIMIT 2)
             UNION ALL
-            (SELECT 'claim' as event_type, CONCAT('Claim on Case #', case_id) as title, campus_id, created_at FROM recovery_cases " . ($scope ? "WHERE campus_id = $scope" : "") . " ORDER BY case_id DESC LIMIT 2)
-            ORDER BY created_at DESC LIMIT 3
+            (SELECT 'claim' as event_type, CONCAT('Claim on Case #', id) as title, campus_id, DATE(created_at) as event_date FROM recovery_cases " . ($scope ? "WHERE campus_id = $scope" : "") . " ORDER BY id DESC LIMIT 2)
+            ORDER BY event_date DESC LIMIT 3
         ";
         $rq = @$conn->query($recentSql);
         if ($rq) {

@@ -26,6 +26,57 @@ require_once __DIR__ . '/../Backend/functions.php';
 // Test 1: Real-Time Telemetry Endpoint
 $testMode = $_GET['test'] ?? 'telemetry';
 
+if ($testMode === 'backfill') {
+    echo "=== BACKFILLING CAMPUS_ID = 1 FOR SVGP ===\n";
+    $conn->query("UPDATE found_reports SET campus_id = 1 WHERE campus_id IS NULL OR campus_id = 0");
+    echo "found_reports backfilled: " . $conn->affected_rows . "\n";
+
+    $conn->query("UPDATE lost_reports SET campus_id = 1 WHERE campus_id IS NULL OR campus_id = 0");
+    echo "lost_reports backfilled: " . $conn->affected_rows . "\n";
+
+    $conn->query("UPDATE matches SET campus_id = 1 WHERE campus_id IS NULL OR campus_id = 0");
+    echo "matches backfilled: " . $conn->affected_rows . "\n";
+
+    $conn->query("UPDATE recovery_cases SET campus_id = 1 WHERE campus_id IS NULL OR campus_id = 0");
+    echo "recovery_cases backfilled: " . $conn->affected_rows . "\n";
+
+    $conn->query("UPDATE users SET campus_id = 1 WHERE campus_id IS NULL OR campus_id = 0");
+    echo "users backfilled: " . $conn->affected_rows . "\n";
+
+    echo "\n=== COUNTS FOR CAMPUS #1 (SVGP) ===\n";
+    echo "Users: " . $conn->query("SELECT COUNT(*) as c FROM users WHERE campus_id = 1")->fetch_assoc()['c'] . "\n";
+    echo "Lost Reports: " . $conn->query("SELECT COUNT(*) as c FROM lost_reports WHERE campus_id = 1")->fetch_assoc()['c'] . "\n";
+    echo "Found Reports: " . $conn->query("SELECT COUNT(*) as c FROM found_reports WHERE campus_id = 1")->fetch_assoc()['c'] . "\n";
+    echo "Matches: " . $conn->query("SELECT COUNT(*) as c FROM matches WHERE campus_id = 1")->fetch_assoc()['c'] . "\n";
+    echo "Recovery Cases: " . $conn->query("SELECT COUNT(*) as c FROM recovery_cases WHERE campus_id = 1")->fetch_assoc()['c'] . "\n";
+    exit;
+}
+
+if ($testMode === 'inspect_reports') {
+    echo "=== INSPECTING REPORTS SCHEMA & DATA ===\n\n";
+    
+    echo "--- lost_reports columns ---\n";
+    $lr = $conn->query("SHOW COLUMNS FROM lost_reports");
+    if ($lr) while ($c = $lr->fetch_assoc()) echo " - {$c['Field']} ({$c['Type']})\n";
+    
+    echo "\n--- lost_reports sample rows ---\n";
+    $ls = $conn->query("SELECT * FROM lost_reports LIMIT 5");
+    if ($ls) while ($r = $ls->fetch_assoc()) echo json_encode($r) . "\n";
+
+    echo "\n--- found_reports sample rows ---\n";
+    $fs = $conn->query("SELECT * FROM found_reports LIMIT 5");
+    if ($fs) while ($r = $fs->fetch_assoc()) echo json_encode($r) . "\n";
+
+    echo "\n--- matches sample rows ---\n";
+    $ms = $conn->query("SELECT * FROM matches LIMIT 5");
+    if ($ms) while ($r = $ms->fetch_assoc()) echo json_encode($r) . "\n";
+
+    echo "\n--- recovery_cases sample rows ---\n";
+    $cs = $conn->query("SELECT * FROM recovery_cases LIMIT 5");
+    if ($cs) while ($r = $cs->fetch_assoc()) echo json_encode($r) . "\n";
+    exit;
+}
+
 if ($testMode === 'campuses') {
     echo "Testing action=manage_campuses...\n";
     $cRes = $conn->query("SHOW COLUMNS FROM campuses");
