@@ -38,6 +38,7 @@ $conn->query("CREATE TABLE IF NOT EXISTS `campuses` (
   `id` INT(11) NOT NULL AUTO_INCREMENT,
   `name` VARCHAR(150) NOT NULL,
   `code` VARCHAR(50) NOT NULL,
+  `address` VARCHAR(255) NULL DEFAULT NULL,
   `status` ENUM('active', 'inactive') NOT NULL DEFAULT 'active',
   `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -45,30 +46,52 @@ $conn->query("CREATE TABLE IF NOT EXISTS `campuses` (
   UNIQUE KEY `idx_campus_code` (`code`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;");
 
+if (!colExists($conn, 'campuses', 'address')) {
+    $conn->query("ALTER TABLE `campuses` ADD COLUMN `address` VARCHAR(255) NULL DEFAULT NULL AFTER `code`");
+}
 echo "OK.\n";
 
-// 2. Seed Default Campuses
-echo "[2/10] Seeding default campuses... ";
-$conn->query("INSERT INTO `campuses` (`id`, `name`, `code`, `status`) 
-VALUES 
-  (1, 'Sri Venkateswara Govt Polytechnic', 'SVGP', 'active'),
-  (2, 'Tirupati Central Campus', 'TCC', 'active')
-ON DUPLICATE KEY UPDATE 
-  `name` = VALUES(`name`),
-  `status` = VALUES(`status`);");
+// 2. Seed Default Campuses (including all registration page campuses)
+echo "[2/10] Seeding all registration campuses... ";
+$campusesToSeed = [
+    [1, 'Sri Venkateswara Govt Polytechnic', 'SVGP', 'KT Road, Tirupati, AP', 'active'],
+    [2, 'Tirupati Central Campus', 'TCC', 'Tirupati Central, AP', 'active'],
+    [3, 'Government polytechinc pillaripattu, Puttur.', 'PLPT', 'Pillaripattu, Puttur, AP', 'active'],
+    [4, 'Venkata Perumal', 'VKPT', 'Tirupati, AP', 'active'],
+    [5, 'University of California, Berkeley', 'UCB', 'Berkeley, CA, USA', 'active'],
+    [6, 'Columbia University', 'COLUMBIA', 'New York, NY, USA', 'active'],
+    [7, 'Georgia Institute of Technology (Georgia Tech)', 'GATECH', 'Atlanta, GA, USA', 'active'],
+    [8, 'Carnegie Mellon University (CMU)', 'CMU', 'Pittsburgh, PA, USA', 'active'],
+    [9, 'Other Academic Institution', 'OTHER', 'Global / Other', 'active'],
+];
+
+foreach ($campusesToSeed as $c) {
+    $stmtC = $conn->prepare("INSERT INTO `campuses` (`id`, `name`, `code`, `address`, `status`) 
+        VALUES (?, ?, ?, ?, ?)
+        ON DUPLICATE KEY UPDATE 
+          `name` = VALUES(`name`),
+          `code` = VALUES(`code`),
+          `address` = COALESCE(VALUES(`address`), `address`),
+          `status` = VALUES(`status`)");
+    $stmtC->bind_param("issss", $c[0], $c[1], $c[2], $c[3], $c[4]);
+    $stmtC->execute();
+    $stmtC->close();
+}
 echo "OK.\n";
 
-// 3. Add campus_id to users
-echo "[3/10] Checking 'users.campus_id'... ";
+// 3. Add campus_id to users and remap accurately
+echo "[3/10] Checking 'users.campus_id' and mapping students... ";
 if (!colExists($conn, 'users', 'campus_id')) {
     $conn->query("ALTER TABLE `users` ADD COLUMN `campus_id` INT(11) NULL DEFAULT NULL AFTER `user_id`, ADD INDEX `idx_user_campus` (`campus_id`)");
-    echo "Added column.\n";
-} else {
-    echo "Already exists.\n";
+    echo "Added column. ";
 }
 
-// Backfill users
-$conn->query("UPDATE `users` SET `campus_id` = 1 WHERE `campus_id` IS NULL");
+// Remap students by college name
+$conn->query("UPDATE `users` SET `campus_id` = 3 WHERE `college` LIKE '%pillaripattu%' OR `college` LIKE '%Puttur%'");
+$conn->query("UPDATE `users` SET `campus_id` = 9 WHERE `college` LIKE '%other%' OR `college` LIKE '%Other%'");
+$conn->query("UPDATE `users` SET `campus_id` = 1 WHERE (`college` LIKE '%Sri Venkateswara%' OR `college` = 'svgp') AND `campus_id` != 3");
+$conn->query("UPDATE `users` SET `campus_id` = 1 WHERE `campus_id` IS NULL OR `campus_id` = 0");
+echo "OK.\n";
 
 // 4. Update admins table
 echo "[4/10] Checking 'admins' role & campus_id... ";
@@ -148,9 +171,13 @@ echo "OK.\n\n";
 
 echo "=== Migration Finished Successfully! ===\n\n";
 
-echo "--- Live Counts for SVGP (Campus #1) ---\n";
-echo "Users: " . $conn->query("SELECT COUNT(*) as c FROM users WHERE campus_id = 1")->fetch_assoc()['c'] . "\n";
-echo "Lost Reports: " . $conn->query("SELECT COUNT(*) as c FROM lost_reports WHERE campus_id = 1")->fetch_assoc()['c'] . "\n";
-echo "Found Reports: " . $conn->query("SELECT COUNT(*) as c FROM found_reports WHERE campus_id = 1")->fetch_assoc()['c'] . "\n";
-echo "Matches: " . $conn->query("SELECT COUNT(*) as c FROM matches WHERE campus_id = 1")->fetch_assoc()['c'] . "\n";
-echo "Recovery Cases: " . $conn->query("SELECT COUNT(*) as c FROM recovery_cases WHERE campus_id = 1")->fetch_assoc()['c'] . "\n";
+echo "--- Live Counts Across All Campuses ---\n";
+$allC = $conn->query("SELECT id, name, code FROM campuses ORDER BY id ASC");
+if ($allC) {
+    while ($c = $allC->fetch_assoc()) {
+        $uCount = $conn->query("SELECT COUNT(*) as c FROM users WHERE campus_id = " . (int)$c['id'])->fetch_assoc()['c'];
+        $lCount = $conn->query("SELECT COUNT(*) as c FROM lost_reports WHERE campus_id = " . (int)$c['id'])->fetch_assoc()['c'];
+        $fCount = $conn->query("SELECT COUNT(*) as c FROM found_reports WHERE campus_id = " . (int)$c['id'])->fetch_assoc()['c'];
+        echo "Campus #{$c['id']} [{$c['code']}] {$c['name']}: {$uCount} Students | {$lCount} Lost | {$fCount} Found\n";
+    }
+}

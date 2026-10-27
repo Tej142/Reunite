@@ -1085,10 +1085,35 @@ if ($action === 'manage_campuses') {
 
     if ($method === 'POST') {
         $req = getRequestData();
+        $subaction = strtolower(trim($req['subaction'] ?? $_POST['subaction'] ?? ''));
         $id = (int)($req['id'] ?? $_POST['id'] ?? 0);
         $name = trim($req['name'] ?? $_POST['name'] ?? '');
         $code = strtoupper(trim($req['code'] ?? $_POST['code'] ?? ''));
+        $address = trim($req['address'] ?? $_POST['address'] ?? '');
         $status = in_array(trim($req['status'] ?? $_POST['status'] ?? ''), ['active', 'inactive']) ? trim($req['status'] ?? $_POST['status'] ?? '') : 'active';
+
+        // Subaction: Toggle Campus Active Status
+        if ($subaction === 'toggle_status') {
+            $isActive = isset($req['is_active']) ? (int)$req['is_active'] : null;
+            if ($id > 0) {
+                if ($isActive !== null) {
+                    $newStatus = ($isActive === 1) ? 'active' : 'inactive';
+                    $stmt = $conn->prepare("UPDATE campuses SET status = ? WHERE id = ?");
+                    $stmt->bind_param("si", $newStatus, $id);
+                } else {
+                    $stmt = $conn->prepare("UPDATE campuses SET status = IF(status = 'active', 'inactive', 'active') WHERE id = ?");
+                    $stmt->bind_param("i", $id);
+                }
+                $stmt->execute();
+                $stmt->close();
+                log_admin_action('Toggle Campus Status', 'campus', $id, "Campus #$id status toggled");
+                echo json_encode(['success' => true, 'message' => "Campus status updated successfully."]);
+                exit;
+            } else {
+                echo json_encode(['success' => false, 'error' => 'Invalid campus ID.']);
+                exit;
+            }
+        }
 
         if (empty($name) || empty($code)) {
             echo json_encode(['success' => false, 'error' => 'Campus Name and Code are required.']);
@@ -1096,20 +1121,37 @@ if ($action === 'manage_campuses') {
         }
 
         if ($id > 0) {
-            $stmt = $conn->prepare("UPDATE campuses SET name = ?, code = ?, status = ? WHERE id = ?");
-            $stmt->bind_param("sssi", $name, $code, $status, $id);
-            $stmt->execute();
-            $stmt->close();
+            $stmt = $conn->prepare("UPDATE campuses SET name = ?, code = ?, address = ?, status = ? WHERE id = ?");
+            if ($stmt) {
+                $stmt->bind_param("ssssi", $name, $code, $address, $status, $id);
+                $stmt->execute();
+                $stmt->close();
+            } else {
+                // Fallback if address column is not yet present
+                $stmt2 = $conn->prepare("UPDATE campuses SET name = ?, code = ?, status = ? WHERE id = ?");
+                $stmt2->bind_param("sssi", $name, $code, $status, $id);
+                $stmt2->execute();
+                $stmt2->close();
+            }
             log_admin_action('Update Campus', 'campus', $id, "Updated: $name ($code)");
             echo json_encode(['success' => true, 'message' => "Campus '$name' updated successfully."]);
         } else {
-            $stmt = $conn->prepare("INSERT INTO campuses (name, code, status) VALUES (?, ?, ?)");
-            $stmt->bind_param("sss", $name, $code, $status);
-            $stmt->execute();
-            $newId = $stmt->insert_id;
-            $stmt->close();
+            $stmt = $conn->prepare("INSERT INTO campuses (name, code, address, status) VALUES (?, ?, ?, ?)");
+            if ($stmt) {
+                $stmt->bind_param("ssss", $name, $code, $address, $status);
+                $stmt->execute();
+                $newId = $stmt->insert_id;
+                $stmt->close();
+            } else {
+                // Fallback without address
+                $stmt2 = $conn->prepare("INSERT INTO campuses (name, code, status) VALUES (?, ?, ?)");
+                $stmt2->bind_param("sss", $name, $code, $status);
+                $stmt2->execute();
+                $newId = $stmt2->insert_id;
+                $stmt2->close();
+            }
             log_admin_action('Create Campus', 'campus', $newId, "Created: $name ($code)");
-            echo json_encode(['success' => true, 'message' => "Campus '$name' created successfully."]);
+            echo json_encode(['success' => true, 'message' => "Campus '$name' created successfully.", 'id' => $newId]);
         }
         exit;
     }

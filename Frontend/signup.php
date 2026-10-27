@@ -1,3 +1,30 @@
+<?php
+require_once __DIR__ . '/../Backend/config/config.php';
+
+$activeCampuses = [];
+if (isset($conn) && $conn) {
+    $cRes = @$conn->query("SELECT id, name, code, address, status FROM campuses WHERE status = 'active' ORDER BY name ASC");
+    if ($cRes) {
+        while ($row = $cRes->fetch_assoc()) {
+            $activeCampuses[] = $row;
+        }
+    }
+}
+
+if (empty($activeCampuses)) {
+    $activeCampuses = [
+        ['id' => 1, 'name' => 'Sri Venkateswara Govt Polytechnic', 'code' => 'SVGP'],
+        ['id' => 3, 'name' => 'Government polytechinc pillaripattu, Puttur.', 'code' => 'PLPT'],
+        ['id' => 4, 'name' => 'Venkata Perumal', 'code' => 'VKPT'],
+        ['id' => 2, 'name' => 'Tirupati Central Campus', 'code' => 'TCC'],
+        ['id' => 5, 'name' => 'University of California, Berkeley', 'code' => 'UCB'],
+        ['id' => 6, 'name' => 'Columbia University', 'code' => 'COLUMBIA'],
+        ['id' => 7, 'name' => 'Georgia Institute of Technology (Georgia Tech)', 'code' => 'GATECH'],
+        ['id' => 8, 'name' => 'Carnegie Mellon University (CMU)', 'code' => 'CMU'],
+        ['id' => 9, 'name' => 'Other Academic Institution', 'code' => 'OTHER']
+    ];
+}
+?>
 <!doctype html>
 <html lang="en">
 <head>
@@ -96,16 +123,13 @@
       <!-- College Select -->
       <div class="field">
         <label for="college">College / University</label>
-        <select id="college" required>
+        <select id="college" name="college" required>
           <option value="" disabled selected>Select your college...</option>
-          <option value="svgp">Sri Venkateswara Government polytechnic, Tirupati</option>
-          <option value="plpt">Government polytechinc pillaripattu, Puttur.</option>
-          <option value="vkpt">Venkata Perumal</option>
-          <option value="berkeley">University of California, Berkeley</option>
-          <option value="columbia">Columbia University</option>
-          <option value="gatech">Georgia Institute of Technology (Georgia Tech)</option>
-          <option value="cmu">Carnegie Mellon University (CMU)</option>
-          <option value="other">Other Academic Institution</option>
+          <?php foreach ($activeCampuses as $c): ?>
+            <option value="<?= htmlspecialchars($c['name']); ?>" data-campus-id="<?= (int)$c['id']; ?>" data-code="<?= htmlspecialchars($c['code']); ?>">
+              <?= htmlspecialchars($c['name']); ?>
+            </option>
+          <?php endforeach; ?>
         </select>
         <span class="error-msg" id="collegeError"></span>
       </div>

@@ -152,6 +152,7 @@ function login_user($userData, $setCookie = true) {
     $_SESSION['phone'] = $userData['phone'] ?? '+91 98765 43210';
     $_SESSION['college'] = $userData['college'] ?? 'Sri Venkateswara Govt Polytechnic';
     $_SESSION['branch'] = $userData['branch'] ?? 'Computer Science';
+    $_SESSION['campus_id'] = $userData['campus_id'] ?? null;
     $_SESSION['trust_score'] = $userData['trust_score'] ?? 100;
     $_SESSION['role'] = $userData['role'] ?? 'user';
 
@@ -162,6 +163,7 @@ function login_user($userData, $setCookie = true) {
         'email' => $_SESSION['email'],
         'phone' => $_SESSION['phone'],
         'college' => $_SESSION['college'],
+        'campus_id' => $_SESSION['campus_id'],
         'branch' => $_SESSION['branch'],
         'trust_score' => $_SESSION['trust_score'],
         'logged_in_at' => time()

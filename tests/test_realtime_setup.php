@@ -26,6 +26,91 @@ require_once __DIR__ . '/../Backend/functions.php';
 // Test 1: Real-Time Telemetry Endpoint
 $testMode = $_GET['test'] ?? 'telemetry';
 
+if ($testMode === 'inspect_campuses') {
+    echo "=== DISCOVERING ALL CAMPUSES / COLLEGES IN DATABASE ===\n\n";
+
+    echo "--- 0. All Tables in Database ---\n";
+    $tRes = $conn->query("SHOW TABLES");
+    if ($tRes) {
+        while ($tr = $tRes->fetch_row()) {
+            echo " - {$tr[0]}\n";
+        }
+    }
+
+    echo "--- 1. All Current Rows in 'campuses' table ---\n";
+    $cAll = $conn->query("SELECT * FROM campuses");
+    if ($cAll) {
+        while ($r = $cAll->fetch_assoc()) {
+            echo " - ID: {$r['id']} | Code: {$r['code']} | Name: '{$r['name']}' | Status: {$r['status']}\n";
+        }
+    } else {
+        echo "Failed or table doesn't exist: " . $conn->error . "\n";
+    }
+
+    echo "\n--- 1b. All Current Admins in 'admins' table ---\n";
+    $aAll = $conn->query("SELECT admin_id, username, email, full_name, role, campus_id, status FROM admins");
+    if ($aAll) {
+        while ($a = $aAll->fetch_assoc()) {
+            echo " - ID: {$a['admin_id']} | User: {$a['username']} | Name: {$a['full_name']} | Role: {$a['role']} | Campus ID: " . ($a['campus_id'] ?? 'NULL') . "\n";
+        }
+    }
+
+    echo "\n--- 2. Distinct 'college' values in 'users' table ---\n";
+    $uCol = $conn->query("SELECT college, campus_id, COUNT(*) as cnt FROM users GROUP BY college, campus_id");
+    if ($uCol) {
+        while ($r = $uCol->fetch_assoc()) {
+            echo " - College: '" . ($r['college'] ?? 'NULL') . "' | campus_id: " . ($r['campus_id'] ?? 'NULL') . " | Count: {$r['cnt']}\n";
+        }
+    }
+
+    echo "\n--- 3. Detailed Users List with College & Campus ---\n";
+    $uList = $conn->query("SELECT user_id, full_name, email, pin, college, branch, campus_id FROM users ORDER BY user_id ASC");
+    if ($uList) {
+        while ($u = $uList->fetch_assoc()) {
+            echo " #{$u['user_id']} | {$u['full_name']} | Pin: {$u['pin']} | College: '{$u['college']}' | Branch: '{$u['branch']}' | Campus ID: {$u['campus_id']}\n";
+        }
+    }
+
+    echo "\n--- 4. Reports associated by User's College ---\n";
+    $lrByCol = $conn->query("SELECT u.college, COUNT(lr.lost_id) as lost_count 
+                             FROM lost_reports lr 
+                             JOIN users u ON lr.user_id = u.user_id 
+                             GROUP BY u.college");
+    if ($lrByCol) {
+        while ($r = $lrByCol->fetch_assoc()) {
+            echo " - Lost reports by users with college '{$r['college']}': {$r['lost_count']}\n";
+        }
+    }
+
+    $frByCol = $conn->query("SELECT u.college, COUNT(fr.found_id) as found_count 
+                             FROM found_reports fr 
+                             JOIN users u ON fr.finder_id = u.user_id 
+                             GROUP BY u.college");
+    if ($frByCol) {
+        while ($r = $frByCol->fetch_assoc()) {
+            echo " - Found reports by users with college '{$r['college']}': {$r['found_count']}\n";
+        }
+    }
+
+    echo "\n--- 5. Distinct locations in 'lost_reports' ---\n";
+    $lLoc = $conn->query("SELECT location, COUNT(*) as cnt FROM lost_reports GROUP BY location");
+    if ($lLoc) {
+        while ($r = $lLoc->fetch_assoc()) {
+            echo " - Location: '{$r['location']}' (Count: {$r['cnt']})\n";
+        }
+    }
+
+    echo "\n--- 6. Distinct locations in 'found_reports' ---\n";
+    $fLoc = $conn->query("SELECT location, COUNT(*) as cnt FROM found_reports GROUP BY location");
+    if ($fLoc) {
+        while ($r = $fLoc->fetch_assoc()) {
+            echo " - Location: '{$r['location']}' (Count: {$r['cnt']})\n";
+        }
+    }
+
+    exit;
+}
+
 if ($testMode === 'backfill') {
     echo "=== BACKFILLING CAMPUS_ID = 1 FOR SVGP ===\n";
     $conn->query("UPDATE found_reports SET campus_id = 1 WHERE campus_id IS NULL OR campus_id = 0");

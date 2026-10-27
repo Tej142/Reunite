@@ -14,12 +14,24 @@ $collegeList = [
     'svgp'     => 'Sri Venkateswara Government polytechnic, Tirupati',
     'plpt'     => 'Government polytechinc pillaripattu, Puttur.',
     'vkpt'     => 'Venkata Perumal',
+    'tcc'      => 'Tirupati Central Campus',
     'berkeley' => 'University of California, Berkeley',
     'columbia' => 'Columbia University',
     'gatech'   => 'Georgia Institute of Technology (Georgia Tech)',
     'cmu'      => 'Carnegie Mellon University (CMU)',
     'other'    => 'Other Academic Institution'
 ];
+
+if (isset($conn) && $conn) {
+    $dbCampuses = @$conn->query("SELECT code, name FROM campuses WHERE status = 'active' ORDER BY name ASC");
+    if ($dbCampuses && $dbCampuses->num_rows > 0) {
+        $dynList = [];
+        while ($dc = $dbCampuses->fetch_assoc()) {
+            $dynList[strtolower($dc['code'])] = $dc['name'];
+        }
+        $collegeList = $dynList;
+    }
+}
 
 $branchList = [
     'cme'  => 'Computer Engineering',

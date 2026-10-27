@@ -46,6 +46,28 @@ document.addEventListener('DOMContentLoaded', () => {
     confirmPassword: document.getElementById('confirmPasswordError')
   };
 
+  // ── Live Sync Campuses from Database ─────────────────────
+  async function syncActiveCampuses() {
+    try {
+      const res = await fetch('api/campuses.php');
+      const data = await res.json();
+      if (data && data.success && Array.isArray(data.campuses) && data.campuses.length > 0) {
+        const sel = fields.college;
+        if (!sel) return;
+        const currentVal = sel.value;
+        const opts = ['<option value="" disabled selected>Select your college...</option>'];
+        data.campuses.forEach(c => {
+          opts.push(`<option value="${c.name}" data-campus-id="${c.id}" data-code="${c.code}">${c.name}</option>`);
+        });
+        sel.innerHTML = opts.join('');
+        if (currentVal) sel.value = currentVal;
+      }
+    } catch (err) {
+      // Keeps resilient server-side pre-rendered options
+    }
+  }
+  syncActiveCampuses();
+
   // ── Password Visibility Toggles ─────────────────────────
   const setupPasswordToggle = (toggleBtnId, inputId) => {
     const btn = document.getElementById(toggleBtnId);
@@ -493,7 +515,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
       const collegeSelect = fields.college;
       const branchSelect = fields.branch;
-      const collegeText = collegeSelect ? (collegeSelect.options[collegeSelect.selectedIndex]?.text || collegeSelect.value) : '';
+      const selectedOption = collegeSelect?.options[collegeSelect.selectedIndex];
+      const collegeText = selectedOption ? (selectedOption.value || selectedOption.text) : '';
+      const campusId = selectedOption ? (selectedOption.getAttribute('data-campus-id') || selectedOption.dataset?.campusId) : null;
       const branchCode = branchSelect ? branchSelect.value : 'cme';
 
       try {
@@ -508,6 +532,7 @@ document.addEventListener('DOMContentLoaded', () => {
             email: fields.email.value.trim(),
             phone: fields.phone.value.trim(),
             college: collegeText,
+            campus_id: campusId,
             branch: branchCode,
             password: fields.password.value
           })

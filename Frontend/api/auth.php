@@ -132,7 +132,7 @@ if ($action === 'login') {
     // ─────────────────────────────────────────────────────────────
     if ($conn) {
         $encrypted_id = encryptData($identifier);
-        $sql = "SELECT user_id, full_name, pin, email, phone, password_hash, trust_score, role, status, college, branch FROM users WHERE pin = ? OR email = ? OR email = ? OR phone = ? OR phone = ? LIMIT 1";
+        $sql = "SELECT user_id, full_name, pin, email, phone, password_hash, trust_score, role, status, college, branch, campus_id FROM users WHERE pin = ? OR email = ? OR email = ? OR phone = ? OR phone = ? LIMIT 1";
         $stmt = $conn->prepare($sql);
         if ($stmt) {
             $stmt->bind_param("sssss", $identifier, $encrypted_id, $identifier, $encrypted_id, $identifier);
@@ -156,6 +156,7 @@ if ($action === 'login') {
                         'phone' => decryptData($user['phone']),
                         'college' => $user['college'],
                         'branch' => $user['branch'],
+                        'campus_id' => $user['campus_id'] ?? null,
                         'trust_score' => $user['trust_score'],
                         'role' => $user['role']
                     ]);
@@ -357,6 +358,7 @@ if ($action === 'signup') {
     $phone = trim($input['phone'] ?? '');
     $pin = trim($input['pin'] ?? '');
     $college = trim($input['college'] ?? 'Sri Venkateswara Govt Polytechnic');
+    $campus_id = !empty($input['campus_id']) ? (int)$input['campus_id'] : null;
     $branch = trim($input['branch'] ?? 'cme');
     $password = $input['password'] ?? '';
 
@@ -372,6 +374,20 @@ if ($action === 'signup') {
     }
 
     if ($conn) {
+        // Resolve campus_id from campuses table if not provided
+        if (!$campus_id && !empty($college)) {
+            $cStmt = $conn->prepare("SELECT id FROM campuses WHERE name = ? OR code = ? LIMIT 1");
+            if ($cStmt) {
+                $cStmt->bind_param("ss", $college, $college);
+                $cStmt->execute();
+                $cRes = $cStmt->get_result();
+                if ($cRes && $cRow = $cRes->fetch_assoc()) {
+                    $campus_id = (int)$cRow['id'];
+                }
+                $cStmt->close();
+            }
+        }
+
         $encrypted_email = encryptData($email);
         $encrypted_phone = !empty($phone) ? encryptData($phone) : null;
         $pass_hash = password_hash($password, PASSWORD_DEFAULT);
@@ -379,9 +395,9 @@ if ($action === 'signup') {
         $role = 'user';
         $status = 'active';
 
-        $stmt = $conn->prepare("INSERT INTO users (full_name, pin, email, phone, password_hash, trust_score, role, status, dob, college, branch, email_verified) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)");
+        $stmt = $conn->prepare("INSERT INTO users (full_name, pin, email, phone, password_hash, trust_score, role, status, dob, college, branch, email_verified, campus_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)");
         if ($stmt) {
-            $stmt->bind_param("sssssisssss", $name, $pin, $encrypted_email, $encrypted_phone, $pass_hash, $trust_score, $role, $status, $dob, $college, $branch);
+            $stmt->bind_param("sssssisssssi", $name, $pin, $encrypted_email, $encrypted_phone, $pass_hash, $trust_score, $role, $status, $dob, $college, $branch, $campus_id);
             if ($stmt->execute()) {
                 $uid = $stmt->insert_id;
                 $stmt->close();
@@ -394,6 +410,7 @@ if ($action === 'signup') {
                     'phone' => $phone,
                     'college' => $college,
                     'branch' => $branch,
+                    'campus_id' => $campus_id,
                     'trust_score' => $trust_score
                 ]);
                 logAccess($uid, 'User Registered');
@@ -442,11 +459,35 @@ if ($action === 'update_profile') {
     $user_id = $_SESSION['user_id'] ?? 1;
     if ($conn) {
         $encrypted_phone = !empty($phone) ? encryptData($phone) : null;
-        $stmt = $conn->prepare("UPDATE users SET full_name = ?, phone = ?, college = ?, branch = ? WHERE user_id = ?");
-        if ($stmt) {
-            $stmt->bind_param("ssssi", $name, $encrypted_phone, $college, $branch, $user_id);
-            $stmt->execute();
-            $stmt->close();
+
+        $campus_id = null;
+        if (!empty($college)) {
+            $cStmt = $conn->prepare("SELECT id FROM campuses WHERE name = ? OR code = ? LIMIT 1");
+            if ($cStmt) {
+                $cStmt->bind_param("ss", $college, $college);
+                $cStmt->execute();
+                $cRes = $cStmt->get_result();
+                if ($cRes && $cRow = $cRes->fetch_assoc()) {
+                    $campus_id = (int)$cRow['id'];
+                }
+                $cStmt->close();
+            }
+        }
+
+        if ($campus_id) {
+            $stmt = $conn->prepare("UPDATE users SET full_name = ?, phone = ?, college = ?, branch = ?, campus_id = ? WHERE user_id = ?");
+            if ($stmt) {
+                $stmt->bind_param("ssssii", $name, $encrypted_phone, $college, $branch, $campus_id, $user_id);
+                $stmt->execute();
+                $stmt->close();
+            }
+        } else {
+            $stmt = $conn->prepare("UPDATE users SET full_name = ?, phone = ?, college = ?, branch = ? WHERE user_id = ?");
+            if ($stmt) {
+                $stmt->bind_param("ssssi", $name, $encrypted_phone, $college, $branch, $user_id);
+                $stmt->execute();
+                $stmt->close();
+            }
         }
     }
 

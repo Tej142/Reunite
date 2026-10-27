@@ -27,6 +27,7 @@ FILES_TO_DEPLOY = [
     "Backend/admin_scope.php",
     "Backend/functions.php",
     "Backend/notifications.php",
+    "Backend/reports.php",
     "Backend/migrate_campus_admin.php",
     "Backend/migrations/campus_admin_migration.sql",
     "Frontend/admin/index.php",
@@ -34,7 +35,11 @@ FILES_TO_DEPLOY = [
     "Frontend/admin/js/admin.js",
     "Frontend/api/verify_otp.php",
     "Frontend/api/auth.php",
+    "Frontend/api/campuses.php",
     "Frontend/includes/auth.php",
+    "Frontend/signup.php",
+    "Frontend/js/signup.js",
+    "Frontend/profile.php",
     "Frontend/login.php",
     "Frontend/css/login.css",
     "Frontend/js/login.js",
@@ -65,7 +70,10 @@ def deploy():
     ftp.login(FTP_USER, FTP_PASS)
     print("Logged in successfully.")
 
-    for rel_path in FILES_TO_DEPLOY:
+    target_files = sys.argv[1:] if len(sys.argv) > 1 else FILES_TO_DEPLOY
+
+    for rel_path in target_files:
+        rel_path = rel_path.replace("\\", "/")
         local_path = os.path.join(base_dir, rel_path.replace("/", os.sep))
         remote_path = f"{REMOTE_ROOT}/{rel_path}"
         remote_dir = os.path.dirname(remote_path)

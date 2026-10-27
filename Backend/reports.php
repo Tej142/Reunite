@@ -358,6 +358,22 @@ if ($action === 'create' || ($method === 'POST' && ($action === '' || $action ==
 
         if ($reportLimitTransaction) { $conn->commit(); $reportLimitTransaction = false; }
 
+        // Scope report by user's campus_id
+        if ($insertedId && $conn) {
+            $repCampusId = $_SESSION['campus_id'] ?? null;
+            if (!$repCampusId && $userId) {
+                $ucRes = $conn->query("SELECT campus_id FROM users WHERE user_id = " . (int)$userId);
+                if ($ucRes && $ucRow = $ucRes->fetch_assoc()) {
+                    $repCampusId = $ucRow['campus_id'];
+                }
+            }
+            if ($repCampusId) {
+                $targetTbl = ($reportType === 'found') ? 'found_reports' : 'lost_reports';
+                $targetPk = ($reportType === 'found') ? 'found_id' : 'lost_id';
+                $conn->query("UPDATE `$targetTbl` SET `campus_id` = " . (int)$repCampusId . " WHERE `$targetPk` = " . (int)$insertedId);
+            }
+        }
+
         // Save Digital DNA to digital_dna table if present
         if ($insertedId && !empty($dnaJson)) {
             $upperType = strtoupper($reportType);
