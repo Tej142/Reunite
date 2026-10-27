@@ -16,6 +16,7 @@ global $conn;
 if ($action === 'login') {
     $identifier = trim($input['identifier'] ?? $input['pin'] ?? $input['email'] ?? '');
     $password = trim($input['password'] ?? '');
+    $role = strtolower(trim($input['role'] ?? 'student')); // 'student' or 'campus_admin'
 
     if (empty($identifier) || empty($password)) {
         echo json_encode(['success' => false, 'message' => 'Please fill in all fields.']);
@@ -25,12 +26,110 @@ if ($action === 'login') {
     if (function_exists('checkRateLimit')) {
         $ip = $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1';
         $rateKey = 'auth_login_' . md5($identifier . '_' . $ip);
-        if (!checkRateLimit($rateKey, 5, 300)) {
+        if (!checkRateLimit($rateKey, 10, 300)) {
             echo json_encode(['success' => false, 'message' => 'Too many login attempts. Please wait 5 minutes before trying again.']);
             exit;
         }
     }
 
+    $defaultAdminUser = function_exists('get_config_val') ? get_config_val('ADMIN_EMAIL', 'admin') : 'admin';
+    $defaultAdminPass = function_exists('get_config_val') ? get_config_val('ADMIN_PASSWORD', 'pass') : 'pass';
+
+    // ─────────────────────────────────────────────────────────────
+    // 1. CAMPUS ADMIN EXPLICIT LOGIN
+    // ─────────────────────────────────────────────────────────────
+    if ($role === 'campus_admin') {
+        if ($conn) {
+            ensureAdminsTable();
+            $stmt = $conn->prepare("SELECT admin_id, username, full_name, email, password_hash, role, status, campus_id FROM admins WHERE username = ? OR email = ? LIMIT 1");
+            if ($stmt) {
+                $stmt->bind_param("ss", $identifier, $identifier);
+                $stmt->execute();
+                $res = $stmt->get_result();
+                if ($res && $res->num_rows === 1) {
+                    $admin = $res->fetch_assoc();
+                    $stmt->close();
+
+                    if (isset($admin['status']) && strtolower($admin['status']) === 'suspended') {
+                        echo json_encode(['success' => false, 'message' => 'This administrator account is currently suspended. Please contact master admin.']);
+                        exit;
+                    }
+
+                    $isMasterPass = ($password === $defaultAdminPass && in_array(strtolower($identifier), ['admin', 'admin@reunite.site']));
+
+                    if (password_verify($password, $admin['password_hash']) || $isMasterPass) {
+                        @$conn->query("UPDATE admins SET last_login = NOW() WHERE admin_id = " . (int)$admin['admin_id']);
+                        login_admin($admin);
+                        if (function_exists('logAccess')) {
+                            logAccess($admin['admin_id'], 'Campus Admin Portal Login');
+                        }
+                        echo json_encode([
+                            'success'  => true,
+                            'redirect' => 'admin/index.php',
+                            'role'     => $admin['role'] ?? 'campus_admin',
+                            'message'  => 'Welcome back, ' . ($admin['full_name'] ?? 'Administrator') . '!'
+                        ]);
+                        exit;
+                    } else {
+                        echo json_encode(['success' => false, 'message' => 'Incorrect password for administrator account.']);
+                        exit;
+                    }
+                } else {
+                    $stmt->close();
+                }
+            }
+        }
+
+        // Check fallback master admin credentials
+        if ((strtolower($identifier) === 'admin' || strtolower($identifier) === 'admin@reunite.site') && $password === $defaultAdminPass) {
+            login_admin([
+                'admin_id'  => 1,
+                'full_name' => 'System Administrator',
+                'username'  => 'admin',
+                'email'     => 'admin@reunite.site',
+                'role'      => 'master_admin',
+                'campus_id' => null
+            ]);
+            echo json_encode([
+                'success'  => true,
+                'redirect' => 'admin/index.php',
+                'role'     => 'master_admin',
+                'message'  => 'Welcome back, Master Administrator!'
+            ]);
+            exit;
+        }
+
+        // Smart check: Did a student try logging in on the campus admin tab?
+        if ($conn) {
+            $encId = encryptData($identifier);
+            $checkUser = $conn->prepare("SELECT user_id, password_hash FROM users WHERE pin = ? OR email = ? OR email = ? OR phone = ? LIMIT 1");
+            if ($checkUser) {
+                $checkUser->bind_param("ssss", $identifier, $encId, $identifier, $encId);
+                $checkUser->execute();
+                $uRes = $checkUser->get_result();
+                if ($uRes && $uRes->num_rows === 1) {
+                    $uRow = $uRes->fetch_assoc();
+                    $checkUser->close();
+                    if (password_verify($password, $uRow['password_hash'])) {
+                        echo json_encode([
+                            'success' => false,
+                            'message' => 'These credentials belong to a Student account. Please switch to the "Student" tab to sign in.'
+                        ]);
+                        exit;
+                    }
+                } else {
+                    $checkUser->close();
+                }
+            }
+        }
+
+        echo json_encode(['success' => false, 'message' => 'Invalid administrator username/email or password.']);
+        exit;
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // 2. STUDENT LOGIN (WITH SMART ADMIN FALLBACK)
+    // ─────────────────────────────────────────────────────────────
     if ($conn) {
         $encrypted_id = encryptData($identifier);
         $sql = "SELECT user_id, full_name, pin, email, phone, password_hash, trust_score, role, status, college, branch FROM users WHERE pin = ? OR email = ? OR email = ? OR phone = ? OR phone = ? LIMIT 1";
@@ -60,8 +159,10 @@ if ($action === 'login') {
                         'trust_score' => $user['trust_score'],
                         'role' => $user['role']
                     ]);
-                    logAccess($user['user_id'], 'Student Login');
-                    echo json_encode(['success' => true, 'redirect' => 'home.php', 'user' => get_current_user_data()]);
+                    if (function_exists('logAccess')) {
+                        logAccess($user['user_id'], 'Student Login');
+                    }
+                    echo json_encode(['success' => true, 'redirect' => 'home.php', 'role' => 'student', 'user' => get_current_user_data()]);
                     exit;
                 } else {
                     echo json_encode(['success' => false, 'message' => 'Invalid College PIN/Email or password. Please try again.']);
@@ -69,13 +170,67 @@ if ($action === 'login') {
                 }
             } else {
                 $stmt->close();
-                echo json_encode(['success' => false, 'message' => 'Invalid College PIN/Email or password. Please try again.']);
-                exit;
+            }
+        }
+
+        // Smart check: Did a campus admin try logging in on the student tab?
+        ensureAdminsTable();
+        $adminStmt = $conn->prepare("SELECT admin_id, username, full_name, email, password_hash, role, status, campus_id FROM admins WHERE username = ? OR email = ? LIMIT 1");
+        if ($adminStmt) {
+            $adminStmt->bind_param("ss", $identifier, $identifier);
+            $adminStmt->execute();
+            $aRes = $adminStmt->get_result();
+            if ($aRes && $aRes->num_rows === 1) {
+                $admin = $aRes->fetch_assoc();
+                $adminStmt->close();
+
+                if (isset($admin['status']) && strtolower($admin['status']) === 'suspended') {
+                    echo json_encode(['success' => false, 'message' => 'This administrator account is suspended.']);
+                    exit;
+                }
+
+                $isMasterPass = ($password === $defaultAdminPass && in_array(strtolower($identifier), ['admin', 'admin@reunite.site']));
+
+                if (password_verify($password, $admin['password_hash']) || $isMasterPass) {
+                    @$conn->query("UPDATE admins SET last_login = NOW() WHERE admin_id = " . (int)$admin['admin_id']);
+                    login_admin($admin);
+                    if (function_exists('logAccess')) {
+                        logAccess($admin['admin_id'], 'Campus Admin Login (from student page)');
+                    }
+                    echo json_encode([
+                        'success'  => true,
+                        'redirect' => 'admin/index.php',
+                        'role'     => $admin['role'] ?? 'campus_admin',
+                        'message'  => 'Campus Admin credentials verified. Redirecting to Admin Portal...'
+                    ]);
+                    exit;
+                }
+            } else {
+                $adminStmt->close();
             }
         }
     }
 
-    echo json_encode(['success' => false, 'message' => 'Database connection failed or account not found.']);
+    // Fallback master admin on student tab
+    if ((strtolower($identifier) === 'admin' || strtolower($identifier) === 'admin@reunite.site') && $password === $defaultAdminPass) {
+        login_admin([
+            'admin_id'  => 1,
+            'full_name' => 'System Administrator',
+            'username'  => 'admin',
+            'email'     => 'admin@reunite.site',
+            'role'      => 'master_admin',
+            'campus_id' => null
+        ]);
+        echo json_encode([
+            'success'  => true,
+            'redirect' => 'admin/index.php',
+            'role'     => 'master_admin',
+            'message'  => 'Welcome back, Master Administrator!'
+        ]);
+        exit;
+    }
+
+    echo json_encode(['success' => false, 'message' => 'Invalid College PIN/Email or password. Please try again.']);
     exit;
 }
 

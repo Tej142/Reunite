@@ -174,6 +174,55 @@ function login_user($userData, $setCookie = true) {
     return true;
 }
 
+function login_admin($adminData) {
+    init_session();
+    global $conn;
+    $rawRole = strtolower($adminData['role'] ?? 'campus_admin');
+    $campusId = !empty($adminData['campus_id']) ? (int)$adminData['campus_id'] : null;
+    $isMaster = ($rawRole === 'master_admin' || $rawRole === 'superadmin' || ($campusId === null && in_array($rawRole, ['admin', 'superadmin', 'master_admin'])));
+    $normalizedRole = $isMaster ? 'master_admin' : 'campus_admin';
+
+    $_SESSION['admin_id']           = (int)($adminData['admin_id'] ?? 1);
+    $_SESSION['full_name']          = $adminData['full_name'] ?? 'Campus Administrator';
+    $_SESSION['username']           = $adminData['username'] ?? 'admin';
+    $_SESSION['email']              = $adminData['email'] ?? '';
+    $_SESSION['role']               = $normalizedRole;
+    $_SESSION['admin_logged_in']    = true;
+    $_SESSION['reunite_admin_auth']  = true;
+    $_SESSION['admin_campus_id']    = $campusId;
+
+    if ($campusId && $conn) {
+        $cStmt = $conn->prepare("SELECT name, code FROM campuses WHERE id = ? LIMIT 1");
+        if ($cStmt) {
+            $cStmt->bind_param("i", $campusId);
+            $cStmt->execute();
+            if ($cRow = $cStmt->get_result()->fetch_assoc()) {
+                $_SESSION['admin_campus_name'] = $cRow['name'];
+                $_SESSION['admin_campus_code'] = $cRow['code'];
+            }
+            $cStmt->close();
+        }
+    } else {
+        $_SESSION['admin_campus_name'] = 'All Campuses (Global)';
+        $_SESSION['admin_campus_code'] = 'ALL';
+    }
+
+    $payload = base64_encode(json_encode([
+        'admin_id'  => (int)$_SESSION['admin_id'],
+        'username'  => $_SESSION['username'],
+        'role'      => $normalizedRole,
+        'campus_id' => $campusId,
+        'ts'        => time()
+    ]));
+    setcookie('reunite_admin_session', $payload, [
+        'expires'  => time() + 3600 * 8,
+        'path'     => '/',
+        'httponly' => true,
+        'samesite' => 'Lax'
+    ]);
+    return true;
+}
+
 function logout_user() {
     init_session();
     $_SESSION = [];

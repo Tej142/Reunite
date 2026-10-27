@@ -5,6 +5,25 @@ document.addEventListener('DOMContentLoaded', () => {
   const topAlert = document.getElementById('loginTopAlert');
   const topAlertText = document.getElementById('loginTopAlertText');
 
+  // Role Switcher Elements
+  const tabStudent = document.getElementById('tabStudent');
+  const tabCampusAdmin = document.getElementById('tabCampusAdmin');
+  const loginRoleInput = document.getElementById('loginRole');
+  const pageTitle = document.getElementById('pageTitle');
+  const loginHeaderTitle = document.getElementById('loginHeaderTitle');
+  const loginHeaderSubtitle = document.getElementById('loginHeaderSubtitle');
+  const campusAdminBadge = document.getElementById('campusAdminBadge');
+  const pinLabel = document.getElementById('pinLabel');
+  const forgotPasswordLink = document.getElementById('forgotPasswordLink');
+  const campusAdminPwdNote = document.getElementById('campusAdminPwdNote');
+  const signupPrompt = document.getElementById('signupPrompt');
+  const campusAdminPrompt = document.getElementById('campusAdminPrompt');
+  const roleSwitchPromptText = document.getElementById('roleSwitchPromptText');
+  const roleSwitchLink = document.getElementById('roleSwitchLink');
+  const successTitle = document.getElementById('successTitle');
+  const successSubtitle = document.getElementById('successSubtitle');
+  const successBtnHome = document.getElementById('successBtnHome');
+
   // Input Elements
   const fields = {
     pin: document.getElementById('pin'),
@@ -27,8 +46,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const icon = topAlert.querySelector('.alert-icon');
       if (icon) icon.style.stroke = isSuccess ? '#22C55E' : '#EF4444';
       topAlert.classList.remove('show');
-      // Trigger reflow to restart CSS animation
-      void topAlert.offsetWidth;
+      void topAlert.offsetWidth; // Trigger reflow
       topAlert.classList.add('show');
     }
   }
@@ -39,8 +57,125 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // ── Check for Password Reset Success Params ─────────────
+  // ── Role Switching Engine ───────────────────────────────
+  function getActiveRole() {
+    return loginRoleInput ? loginRoleInput.value : 'student';
+  }
+
+  function setRole(role) {
+    const isCampusAdmin = (role === 'campus_admin');
+    const targetRole = isCampusAdmin ? 'campus_admin' : 'student';
+
+    if (loginRoleInput) loginRoleInput.value = targetRole;
+
+    // Clear active alerts and field warnings
+    hideTopAlert();
+    clearFieldWarning('pin');
+    clearFieldWarning('password');
+
+    // Update Tab Classes
+    if (tabStudent) {
+      tabStudent.classList.toggle('active', !isCampusAdmin);
+      tabStudent.setAttribute('aria-selected', !isCampusAdmin ? 'true' : 'false');
+    }
+    if (tabCampusAdmin) {
+      tabCampusAdmin.classList.toggle('active', isCampusAdmin);
+      tabCampusAdmin.setAttribute('aria-selected', isCampusAdmin ? 'true' : 'false');
+    }
+
+    // Update Content & Headings
+    if (pageTitle) {
+      document.title = isCampusAdmin ? 'Campus Admin Login — Reunite' : 'Student Login — Reunite';
+    }
+
+    if (loginHeaderTitle) {
+      loginHeaderTitle.innerHTML = isCampusAdmin
+        ? 'Campus Admin <em>Portal</em>'
+        : 'Welcome Back to <em>Reunite</em>';
+    }
+
+    if (loginHeaderSubtitle) {
+      loginHeaderSubtitle.textContent = isCampusAdmin
+        ? 'Sign in with your campus administrator credentials to manage your institution.'
+        : 'Log in with your college credentials to search for and trace your belongings.';
+    }
+
+    if (campusAdminBadge) {
+      campusAdminBadge.style.display = isCampusAdmin ? 'flex' : 'none';
+    }
+
+    if (pinLabel) {
+      pinLabel.textContent = isCampusAdmin ? 'Admin Username or Email' : 'College PIN or Email';
+    }
+
+    if (fields.pin) {
+      fields.pin.placeholder = isCampusAdmin
+        ? 'e.g. ramesh_svgp or admin@campus.edu'
+        : 'e.g. 24155-cm-002 or name@example.com';
+      fields.pin.focus();
+    }
+
+    if (forgotPasswordLink) {
+      forgotPasswordLink.style.display = isCampusAdmin ? 'none' : 'inline';
+    }
+
+    if (campusAdminPwdNote) {
+      campusAdminPwdNote.style.display = isCampusAdmin ? 'inline' : 'none';
+    }
+
+    if (submitBtn) {
+      submitBtn.textContent = isCampusAdmin ? 'Sign in as Campus Admin' : 'Sign in';
+    }
+
+    if (signupPrompt) {
+      signupPrompt.style.display = isCampusAdmin ? 'none' : 'block';
+    }
+
+    if (campusAdminPrompt) {
+      campusAdminPrompt.style.display = isCampusAdmin ? 'block' : 'none';
+    }
+
+    if (roleSwitchPromptText) {
+      roleSwitchPromptText.textContent = isCampusAdmin ? 'Student at this college?' : 'Campus staff or administrator?';
+    }
+
+    if (roleSwitchLink) {
+      roleSwitchLink.innerHTML = isCampusAdmin ? 'Switch to Student Login &larr;' : 'Log in as Campus Admin &rarr;';
+    }
+
+    // Update URL hash smoothly without page refresh
+    if (history.replaceState) {
+      const newUrl = isCampusAdmin
+        ? window.location.pathname + '?role=campus_admin'
+        : window.location.pathname;
+      history.replaceState(null, '', newUrl);
+    }
+  }
+
+  // Bind Tab Click Handlers
+  if (tabStudent) {
+    tabStudent.addEventListener('click', () => setRole('student'));
+  }
+  if (tabCampusAdmin) {
+    tabCampusAdmin.addEventListener('click', () => setRole('campus_admin'));
+  }
+  if (roleSwitchLink) {
+    roleSwitchLink.addEventListener('click', (e) => {
+      e.preventDefault();
+      setRole(getActiveRole() === 'student' ? 'campus_admin' : 'student');
+    });
+  }
+
+  // ── URL Query & Hash Detection ──────────────────────────
   const urlParams = new URLSearchParams(window.location.search);
+  const requestedRole = urlParams.get('role') || urlParams.get('tab');
+  const isAdminParam = urlParams.get('admin') !== null || window.location.hash.includes('campus_admin') || window.location.hash.includes('admin');
+
+  if (requestedRole === 'campus_admin' || requestedRole === 'admin' || isAdminParam) {
+    setRole('campus_admin');
+  }
+
+  // ── Check for Password Reset Success Params ─────────────
   if (urlParams.get('reset') === 'success') {
     showTopAlert('Password reset successful! Please sign in with your new password.', true);
     const pinParam = urlParams.get('pin') || urlParams.get('email');
@@ -61,7 +196,6 @@ document.addEventListener('DOMContentLoaded', () => {
       const isPassword = input.type === 'password';
       input.type = isPassword ? 'text' : 'password';
 
-      // Toggle SVG Icon (Eye vs Eye-slash)
       if (isPassword) {
         btn.innerHTML = `
           <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
@@ -107,13 +241,28 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function validatePin() {
     const val = fields.pin ? fields.pin.value.trim() : '';
-    const pinRegex = /^[a-zA-Z0-9-]{4,20}$/; // e.g. 24155-cm-002
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/; // e.g. student@college.edu
+    const currentRole = getActiveRole();
+
     if (!val) {
-      return setInvalid('pin', 'College PIN or Email is required.');
-    } else if (!pinRegex.test(val) && !emailRegex.test(val)) {
-      return setInvalid('pin', 'Please enter a valid College PIN (e.g. 24155-cm-002) or Email address.');
+      return setInvalid('pin', currentRole === 'campus_admin'
+        ? 'Admin Username or Email is required.'
+        : 'College PIN or Email is required.');
     }
+
+    if (currentRole === 'campus_admin') {
+      const adminUsernameRegex = /^[a-zA-Z0-9_\-\.]{3,50}$/;
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!adminUsernameRegex.test(val) && !emailRegex.test(val)) {
+        return setInvalid('pin', 'Please enter a valid administrator username (e.g. ramesh_svgp) or email.');
+      }
+    } else {
+      const pinRegex = /^[a-zA-Z0-9-]{4,20}$/; // e.g. 24155-cm-002
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!pinRegex.test(val) && !emailRegex.test(val)) {
+        return setInvalid('pin', 'Please enter a valid College PIN (e.g. 24155-cm-002) or Email address.');
+      }
+    }
+
     clearFieldWarning('pin');
     return true;
   }
@@ -122,8 +271,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const val = fields.password ? fields.password.value : '';
     if (!val) {
       return setInvalid('password', 'Password is required.');
-    } else if (val.length < 8) {
-      return setInvalid('password', 'Password must be at least 8 characters long.');
+    } else if (val.length < 4) {
+      return setInvalid('password', 'Password must be at least 4 characters long.');
     }
     clearFieldWarning('password');
     return true;
@@ -146,7 +295,6 @@ document.addEventListener('DOMContentLoaded', () => {
       e.preventDefault();
       hideTopAlert();
 
-      // Validate all fields on submit
       const isPinValid = validatePin();
       const isPassValid = validatePassword();
 
@@ -154,16 +302,18 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
       }
 
-      // Authenticate via API endpoint
+      const activeRole = getActiveRole();
+
       submitBtn.disabled = true;
-      submitBtn.textContent = 'Signing in...';
+      submitBtn.textContent = (activeRole === 'campus_admin') ? 'Authenticating Admin...' : 'Signing in...';
 
       fetch('api/auth.php?action=login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           identifier: fields.pin.value.trim(),
-          password: fields.password.value
+          password: fields.password.value,
+          role: activeRole
         })
       })
       .then(res => res.text())
@@ -174,7 +324,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch(parseErr) {
           console.error('Login Raw Server Output:', text);
           submitBtn.disabled = false;
-          submitBtn.textContent = 'Sign in';
+          submitBtn.textContent = (activeRole === 'campus_admin') ? 'Sign in as Campus Admin' : 'Sign in';
           showTopAlert(text ? 'Server Error: ' + text.substring(0, 100) : 'Empty response from server.');
           return;
         }
@@ -183,7 +333,23 @@ document.addEventListener('DOMContentLoaded', () => {
           hideTopAlert();
           form.classList.add('hide');
           form.style.display = 'none';
+
+          const isAdminLogin = (data.redirect && data.redirect.includes('admin')) || data.role === 'campus_admin' || data.role === 'master_admin';
+
           if (successState) {
+            if (successTitle) {
+              successTitle.textContent = isAdminLogin ? 'Admin Authenticated!' : 'Successfully logged in!';
+            }
+            if (successSubtitle) {
+              successSubtitle.textContent = isAdminLogin
+                ? 'Opening Campus Administrator Command Center...'
+                : 'Redirecting you to the homepage...';
+            }
+            if (successBtnHome) {
+              successBtnHome.textContent = isAdminLogin ? 'Go to Admin Portal' : 'Go to Homepage';
+              successBtnHome.href = data.redirect || (isAdminLogin ? 'admin/index.php' : 'home.php');
+            }
+
             let orbiWrap = successState.querySelector('.login-orbi-wrap');
             if (!orbiWrap) {
               orbiWrap = document.createElement('div');
@@ -197,25 +363,25 @@ document.addEventListener('DOMContentLoaded', () => {
               }
             }
             if (window.Orbi) {
-              window.Orbi.mount(orbiWrap, { state: 'happy', size: 68, label: 'Welcome back' });
+              window.Orbi.mount(orbiWrap, { state: 'happy', size: 68, label: isAdminLogin ? 'Admin Verified' : 'Welcome back' });
               const oEl = orbiWrap.querySelector('.orbi');
               if (oEl) window.Orbi.happy(oEl, 1200);
             }
             successState.classList.add('show');
           }
+
           setTimeout(() => {
-            window.location.href = data.redirect || 'home.php';
+            window.location.href = data.redirect || (isAdminLogin ? 'admin/index.php' : 'home.php');
           }, 850);
         } else {
           submitBtn.disabled = false;
-          submitBtn.textContent = 'Sign in';
+          submitBtn.textContent = (activeRole === 'campus_admin') ? 'Sign in as Campus Admin' : 'Sign in';
           const errMsg = data.message || 'Invalid credentials. Please try again.';
           
-          // Display dynamically above College PIN
           showTopAlert(errMsg);
 
           // Highlight the relevant field
-          if (errMsg.toLowerCase().includes('pin') || errMsg.toLowerCase().includes('email') || errMsg.toLowerCase().includes('account')) {
+          if (errMsg.toLowerCase().includes('pin') || errMsg.toLowerCase().includes('username') || errMsg.toLowerCase().includes('email') || errMsg.toLowerCase().includes('account')) {
             setInvalid('pin', '');
             if (fields.pin) fields.pin.focus();
           } else {
@@ -227,7 +393,7 @@ document.addEventListener('DOMContentLoaded', () => {
       .catch(err => {
         console.error('Login Network Error:', err);
         submitBtn.disabled = false;
-        submitBtn.textContent = 'Sign in';
+        submitBtn.textContent = (activeRole === 'campus_admin') ? 'Sign in as Campus Admin' : 'Sign in';
         showTopAlert(err.message || 'Unable to reach the server. Please check your connection.');
       });
     });

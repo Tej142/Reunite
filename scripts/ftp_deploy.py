@@ -32,7 +32,12 @@ FILES_TO_DEPLOY = [
     "Frontend/admin/css/admin.css",
     "Frontend/admin/js/admin.js",
     "Frontend/api/verify_otp.php",
+    "Frontend/api/auth.php",
     "Frontend/includes/auth.php",
+    "Frontend/login.php",
+    "Frontend/css/login.css",
+    "Frontend/js/login.js",
+    "tests/test_unified_login.php",
 ]
 
 def ensure_remote_dir(ftp, remote_dir):
