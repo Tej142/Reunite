@@ -38,6 +38,8 @@ FILES_TO_DEPLOY = [
     "Frontend/css/login.css",
     "Frontend/js/login.js",
     "tests/test_unified_login.php",
+    "campus_admin_credentials.json",
+    "Backend/config/campus_admins.json",
 ]
 
 def ensure_remote_dir(ftp, remote_dir):
