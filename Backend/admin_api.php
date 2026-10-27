@@ -967,7 +967,11 @@ if ($action === 'manage_campuses') {
             $campuses[] = $r;
         }
     }
-    echo json_encode(['success' => true, 'campuses' => $campuses]);
+    echo json_encode([
+        'success'  => true,
+        'campuses' => $campuses,
+        'data'     => ['campuses' => $campuses]
+    ]);
     exit;
 }
 
@@ -981,6 +985,7 @@ if ($action === 'manage_campus_admins') {
 
     if ($method === 'POST') {
         $req = getRequestData();
+        $subaction = strtolower(trim($req['subaction'] ?? $_POST['subaction'] ?? ''));
         $adminId = (int)($req['admin_id'] ?? $_POST['admin_id'] ?? 0);
         $username = trim($req['username'] ?? $_POST['username'] ?? '');
         $fullName = trim($req['full_name'] ?? $_POST['full_name'] ?? '');
@@ -990,44 +995,161 @@ if ($action === 'manage_campus_admins') {
         $role = trim($req['role'] ?? $_POST['role'] ?? 'campus_admin');
         $status = in_array(trim($req['status'] ?? $_POST['status'] ?? ''), ['active', 'suspended']) ? trim($req['status'] ?? $_POST['status'] ?? '') : 'active';
 
-        if ($role === 'campus_admin' && empty($campusId)) {
-            echo json_encode(['success' => false, 'error' => 'A Campus Administrator must be assigned to exactly one campus.']);
+        // ── Subaction: DELETE / REMOVE CAMPUS ADMIN ────────────
+        if ($subaction === 'delete') {
+            if ($adminId <= 0) {
+                echo json_encode(['success' => false, 'error' => 'Invalid administrator ID provided for removal.']);
+                exit;
+            }
+            if ($adminId === 1 || (isset($_SESSION['admin_id']) && $adminId === (int)$_SESSION['admin_id'])) {
+                echo json_encode(['success' => false, 'error' => 'Master Administrator account cannot be removed.']);
+                exit;
+            }
+
+            $stmt = $conn->prepare("SELECT username, full_name, role, campus_id FROM admins WHERE admin_id = ? LIMIT 1");
+            if ($stmt) {
+                $stmt->bind_param("i", $adminId);
+                $stmt->execute();
+                $adm = $stmt->get_result()->fetch_assoc();
+                $stmt->close();
+
+                if (!$adm) {
+                    echo json_encode(['success' => false, 'error' => 'Administrator account not found.']);
+                    exit;
+                }
+
+                $delStmt = $conn->prepare("DELETE FROM admins WHERE admin_id = ?");
+                if ($delStmt) {
+                    $delStmt->bind_param("i", $adminId);
+                    $delStmt->execute();
+                    $delStmt->close();
+
+                    log_admin_action('Remove Campus Admin', 'admin', $adminId, "Permanently removed administrator '{$adm['username']}' ({$adm['role']}) for campus #" . ($adm['campus_id'] ?? 'N/A'));
+                    echo json_encode([
+                        'success' => true,
+                        'message' => "Campus Administrator '{$adm['username']}' has been removed successfully."
+                    ]);
+                    exit;
+                }
+            }
+            echo json_encode(['success' => false, 'error' => 'Database error executing administrator removal.']);
             exit;
         }
 
-        if ($adminId > 0) {
-            // Update existing
-            $updates = ["full_name = '$fullName'", "email = '$email'", "status = '$status'"];
-            if ($role === 'master_admin') {
-                $updates[] = "role = 'master_admin'";
-                $updates[] = "campus_id = NULL";
-            } else {
-                $updates[] = "role = 'campus_admin'";
-                $updates[] = "campus_id = $campusId";
-            }
-            if (!empty($password)) {
-                $hash = password_hash($password, PASSWORD_BCRYPT);
-                $updates[] = "password_hash = '$hash'";
-            }
-            $conn->query("UPDATE admins SET " . implode(', ', $updates) . " WHERE admin_id = $adminId");
-            log_admin_action('Update Campus Admin', 'admin', $adminId, "Updated $username ($role)");
-            echo json_encode(['success' => true, 'message' => "Admin account '$username' updated successfully."]);
-        } else {
-            // Create new
-            if (empty($username) || empty($email) || empty($password)) {
-                echo json_encode(['success' => false, 'error' => 'Username, Email, and Password are required.']);
+        // ── Subaction: TOGGLE ACTIVE / SUSPENDED STATUS ────────
+        if ($subaction === 'toggle_status') {
+            if ($adminId <= 0 || $adminId === 1) {
+                echo json_encode(['success' => false, 'error' => 'Master Administrator status cannot be changed.']);
                 exit;
             }
-            $hash = password_hash($password, PASSWORD_BCRYPT);
-            $stmt = $conn->prepare("INSERT INTO admins (username, full_name, email, password_hash, role, campus_id, status) VALUES (?, ?, ?, ?, ?, ?, ?)");
-            $stmt->bind_param("sssssis", $username, $fullName, $email, $hash, $role, $campusId, $status);
-            $stmt->execute();
-            $newAdminId = $stmt->insert_id;
-            $stmt->close();
-            log_admin_action('Create Campus Admin', 'admin', $newAdminId, "Created $username as $role for campus #$campusId");
-            echo json_encode(['success' => true, 'message' => "Campus Admin '$username' created successfully."]);
+            $newStatus = in_array($req['status'] ?? '', ['active', 'suspended']) ? $req['status'] : 'active';
+            $tStmt = $conn->prepare("UPDATE admins SET status = ? WHERE admin_id = ?");
+            if ($tStmt) {
+                $tStmt->bind_param("si", $newStatus, $adminId);
+                $tStmt->execute();
+                $tStmt->close();
+
+                log_admin_action('Toggle Admin Status', 'admin', $adminId, "Administrator status changed to $newStatus");
+                echo json_encode(['success' => true, 'message' => "Administrator status updated to '$newStatus'."]);
+                exit;
+            }
+            echo json_encode(['success' => false, 'error' => 'Database error updating status.']);
+            exit;
         }
-        exit;
+
+        // ── Subaction: CREATE / UPDATE ─────────────────────────
+        if ($role === 'campus_admin' && empty($campusId)) {
+            echo json_encode(['success' => false, 'error' => 'A Campus Administrator must be assigned to an active campus.']);
+            exit;
+        }
+
+        if ($subaction === 'update' || $adminId > 0) {
+            // Update existing admin
+            if ($adminId <= 0) {
+                echo json_encode(['success' => false, 'error' => 'Invalid administrator ID for update.']);
+                exit;
+            }
+
+            // Check if username or email is already taken by another admin
+            $chk = $conn->prepare("SELECT admin_id FROM admins WHERE (username = ? OR email = ?) AND admin_id != ? LIMIT 1");
+            if ($chk) {
+                $chk->bind_param("ssi", $username, $email, $adminId);
+                $chk->execute();
+                if ($chk->get_result()->num_rows > 0) {
+                    $chk->close();
+                    echo json_encode(['success' => false, 'error' => 'Another administrator is already using this username or email.']);
+                    exit;
+                }
+                $chk->close();
+            }
+
+            $effCampusId = ($role === 'master_admin') ? null : $campusId;
+            if (!empty($password)) {
+                $hash = password_hash($password, PASSWORD_BCRYPT);
+                $uStmt = $conn->prepare("UPDATE admins SET full_name = ?, username = ?, email = ?, password_hash = ?, role = ?, campus_id = ?, status = ? WHERE admin_id = ?");
+                $uStmt->bind_param("sssssisi", $fullName, $username, $email, $hash, $role, $effCampusId, $status, $adminId);
+            } else {
+                $uStmt = $conn->prepare("UPDATE admins SET full_name = ?, username = ?, email = ?, role = ?, campus_id = ?, status = ? WHERE admin_id = ?");
+                $uStmt->bind_param("ssssisi", $fullName, $username, $email, $role, $effCampusId, $status, $adminId);
+            }
+
+            if ($uStmt && $uStmt->execute()) {
+                $uStmt->close();
+                log_admin_action('Update Campus Admin', 'admin', $adminId, "Updated admin '$username' ($role, campus #$effCampusId)");
+                echo json_encode(['success' => true, 'message' => "Administrator '$username' updated successfully."]);
+                exit;
+            } else {
+                echo json_encode(['success' => false, 'error' => 'Failed to update administrator record in database.']);
+                exit;
+            }
+        } else {
+            // Create brand new campus admin
+            if (empty($username) || empty($email) || empty($password) || empty($fullName)) {
+                echo json_encode(['success' => false, 'error' => 'Full Name, Username, Email, and Password are all required.']);
+                exit;
+            }
+            if (strlen($password) < 4) {
+                echo json_encode(['success' => false, 'error' => 'Password must be at least 4 characters long.']);
+                exit;
+            }
+
+            // Check if username or email already exists
+            $chk = $conn->prepare("SELECT admin_id FROM admins WHERE username = ? OR email = ? LIMIT 1");
+            if ($chk) {
+                $chk->bind_param("ss", $username, $email);
+                $chk->execute();
+                if ($chk->get_result()->num_rows > 0) {
+                    $chk->close();
+                    echo json_encode(['success' => false, 'error' => "An administrator account already exists with username '$username' or email '$email'."]);
+                    exit;
+                }
+                $chk->close();
+            }
+
+            $hash = password_hash($password, PASSWORD_BCRYPT);
+            $effCampusId = ($role === 'master_admin') ? null : $campusId;
+            $insStmt = $conn->prepare("INSERT INTO admins (username, full_name, email, password_hash, role, campus_id, status) VALUES (?, ?, ?, ?, ?, ?, ?)");
+            if ($insStmt) {
+                $insStmt->bind_param("sssssis", $username, $fullName, $email, $hash, $role, $effCampusId, $status);
+                if ($insStmt->execute()) {
+                    $newAdminId = $insStmt->insert_id;
+                    $insStmt->close();
+                    log_admin_action('Create Campus Admin', 'admin', $newAdminId, "Created $role '$username' for campus #$effCampusId");
+                    echo json_encode([
+                        'success'  => true,
+                        'message'  => "Campus Administrator '$username' created successfully.",
+                        'admin_id' => $newAdminId
+                    ]);
+                    exit;
+                } else {
+                    $insStmt->close();
+                    echo json_encode(['success' => false, 'error' => 'Database error inserting administrator.']);
+                    exit;
+                }
+            }
+            echo json_encode(['success' => false, 'error' => 'Database error preparing administrator insertion.']);
+            exit;
+        }
     }
 
     // GET: List all administrators
@@ -1044,7 +1166,11 @@ if ($action === 'manage_campus_admins') {
             $admins[] = $r;
         }
     }
-    echo json_encode(['success' => true, 'admins' => $admins]);
+    echo json_encode([
+        'success' => true,
+        'admins'  => $admins,
+        'data'    => ['admins' => $admins]
+    ]);
     exit;
 }
 

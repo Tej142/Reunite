@@ -990,15 +990,18 @@ async function loadCampusesForDropdown() {
   try {
     const res = await fetch(`${API_ENDPOINT}?action=manage_campuses`);
     const json = await res.json();
-    if (json.success && Array.isArray(json.data?.campuses)) {
-      cachedCampuses = json.data.campuses;
+    const campuses = json.campuses || json.data?.campuses || [];
+    if (json.success && Array.isArray(campuses)) {
+      cachedCampuses = campuses;
       
+      const activeList = cachedCampuses.filter(c => c.status === 'active' || c.is_active == 1 || !c.status);
+
       // Populate Topbar Filter
       const sel = document.getElementById('globalCampusSelector');
       if (sel) {
         const curVal = sel.value;
         sel.innerHTML = '<option value="">All Campuses (Global)</option>' + 
-          cachedCampuses.filter(c => c.is_active == 1).map(c => `
+          activeList.map(c => `
             <option value="${c.id}" ${curVal == c.id ? 'selected' : ''}>${escapeHtml(c.name)} (${escapeHtml(c.code)})</option>
           `).join('');
       }
@@ -1006,9 +1009,10 @@ async function loadCampusesForDropdown() {
       // Populate Admin Modal Campus Select
       const adminCampSel = document.getElementById('adminModalCampusSelect');
       if (adminCampSel) {
+        const curSel = adminCampSel.value;
         adminCampSel.innerHTML = '<option value="">Select Campus...</option>' + 
-          cachedCampuses.filter(c => c.is_active == 1).map(c => `
-            <option value="${c.id}">${escapeHtml(c.name)} (${escapeHtml(c.code)})</option>
+          activeList.map(c => `
+            <option value="${c.id}" ${curSel == c.id ? 'selected' : ''}>${escapeHtml(c.name)} (${escapeHtml(c.code)})</option>
           `).join('');
       }
     }
@@ -1026,7 +1030,7 @@ async function loadCampuses() {
   try {
     const res = await fetch(`${API_ENDPOINT}?action=manage_campuses`);
     const json = await res.json();
-    const campuses = json.data?.campuses || [];
+    const campuses = json.campuses || json.data?.campuses || [];
 
     if (json.success && Array.isArray(campuses)) {
       cachedCampuses = campuses;
@@ -1046,8 +1050,8 @@ async function loadCampuses() {
           <td><code>${escapeHtml(c.code)}</code></td>
           <td><div style="font-size:0.85rem; color:var(--muted);">${escapeHtml(c.address || 'Not specified')}</div></td>
           <td>
-            <span class="status-pill ${c.is_active == 1 ? 'active' : 'blocked'}">
-              ${c.is_active == 1 ? 'Active' : 'Inactive'}
+            <span class="status-pill ${c.status === 'active' || c.is_active == 1 ? 'active' : 'blocked'}">
+              ${c.status === 'active' || c.is_active == 1 ? 'Active' : 'Inactive'}
             </span>
           </td>
           <td>${c.created_at ? c.created_at.substring(0, 10) : 'N/A'}</td>
@@ -1166,7 +1170,7 @@ async function loadCampusAdmins() {
   try {
     const res = await fetch(`${API_ENDPOINT}?action=manage_campus_admins`);
     const json = await res.json();
-    const admins = json.data?.admins || [];
+    const admins = json.admins || json.data?.admins || [];
 
     if (json.success && Array.isArray(admins)) {
       cachedAdmins = admins;
@@ -1211,6 +1215,9 @@ async function loadCampusAdmins() {
                 <button class="btn-action-icon ${a.status === 'active' ? 'danger' : 'success'}" title="${a.status === 'active' ? 'Suspend Admin' : 'Activate Admin'}" onclick="toggleAdminStatus(${a.admin_id}, '${a.status === 'active' ? 'suspended' : 'active'}')">
                   <i class="fa-solid ${a.status === 'active' ? 'fa-ban' : 'fa-circle-check'}"></i>
                 </button>
+                <button class="btn-action-icon danger" title="Remove Admin" onclick="deleteCampusAdmin(${a.admin_id}, '${escapeHtml(a.username)}')">
+                  <i class="fa-solid fa-trash"></i>
+                </button>
               ` : ''}
             </div>
           </td>
@@ -1237,14 +1244,15 @@ function handleAdminRoleSelectChange(val) {
 }
 
 function openAddAdminModal() {
-  document.getElementById('adminModalTitle').textContent = 'Add Administrator';
+  loadCampusesForDropdown();
+  document.getElementById('adminModalTitle').textContent = 'Add Campus Administrator';
   document.getElementById('adminModalId').value = '';
   document.getElementById('adminModalFullName').value = '';
   document.getElementById('adminModalUsername').value = '';
   document.getElementById('adminModalEmail').value = '';
   document.getElementById('adminModalPassword').value = '';
   document.getElementById('adminModalPassword').required = true;
-  document.getElementById('adminModalPasswordLabel').textContent = 'Password (Required, min 6 chars)';
+  document.getElementById('adminModalPasswordLabel').textContent = 'Password (Required, min 4 chars)';
   document.getElementById('adminModalRole').value = 'campus_admin';
   handleAdminRoleSelectChange('campus_admin');
   document.getElementById('adminModalCampusSelect').value = '';
@@ -1252,6 +1260,7 @@ function openAddAdminModal() {
 }
 
 function openEditAdminModal(adminId) {
+  loadCampusesForDropdown();
   const a = cachedAdmins.find(item => item.admin_id == adminId);
   if (!a) return;
 
@@ -1310,7 +1319,7 @@ async function handleSaveCampusAdmin(e) {
       closeModal('campusAdminModal');
       loadCampusAdmins();
     } else {
-      showToast(json.message || 'Failed to save administrator.', 'error');
+      showToast(json.message || json.error || 'Failed to save administrator.', 'error');
     }
   } catch (err) {
     showToast('Network error saving administrator.', 'error');
@@ -1339,10 +1348,36 @@ async function toggleAdminStatus(adminId, newStatus) {
       showToast(`Administrator marked as ${newStatus}.`, 'success');
       loadCampusAdmins();
     } else {
-      showToast(json.message || 'Action failed.', 'error');
+      showToast(json.message || json.error || 'Action failed.', 'error');
     }
   } catch (err) {
     showToast('Error updating administrator status.', 'error');
+  }
+}
+
+async function deleteCampusAdmin(adminId, username) {
+  if (!confirm(`Are you sure you want to permanently remove campus administrator "${username}"?\n\nThis will revoke their access to their campus portal immediately.`)) {
+    return;
+  }
+
+  try {
+    const res = await fetch(`${API_ENDPOINT}?action=manage_campus_admins`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        subaction: 'delete',
+        admin_id: adminId
+      })
+    });
+    const json = await res.json();
+    if (json.success) {
+      showToast(json.message || `Campus Admin "${username}" removed successfully.`, 'success');
+      loadCampusAdmins();
+    } else {
+      showToast(json.message || json.error || 'Failed to remove administrator.', 'error');
+    }
+  } catch (err) {
+    showToast('Network error removing administrator.', 'error');
   }
 }
 function showToast(message, type = 'success') {
