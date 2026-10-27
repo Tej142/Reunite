@@ -27,6 +27,7 @@ FILES_TO_DEPLOY = [
     "Backend/admin_scope.php",
     "Backend/functions.php",
     "Backend/notifications.php",
+    "Backend/migrate_campus_admin.php",
     "Backend/migrations/campus_admin_migration.sql",
     "Frontend/admin/index.php",
     "Frontend/admin/css/admin.css",

@@ -35,7 +35,7 @@ $adminInitials = strtoupper(substr($adminName, 0, 1) . (strpos($adminName, ' ') 
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   
   <!-- Admin Stylesheet -->
-  <link rel="stylesheet" href="css/admin.css">
+  <link rel="stylesheet" href="css/admin.css?v=<?= file_exists(__DIR__ . '/css/admin.css') ? filemtime(__DIR__ . '/css/admin.css') : time() ?>">
   <script>
     window.REUNITE_ADMIN = {
       role: <?= json_encode($adminRole) ?>,
@@ -954,6 +954,6 @@ $adminInitials = strtoupper(substr($adminName, 0, 1) . (strpos($adminName, ' ') 
   <div class="toast-container" id="toastContainer"></div>
 
   <!-- JavaScript Application -->
-  <script src="js/admin.js"></script>
+  <script src="js/admin.js?v=<?= file_exists(__DIR__ . '/js/admin.js') ? filemtime(__DIR__ . '/js/admin.js') : time() ?>"></script>
 </body>
 </html>

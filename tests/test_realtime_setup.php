@@ -26,6 +26,42 @@ require_once __DIR__ . '/../Backend/functions.php';
 // Test 1: Real-Time Telemetry Endpoint
 $testMode = $_GET['test'] ?? 'telemetry';
 
+if ($testMode === 'campuses') {
+    echo "Testing action=manage_campuses...\n";
+    $cRes = $conn->query("SHOW COLUMNS FROM campuses");
+    if ($cRes) {
+        while ($col = $cRes->fetch_assoc()) {
+            echo "Col: {$col['Field']} ({$col['Type']})\n";
+        }
+    } else {
+        echo "campuses table error: " . $conn->error . "\n";
+    }
+
+    echo "--- found_reports columns ---\n";
+    $fr = $conn->query("SHOW COLUMNS FROM found_reports");
+    if ($fr) while ($c = $fr->fetch_assoc()) echo " - {$c['Field']}\n";
+    
+    // Add campus_id if missing
+    $cCheck = $conn->query("SHOW COLUMNS FROM found_reports LIKE 'campus_id'");
+    if ($cCheck && $cCheck->num_rows === 0) {
+        $alterRes = $conn->query("ALTER TABLE found_reports ADD COLUMN campus_id INT(11) NULL DEFAULT NULL, ADD INDEX idx_found_campus (campus_id)");
+        echo "ALTER found_reports result: " . ($alterRes ? "SUCCESS" : "ERROR: " . $conn->error) . "\n";
+    }
+
+    $lCheck = $conn->query("SHOW COLUMNS FROM lost_reports LIKE 'campus_id'");
+    if ($lCheck && $lCheck->num_rows === 0) {
+        $alterRes2 = $conn->query("ALTER TABLE lost_reports ADD COLUMN campus_id INT(11) NULL DEFAULT NULL, ADD INDEX idx_lost_campus (campus_id)");
+        echo "ALTER lost_reports result: " . ($alterRes2 ? "SUCCESS" : "ERROR: " . $conn->error) . "\n";
+    }
+
+    // Now test manage_campuses query directly from admin_api
+    $_GET['action'] = 'manage_campuses';
+    ob_start();
+    require __DIR__ . '/../Backend/admin_api.php';
+    echo ob_get_clean();
+    exit;
+}
+
 if ($testMode === 'system') {
     echo "Testing action=system_test...\n";
     $_GET['action'] = 'system_test';

@@ -1101,7 +1101,7 @@ if ($action === 'manage_campuses') {
 
     // GET: List campuses with metrics
     $campuses = [];
-    $res = $conn->query("
+    $res = @$conn->query("
         SELECT c.*,
             (SELECT COUNT(*) FROM users u WHERE u.campus_id = c.id) as student_count,
             (SELECT COUNT(*) FROM lost_reports l WHERE l.campus_id = c.id) as lost_count,
@@ -1110,6 +1110,9 @@ if ($action === 'manage_campuses') {
         FROM campuses c
         ORDER BY c.id ASC
     ");
+    if (!$res) {
+        $res = @$conn->query("SELECT * FROM campuses ORDER BY id ASC");
+    }
     if ($res) {
         while ($r = $res->fetch_assoc()) {
             $campuses[] = $r;
