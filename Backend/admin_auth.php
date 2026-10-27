@@ -58,19 +58,45 @@ $defaultAdminPass = get_config_val('ADMIN_PASSWORD', 'pass');
  * Using a cookie alongside session fixes shared-host session persistence.
  */
 function adminLoginSuccess($adminData, $isApi) {
-    $_SESSION['admin_id']        = $adminData['admin_id'];
-    $_SESSION['full_name']       = $adminData['full_name'];
-    $_SESSION['username']        = $adminData['username'];
-    $_SESSION['email']           = $adminData['email'];
-    $_SESSION['role']            = 'admin';
-    $_SESSION['admin_logged_in'] = true;
+    global $conn;
+    $rawRole = strtolower($adminData['role'] ?? 'campus_admin');
+    $campusId = !empty($adminData['campus_id']) ? (int)$adminData['campus_id'] : null;
+    $isMaster = ($rawRole === 'master_admin' || $rawRole === 'superadmin' || ($campusId === null && in_array($rawRole, ['admin', 'superadmin', 'master_admin'])));
+    $normalizedRole = $isMaster ? 'master_admin' : 'campus_admin';
+
+    $_SESSION['admin_id']          = (int)$adminData['admin_id'];
+    $_SESSION['full_name']         = $adminData['full_name'];
+    $_SESSION['username']          = $adminData['username'];
+    $_SESSION['email']             = $adminData['email'];
+    $_SESSION['role']              = $normalizedRole;
+    $_SESSION['admin_logged_in']   = true;
+    $_SESSION['reunite_admin_auth'] = true;
+    $_SESSION['admin_campus_id']   = $campusId;
+
+    if ($campusId && $conn) {
+        $cStmt = $conn->prepare("SELECT name, code FROM campuses WHERE id = ? LIMIT 1");
+        if ($cStmt) {
+            $cStmt->bind_param("i", $campusId);
+            $cStmt->execute();
+            if ($cRow = $cStmt->get_result()->fetch_assoc()) {
+                $_SESSION['admin_campus_name'] = $cRow['name'];
+                $_SESSION['admin_campus_code'] = $cRow['code'];
+            }
+            $cStmt->close();
+        }
+    } else {
+        $_SESSION['admin_campus_name'] = 'All Campuses (Global)';
+        $_SESSION['admin_campus_code'] = 'ALL';
+    }
 
     // Fallback admin cookie — ensures auth survives across AJAX-to-page-load
     // on shared hosting environments where sessions can be unreliable.
     $payload = base64_encode(json_encode([
-        'admin_id' => $adminData['admin_id'],
-        'username' => $adminData['username'],
-        'ts'       => time()
+        'admin_id'  => (int)$adminData['admin_id'],
+        'username'  => $adminData['username'],
+        'role'      => $normalizedRole,
+        'campus_id' => $campusId,
+        'ts'        => time()
     ]));
     setcookie('reunite_admin_session', $payload, [
         'expires'  => time() + 3600 * 8,
@@ -83,10 +109,12 @@ function adminLoginSuccess($adminData, $isApi) {
         sendJsonResponse(true, "Admin authentication successful!", [
             'redirect' => '../Frontend/admin/index.php',
             'admin'    => [
-                'admin_id'  => $adminData['admin_id'],
-                'full_name' => $adminData['full_name'],
-                'username'  => $adminData['username'],
-                'role'      => 'admin'
+                'admin_id'    => (int)$adminData['admin_id'],
+                'full_name'   => $adminData['full_name'],
+                'username'    => $adminData['username'],
+                'role'        => $normalizedRole,
+                'campus_id'   => $campusId,
+                'campus_name' => $_SESSION['admin_campus_name']
             ]
         ]);
     } else {
@@ -97,7 +125,17 @@ function adminLoginSuccess($adminData, $isApi) {
 
 // 2. Query DB for existing admin in `admins` table
 if ($conn) {
-    $stmt = $conn->prepare("SELECT admin_id, username, full_name, email, password_hash, role, status FROM admins WHERE username = ? OR email = ? LIMIT 1");
+    // Check if campus_id column exists
+    $cols = [];
+    $cr = @$conn->query("SHOW COLUMNS FROM admins");
+    if ($cr) while ($c = $cr->fetch_assoc()) $cols[] = strtolower($c['Field']);
+    $hasCampusCol = in_array('campus_id', $cols);
+
+    $sql = $hasCampusCol
+        ? "SELECT admin_id, username, full_name, email, password_hash, role, status, campus_id FROM admins WHERE username = ? OR email = ? LIMIT 1"
+        : "SELECT admin_id, username, full_name, email, password_hash, role, status FROM admins WHERE username = ? OR email = ? LIMIT 1";
+
+    $stmt = $conn->prepare($sql);
     if ($stmt) {
         $stmt->bind_param("ss", $identifier, $identifier);
         $stmt->execute();

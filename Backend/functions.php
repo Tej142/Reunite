@@ -1071,7 +1071,7 @@ if (!function_exists('formatRelativeTime')) {
 /**
  * Dynamically inserts a notification record across any table schema variations
  */
-function insertSystemNotification($targetUserId, $title, $message, $link = '', $reportType = 'LOST', $reportId = 0, $type = 'match') {
+function insertSystemNotification($targetUserId, $title, $message, $link = '', $reportType = 'LOST', $reportId = 0, $type = 'match', $campusId = null) {
     global $conn;
     if (!$conn || empty($targetUserId)) return false;
 
@@ -1123,6 +1123,40 @@ function insertSystemNotification($targetUserId, $title, $message, $link = '', $
         $fields[] = 'created_at';
         $vals[] = date('Y-m-d H:i:s');
         $types .= 's';
+    }
+
+    if (in_array('campus_id', $nCols)) {
+        if ($campusId === null && $targetUserId > 0) {
+            $uStmt = $conn->prepare("SELECT campus_id FROM users WHERE user_id = ? LIMIT 1");
+            if ($uStmt) {
+                $uStmt->bind_param("i", $targetUserId);
+                $uStmt->execute();
+                $uRes = $uStmt->get_result();
+                if ($uRow = $uRes->fetch_assoc()) {
+                    $campusId = !empty($uRow['campus_id']) ? (int)$uRow['campus_id'] : null;
+                }
+                $uStmt->close();
+            }
+        }
+        if ($campusId === null && $reportId > 0) {
+            $repTable = (strtoupper($reportType) === 'FOUND') ? 'found_reports' : 'lost_reports';
+            $repIdCol = (strtoupper($reportType) === 'FOUND') ? 'found_id' : 'lost_id';
+            $rStmt = $conn->prepare("SELECT campus_id FROM `$repTable` WHERE `$repIdCol` = ? LIMIT 1");
+            if ($rStmt) {
+                $rStmt->bind_param("i", $reportId);
+                $rStmt->execute();
+                $rRes = $rStmt->get_result();
+                if ($rRow = $rRes->fetch_assoc()) {
+                    $campusId = !empty($rRow['campus_id']) ? (int)$rRow['campus_id'] : null;
+                }
+                $rStmt->close();
+            }
+        }
+        if ($campusId !== null) {
+            $fields[] = 'campus_id';
+            $vals[] = (int)$campusId;
+            $types .= 'i';
+        }
     }
 
     $fieldList = implode(', ', $fields);
@@ -1653,56 +1687,92 @@ function ensureAdminsTable() {
     global $conn;
     if (!$conn) return;
 
+    // 1. Ensure campuses table exists
+    @$conn->query("CREATE TABLE IF NOT EXISTS `campuses` (
+      `id` INT(11) NOT NULL AUTO_INCREMENT,
+      `name` VARCHAR(150) NOT NULL,
+      `code` VARCHAR(50) NOT NULL,
+      `status` ENUM('active', 'inactive') NOT NULL DEFAULT 'active',
+      `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      PRIMARY KEY (`id`),
+      UNIQUE KEY `idx_campus_code` (`code`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;");
+
+    @$conn->query("INSERT INTO `campuses` (`id`, `name`, `code`, `status`) 
+    VALUES 
+      (1, 'Sri Venkateswara Govt Polytechnic', 'SVGP', 'active'),
+      (2, 'Tirupati Central Campus', 'TCC', 'active')
+    ON DUPLICATE KEY UPDATE `name` = VALUES(`name`);");
+
+    // 2. Ensure admins table exists with campus_id
     @$conn->query("CREATE TABLE IF NOT EXISTS `admins` (
       `admin_id` INT(11) NOT NULL AUTO_INCREMENT,
       `username` VARCHAR(50) NOT NULL,
       `full_name` VARCHAR(100) NOT NULL DEFAULT 'System Administrator',
       `email` VARCHAR(100) NOT NULL,
       `password_hash` VARCHAR(255) NOT NULL,
-      `role` ENUM('superadmin', 'admin', 'moderator') DEFAULT 'admin',
+      `role` ENUM('master_admin', 'campus_admin', 'superadmin', 'admin', 'moderator') DEFAULT 'campus_admin',
+      `campus_id` INT(11) NULL DEFAULT NULL,
       `status` ENUM('active', 'suspended') DEFAULT 'active',
       `last_login` DATETIME DEFAULT NULL,
       `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
       `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
       PRIMARY KEY (`admin_id`),
       UNIQUE KEY `idx_admin_username` (`username`),
-      UNIQUE KEY `idx_admin_email` (`email`)
+      UNIQUE KEY `idx_admin_email` (`email`),
+      KEY `idx_admin_campus` (`campus_id`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;");
 
-    // Seed production admin accounts for Charan
+    // Dynamic column check in case table was created with older schema
+    $acRes = @$conn->query("SHOW COLUMNS FROM `admins` LIKE 'campus_id'");
+    if ($acRes && $acRes->num_rows === 0) {
+        @$conn->query("ALTER TABLE `admins` ADD COLUMN `campus_id` INT(11) NULL DEFAULT NULL AFTER `role`, ADD INDEX `idx_admin_campus` (`campus_id`)");
+    }
+    @$conn->query("ALTER TABLE `admins` MODIFY COLUMN `role` ENUM('master_admin', 'campus_admin', 'superadmin', 'admin', 'moderator') NOT NULL DEFAULT 'campus_admin'");
+
+    // 3. Seed initial admin accounts
     $seedAccounts = [
         [
-            'username' => 'charan_admin',
-            'full_name' => 'Charan Administrator',
-            'email' => 'charante153624@gmail.com',
-            'password' => 'Charan@Admin2026!',
-            'role' => 'admin'
+            'username'  => 'charan_admin',
+            'full_name' => 'Charan Master Administrator',
+            'email'     => 'charante153624@gmail.com',
+            'password'  => 'Charan@Admin2026!',
+            'role'      => 'master_admin',
+            'campus_id' => null
         ],
         [
-            'username' => 'charan_moderator',
-            'full_name' => 'Charan Moderator',
-            'email' => 'charanpc1420091@gmail.com',
-            'password' => 'Charan@Mod2026!',
-            'role' => 'moderator'
+            'username'  => 'charan_moderator',
+            'full_name' => 'Charan Campus Admin SVGP',
+            'email'     => 'charanpc1420091@gmail.com',
+            'password'  => 'Charan@Mod2026!',
+            'role'      => 'campus_admin',
+            'campus_id' => 1
         ]
     ];
 
     foreach ($seedAccounts as $acc) {
-        $chk = $conn->prepare("SELECT admin_id FROM admins WHERE username = ? OR email = ? LIMIT 1");
+        $chk = $conn->prepare("SELECT admin_id, role, campus_id FROM admins WHERE username = ? OR email = ? LIMIT 1");
         if ($chk) {
             $chk->bind_param("ss", $acc['username'], $acc['email']);
             $chk->execute();
-            if ($chk->get_result()->num_rows === 0) {
+            $res = $chk->get_result();
+            if ($res->num_rows === 0) {
                 $chk->close();
                 $hash = password_hash($acc['password'], PASSWORD_BCRYPT);
-                $ins = $conn->prepare("INSERT INTO admins (username, full_name, email, password_hash, role, status) VALUES (?, ?, ?, ?, ?, 'active')");
+                $ins = $conn->prepare("INSERT INTO admins (username, full_name, email, password_hash, role, campus_id, status) VALUES (?, ?, ?, ?, ?, ?, 'active')");
                 if ($ins) {
-                    $ins->bind_param("sssss", $acc['username'], $acc['full_name'], $acc['email'], $hash, $acc['role']);
+                    $ins->bind_param("sssssi", $acc['username'], $acc['full_name'], $acc['email'], $hash, $acc['role'], $acc['campus_id']);
                     $ins->execute();
                     $ins->close();
                 }
             } else {
+                $row = $res->fetch_assoc();
                 $chk->close();
+                // Ensure correct role assignment if already existing
+                if ($acc['username'] === 'charan_admin' && $row['role'] !== 'master_admin') {
+                    @$conn->query("UPDATE admins SET role = 'master_admin', campus_id = NULL WHERE admin_id = " . (int)$row['admin_id']);
+                }
             }
         }
     }

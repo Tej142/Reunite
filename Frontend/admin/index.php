@@ -13,6 +13,9 @@ $adminUser = get_current_user_data();
 $adminName = htmlspecialchars($_SESSION['full_name'] ?? 'System Administrator');
 $adminRole = htmlspecialchars($_SESSION['role'] ?? 'admin');
 $adminEmail = htmlspecialchars($_SESSION['email'] ?? 'admin@reunite.site');
+$adminCampusId = $_SESSION['admin_campus_id'] ?? null;
+$adminCampusName = htmlspecialchars($_SESSION['admin_campus_name'] ?? 'All Campuses (Global)');
+$isMasterAdmin = ($adminRole === 'master_admin' || $adminRole === 'superadmin' || ($adminCampusId === null && in_array($adminRole, ['admin', 'master_admin'])));
 $adminInitials = strtoupper(substr($adminName, 0, 1) . (strpos($adminName, ' ') !== false ? substr($adminName, strpos($adminName, ' ') + 1, 1) : ''));
 ?>
 <!DOCTYPE html>
@@ -21,7 +24,7 @@ $adminInitials = strtoupper(substr($adminName, 0, 1) . (strpos($adminName, ' ') 
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="robots" content="noindex, nofollow">
-  <title>Admin Command Center | Reunite Platform</title>
+  <title><?= $isMasterAdmin ? 'Master Command Center' : 'Campus Admin Portal' ?> | Reunite Platform</title>
   
   <!-- Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -33,6 +36,14 @@ $adminInitials = strtoupper(substr($adminName, 0, 1) . (strpos($adminName, ' ') 
   
   <!-- Admin Stylesheet -->
   <link rel="stylesheet" href="css/admin.css">
+  <script>
+    window.REUNITE_ADMIN = {
+      role: <?= json_encode($adminRole) ?>,
+      isMasterAdmin: <?= json_encode($isMasterAdmin) ?>,
+      campusId: <?= json_encode($adminCampusId) ?>,
+      campusName: <?= json_encode($adminCampusName) ?>
+    };
+  </script>
 </head>
 <body>
 
@@ -47,7 +58,7 @@ $adminInitials = strtoupper(substr($adminName, 0, 1) . (strpos($adminName, ' ') 
           <circle cx="20" cy="20" r="3.5" fill="#E06D38"/>
         </svg>
         <span class="sidebar-brand-name">Reunite</span>
-        <span class="sidebar-badge">Admin</span>
+        <span class="sidebar-badge"><?= $isMasterAdmin ? 'Master' : 'Campus' ?></span>
       </a>
 
       <div class="menu-category">Main</div>
@@ -92,12 +103,30 @@ $adminInitials = strtoupper(substr($adminName, 0, 1) . (strpos($adminName, ' ') 
         </li>
       </ul>
 
-      <div class="menu-category">System</div>
+      <?php if ($isMasterAdmin): ?>
+      <div class="menu-category">Campuses</div>
+      <ul class="sidebar-menu">
+        <li>
+          <button type="button" class="nav-tab-btn" data-tab="campuses">
+            <i class="fa-solid fa-building-columns"></i>
+            <span>Campuses</span>
+          </button>
+        </li>
+        <li>
+          <button type="button" class="nav-tab-btn" data-tab="campus_admins">
+            <i class="fa-solid fa-user-shield"></i>
+            <span>Campus Admins</span>
+          </button>
+        </li>
+      </ul>
+      <?php endif; ?>
+
+      <div class="menu-category"><?= $isMasterAdmin ? 'System' : 'Administration' ?></div>
       <ul class="sidebar-menu">
         <li>
           <button type="button" class="nav-tab-btn" data-tab="users">
             <i class="fa-solid fa-users"></i>
-            <span>Users</span>
+            <span>Students</span>
           </button>
         </li>
         <li>
@@ -106,6 +135,7 @@ $adminInitials = strtoupper(substr($adminName, 0, 1) . (strpos($adminName, ' ') 
             <span>Audit Logs</span>
           </button>
         </li>
+        <?php if ($isMasterAdmin): ?>
         <li>
           <button type="button" class="nav-tab-btn" data-tab="system">
             <i class="fa-solid fa-server"></i>
@@ -118,6 +148,7 @@ $adminInitials = strtoupper(substr($adminName, 0, 1) . (strpos($adminName, ' ') 
             <span>Maintenance HUD</span>
           </a>
         </li>
+        <?php endif; ?>
       </ul>
     </div>
 
@@ -127,7 +158,10 @@ $adminInitials = strtoupper(substr($adminName, 0, 1) . (strpos($adminName, ' ') 
         <div class="admin-avatar"><?= $adminInitials ?: 'A' ?></div>
         <div class="admin-user-info">
           <span class="admin-user-name" title="<?= $adminName ?>"><?= $adminName ?></span>
-          <span class="admin-user-role"><?= strtoupper($adminRole) ?></span>
+          <span class="admin-user-role"><?= $isMasterAdmin ? 'MASTER ADMIN' : 'CAMPUS ADMIN' ?></span>
+          <?php if (!$isMasterAdmin): ?>
+            <span class="admin-user-campus" title="<?= $adminCampusName ?>"><?= $adminCampusName ?></span>
+          <?php endif; ?>
         </div>
       </div>
       <a href="../../Backend/admin_auth.php?action=logout" class="btn-sidebar-logout" title="Sign Out of Admin Portal">
@@ -153,6 +187,21 @@ $adminInitials = strtoupper(substr($adminName, 0, 1) . (strpos($adminName, ' ') 
       </div>
 
       <div class="topbar-actions">
+        <?php if (!$isMasterAdmin): ?>
+          <div class="campus-scope-badge" title="Active Campus Node">
+            <i class="fa-solid fa-building-columns"></i>
+            <span><?= $adminCampusName ?></span>
+          </div>
+        <?php else: ?>
+          <div class="campus-filter-wrap" title="Filter Global View by Campus">
+            <i class="fa-solid fa-building-columns" style="color:var(--accent);"></i>
+            <select id="globalCampusSelector" onchange="handleCampusFilterChange(this.value)">
+              <option value="">All Campuses (Global)</option>
+            </select>
+          </div>
+          <span class="badge-master-admin"><i class="fa-solid fa-shield-halved"></i> Master Admin</span>
+        <?php endif; ?>
+
         <div class="live-health-pill">
           <span class="pulse-beacon"></span>
           <span>Operational</span>
@@ -223,6 +272,7 @@ $adminInitials = strtoupper(substr($adminName, 0, 1) . (strpos($adminName, ' ') 
               <i class="fa-solid fa-arrow-right action-arrow"></i>
             </button>
 
+            <?php if ($isMasterAdmin): ?>
             <button class="action-shortcut-card" onclick="switchTab('system')">
               <div class="action-text">
                 <strong>System Health</strong>
@@ -230,6 +280,15 @@ $adminInitials = strtoupper(substr($adminName, 0, 1) . (strpos($adminName, ' ') 
               </div>
               <i class="fa-solid fa-arrow-right action-arrow"></i>
             </button>
+            <?php else: ?>
+            <button class="action-shortcut-card" onclick="switchTab('logs')">
+              <div class="action-text">
+                <strong>Activity Logs</strong>
+                <span>Review student logins and report submissions</span>
+              </div>
+              <i class="fa-solid fa-arrow-right action-arrow"></i>
+            </button>
+            <?php endif; ?>
           </div>
         </div>
 
@@ -252,7 +311,7 @@ $adminInitials = strtoupper(substr($adminName, 0, 1) . (strpos($adminName, ' ') 
             </div>
             <div class="topology-item">
               <span class="topo-label">Campus Node</span>
-              <span style="color:var(--ink-secondary); font-size:0.85rem;">SV Govt Polytechnic</span>
+              <span id="overviewCampusNode" style="color:var(--accent); font-weight:600; font-size:0.85rem;"><?= $isMasterAdmin ? 'All Campuses (Global)' : $adminCampusName ?></span>
             </div>
           </div>
         </div>
@@ -645,6 +704,86 @@ $adminInitials = strtoupper(substr($adminName, 0, 1) . (strpos($adminName, ' ') 
     </section>
 
 
+    <?php if ($isMasterAdmin): ?>
+    <!-- ══════════════════════════════════════════════════════════════════ -->
+    <!-- TAB 9: CAMPUSES MANAGEMENT (MASTER ADMIN ONLY)                     -->
+    <!-- ══════════════════════════════════════════════════════════════════ -->
+    <section class="admin-tab-pane" id="pane-campuses" style="display:none;">
+      <div class="admin-card">
+        <div class="card-header-bar">
+          <div>
+            <h2>Campuses Directory</h2>
+            <p style="font-size:0.82rem; color:var(--muted); margin:0;">Configure academic institutions, institutional codes, and campus node statuses.</p>
+          </div>
+          <div style="display:flex; gap:10px;">
+            <button type="button" class="admin-btn-primary" onclick="openAddCampusModal()">
+              <i class="fa-solid fa-plus"></i> Add Campus
+            </button>
+          </div>
+        </div>
+
+        <div class="table-responsive">
+          <table class="admin-table">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Campus Name</th>
+                <th>Code</th>
+                <th>Address / Location</th>
+                <th>Status</th>
+                <th>Created</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="campusesTableBody">
+              <tr><td colspan="7" style="text-align:center; padding:30px; color:var(--muted);"><i class="fa-solid fa-spinner fa-spin"></i> Loading campuses...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════════════════════════════════════════════════════════════ -->
+    <!-- TAB 10: CAMPUS ADMINS MANAGEMENT (MASTER ADMIN ONLY)               -->
+    <!-- ══════════════════════════════════════════════════════════════════ -->
+    <section class="admin-tab-pane" id="pane-campus_admins" style="display:none;">
+      <div class="admin-card">
+        <div class="card-header-bar">
+          <div>
+            <h2>Campus Administrators</h2>
+            <p style="font-size:0.82rem; color:var(--muted); margin:0;">Assign and manage institutional administrators strictly scoped to their respective campuses.</p>
+          </div>
+          <div style="display:flex; gap:10px;">
+            <button type="button" class="admin-btn-primary" onclick="openAddAdminModal()">
+              <i class="fa-solid fa-user-plus"></i> Add Campus Admin
+            </button>
+          </div>
+        </div>
+
+        <div class="table-responsive">
+          <table class="admin-table">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Administrator</th>
+                <th>Username</th>
+                <th>Email</th>
+                <th>Assigned Campus</th>
+                <th>Role</th>
+                <th>Status</th>
+                <th>Created</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="campusAdminsTableBody">
+              <tr><td colspan="9" style="text-align:center; padding:30px; color:var(--muted);"><i class="fa-solid fa-spinner fa-spin"></i> Loading campus admins...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+    <?php endif; ?>
+
   </main>
 
   <!-- ── Modal Dialog: Edit User ─────────────────────────────────────── -->
@@ -692,6 +831,100 @@ $adminInitials = strtoupper(substr($adminName, 0, 1) . (strpos($adminName, ' ') 
       </form>
     </div>
   </div>
+
+  <?php if ($isMasterAdmin): ?>
+  <!-- ── Modal Dialog: Add/Edit Campus ───────────────────────────────── -->
+  <div class="admin-modal-backdrop" id="campusModal">
+    <div class="admin-modal-card">
+      <button type="button" class="admin-modal-close" onclick="closeModal('campusModal')">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+      <h2 style="font-family:'Plus Jakarta Sans', sans-serif; font-weight:800; letter-spacing:-0.02em; margin-bottom:6px; color:var(--ink);" id="campusModalTitle">Add New Campus</h2>
+      <p style="color:var(--muted); font-size:0.85rem; margin-bottom:20px;">Define institution details and identifier code.</p>
+
+      <form id="campusForm" onsubmit="handleSaveCampus(event)">
+        <input type="hidden" id="campusFormId" name="id">
+
+        <div style="margin-bottom:16px;">
+          <label style="display:block; font-size:0.8rem; font-weight:600; color:var(--muted); margin-bottom:6px;">Campus Name</label>
+          <input type="text" id="campusFormName" class="admin-input-sm" style="width:100%; padding:10px;" placeholder="e.g. Sri Venkateswara Govt Polytechnic" required>
+        </div>
+
+        <div style="margin-bottom:16px;">
+          <label style="display:block; font-size:0.8rem; font-weight:600; color:var(--muted); margin-bottom:6px;">Campus Short Code</label>
+          <input type="text" id="campusFormCode" class="admin-input-sm" style="width:100%; padding:10px; text-transform:uppercase;" placeholder="e.g. SVGP" required>
+        </div>
+
+        <div style="margin-bottom:24px;">
+          <label style="display:block; font-size:0.8rem; font-weight:600; color:var(--muted); margin-bottom:6px;">Address / City</label>
+          <input type="text" id="campusFormAddress" class="admin-input-sm" style="width:100%; padding:10px;" placeholder="e.g. Tirupati, AP">
+        </div>
+
+        <div style="display:flex; justify-content:flex-end; gap:10px;">
+          <button type="button" class="nav-tab-btn" style="width:auto; padding:10px 18px;" onclick="closeModal('campusModal')">Cancel</button>
+          <button type="submit" class="admin-btn-primary" style="padding:10px 20px; border-radius:10px;" id="btnSaveCampus">Save Campus</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ── Modal Dialog: Add/Edit Campus Admin ──────────────────────────── -->
+  <div class="admin-modal-backdrop" id="campusAdminModal">
+    <div class="admin-modal-card">
+      <button type="button" class="admin-modal-close" onclick="closeModal('campusAdminModal')">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+      <h2 style="font-family:'Plus Jakarta Sans', sans-serif; font-weight:800; letter-spacing:-0.02em; margin-bottom:6px; color:var(--ink);" id="adminModalTitle">Add Administrator</h2>
+      <p style="color:var(--muted); font-size:0.85rem; margin-bottom:20px;">Configure admin credentials and institutional campus assignment.</p>
+
+      <form id="campusAdminForm" onsubmit="handleSaveCampusAdmin(event)">
+        <input type="hidden" id="adminModalId" name="admin_id">
+
+        <div style="margin-bottom:16px;">
+          <label style="display:block; font-size:0.8rem; font-weight:600; color:var(--muted); margin-bottom:6px;">Full Name</label>
+          <input type="text" id="adminModalFullName" class="admin-input-sm" style="width:100%; padding:10px;" placeholder="e.g. Dr. K. Ramesh" required>
+        </div>
+
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:16px;">
+          <div>
+            <label style="display:block; font-size:0.8rem; font-weight:600; color:var(--muted); margin-bottom:6px;">Username</label>
+            <input type="text" id="adminModalUsername" class="admin-input-sm" style="width:100%; padding:10px;" placeholder="e.g. ramesh_svgp" required>
+          </div>
+          <div>
+            <label style="display:block; font-size:0.8rem; font-weight:600; color:var(--muted); margin-bottom:6px;">Email</label>
+            <input type="email" id="adminModalEmail" class="admin-input-sm" style="width:100%; padding:10px;" placeholder="e.g. admin@svgp.edu" required>
+          </div>
+        </div>
+
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:16px;">
+          <div>
+            <label style="display:block; font-size:0.8rem; font-weight:600; color:var(--muted); margin-bottom:6px;">Role</label>
+            <select id="adminModalRole" class="admin-select-sm" style="width:100%; padding:10px;" onchange="handleAdminRoleSelectChange(this.value)">
+              <option value="campus_admin">Campus Admin (Institutional)</option>
+              <option value="master_admin">Master Admin (Global)</option>
+            </select>
+          </div>
+          <div id="adminModalCampusGroup">
+            <label style="display:block; font-size:0.8rem; font-weight:600; color:var(--muted); margin-bottom:6px;">Assigned Campus</label>
+            <select id="adminModalCampusSelect" class="admin-select-sm" style="width:100%; padding:10px;">
+              <option value="">Select Campus...</option>
+            </select>
+          </div>
+        </div>
+
+        <div style="margin-bottom:24px;">
+          <label style="display:block; font-size:0.8rem; font-weight:600; color:var(--muted); margin-bottom:6px;" id="adminModalPasswordLabel">Password</label>
+          <input type="password" id="adminModalPassword" class="admin-input-sm" style="width:100%; padding:10px;" placeholder="Enter password (min 6 chars)...">
+        </div>
+
+        <div style="display:flex; justify-content:flex-end; gap:10px;">
+          <button type="button" class="nav-tab-btn" style="width:auto; padding:10px 18px;" onclick="closeModal('campusAdminModal')">Cancel</button>
+          <button type="submit" class="admin-btn-primary" style="padding:10px 20px; border-radius:10px;" id="btnSaveAdmin">Save Admin</button>
+        </div>
+      </form>
+    </div>
+  </div>
+  <?php endif; ?>
 
   <!-- Toast Container -->
   <div class="toast-container" id="toastContainer"></div>

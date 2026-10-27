@@ -33,14 +33,34 @@ if (!function_exists('format_time_ago')) {
     }
 }
 
-// Get user ID from session
+// Get user ID or Admin ID from session
 $userId = $_SESSION['user_id'] ?? null;
+$isAdmin = !empty($_SESSION['reunite_admin_auth']) || !empty($_SESSION['admin_logged_in']);
+$adminId = $_SESSION['admin_id'] ?? null;
+$adminRole = $_SESSION['role'] ?? null;
+$adminCampusId = $_SESSION['admin_campus_id'] ?? null;
+
+$userCampusId = null;
+if ($userId && $conn) {
+    $uStmt = $conn->prepare("SELECT campus_id FROM users WHERE user_id = ? LIMIT 1");
+    if ($uStmt) {
+        $uStmt->bind_param("i", $userId);
+        $uStmt->execute();
+        $uRes = $uStmt->get_result();
+        if ($uRow = $uRes->fetch_assoc()) {
+            $userCampusId = !empty($uRow['campus_id']) ? (int)$uRow['campus_id'] : null;
+        }
+        $uStmt->close();
+    }
+} elseif ($isAdmin && $adminCampusId) {
+    $userCampusId = (int)$adminCampusId;
+}
 
 $data = getRequestData();
 $action = $data['action'] ?? $_GET['action'] ?? 'get';
 
-// If not logged in, return empty state safely
-if (!$userId) {
+// If not logged in as user or admin, return empty state safely
+if (!$userId && !$isAdmin) {
     echo json_encode([
         'success' => true,
         'logged_in' => false,
@@ -134,24 +154,72 @@ $notifications = [];
 $unreadCount = 0;
 
 if ($conn) {
-    // Unread count
-    $stmtCount = $conn->prepare("SELECT COUNT(*) AS cnt FROM notifications WHERE (user_id = ? OR user_id = 0) AND is_read = 0");
-    if ($stmtCount) {
-        $stmtCount->bind_param("i", $userId);
-        $stmtCount->execute();
-        $cntRes = $stmtCount->get_result();
-        if ($cntRow = $cntRes->fetch_assoc()) {
-            $unreadCount = (int)$cntRow['cnt'];
-        }
-        $stmtCount->close();
+    // Check if campus_id column exists
+    $hasCampusCol = false;
+    $cCols = @$conn->query("SHOW COLUMNS FROM notifications LIKE 'campus_id'");
+    if ($cCols && $cCols->num_rows > 0) {
+        $hasCampusCol = true;
     }
 
-    // List latest 25 notifications
-    $stmtList = $conn->prepare("SELECT * FROM notifications WHERE (user_id = ? OR user_id = 0) ORDER BY notification_id DESC LIMIT 25");
-    if ($stmtList) {
-        $stmtList->bind_param("i", $userId);
-        $stmtList->execute();
-        $listRes = $stmtList->get_result();
+    if ($isAdmin && !$userId) {
+        // Administrator notification view
+        if ($userCampusId && $hasCampusCol) {
+            $stmtCount = $conn->prepare("SELECT COUNT(*) AS cnt FROM notifications WHERE (campus_id = ? OR (campus_id IS NULL AND user_id = 0)) AND is_read = 0");
+            if ($stmtCount) {
+                $stmtCount->bind_param("i", $userCampusId);
+                $stmtCount->execute();
+                if ($cntRow = $stmtCount->get_result()->fetch_assoc()) $unreadCount = (int)$cntRow['cnt'];
+                $stmtCount->close();
+            }
+
+            $stmtList = $conn->prepare("SELECT * FROM notifications WHERE (campus_id = ? OR (campus_id IS NULL AND user_id = 0)) ORDER BY notification_id DESC LIMIT 25");
+            if ($stmtList) {
+                $stmtList->bind_param("i", $userCampusId);
+                $stmtList->execute();
+                $listRes = $stmtList->get_result();
+            }
+        } else {
+            // Master admin sees global notifications
+            $cntRes = $conn->query("SELECT COUNT(*) AS cnt FROM notifications WHERE is_read = 0");
+            if ($cntRes && $cntRow = $cntRes->fetch_assoc()) $unreadCount = (int)$cntRow['cnt'];
+            $listRes = $conn->query("SELECT * FROM notifications ORDER BY notification_id DESC LIMIT 25");
+        }
+    } else {
+        // Student user notification view
+        if ($hasCampusCol && $userCampusId) {
+            $stmtCount = $conn->prepare("SELECT COUNT(*) AS cnt FROM notifications WHERE (user_id = ? OR (user_id = 0 AND (campus_id IS NULL OR campus_id = ?))) AND is_read = 0");
+            if ($stmtCount) {
+                $stmtCount->bind_param("ii", $userId, $userCampusId);
+                $stmtCount->execute();
+                if ($cntRow = $stmtCount->get_result()->fetch_assoc()) $unreadCount = (int)$cntRow['cnt'];
+                $stmtCount->close();
+            }
+
+            $stmtList = $conn->prepare("SELECT * FROM notifications WHERE (user_id = ? OR (user_id = 0 AND (campus_id IS NULL OR campus_id = ?))) ORDER BY notification_id DESC LIMIT 25");
+            if ($stmtList) {
+                $stmtList->bind_param("ii", $userId, $userCampusId);
+                $stmtList->execute();
+                $listRes = $stmtList->get_result();
+            }
+        } else {
+            $stmtCount = $conn->prepare("SELECT COUNT(*) AS cnt FROM notifications WHERE (user_id = ? OR user_id = 0) AND is_read = 0");
+            if ($stmtCount) {
+                $stmtCount->bind_param("i", $userId);
+                $stmtCount->execute();
+                if ($cntRow = $stmtCount->get_result()->fetch_assoc()) $unreadCount = (int)$cntRow['cnt'];
+                $stmtCount->close();
+            }
+
+            $stmtList = $conn->prepare("SELECT * FROM notifications WHERE (user_id = ? OR user_id = 0) ORDER BY notification_id DESC LIMIT 25");
+            if ($stmtList) {
+                $stmtList->bind_param("i", $userId);
+                $stmtList->execute();
+                $listRes = $stmtList->get_result();
+            }
+        }
+    }
+
+    if (isset($listRes) && $listRes) {
         while ($row = $listRes->fetch_assoc()) {
             $nType = $row['type'] ?: 'match';
             $icon = $nType;

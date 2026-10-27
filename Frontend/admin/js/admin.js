@@ -6,13 +6,37 @@
 const API_ENDPOINT = '../../Backend/admin_api.php';
 let activeTab = 'overview';
 let cachedUsers = [];
+let cachedCampuses = [];
+let cachedAdmins = [];
+let selectedCampusId = '';
 
 document.addEventListener('DOMContentLoaded', () => {
   initNavigation();
   initEventListeners();
+  if (window.REUNITE_ADMIN?.isMasterAdmin) {
+    loadCampusesForDropdown();
+  }
   loadStats();
-  loadSystemDiagnostics();
+  if (window.REUNITE_ADMIN?.isMasterAdmin) {
+    loadSystemDiagnostics();
+  }
 });
+
+function getCampusParam() {
+  return selectedCampusId ? `&campus_id=${encodeURIComponent(selectedCampusId)}` : '';
+}
+
+function handleCampusFilterChange(campusId) {
+  selectedCampusId = campusId;
+  const nodeEl = document.getElementById('overviewCampusNode');
+  if (nodeEl) {
+    const sel = document.getElementById('globalCampusSelector');
+    nodeEl.textContent = sel && sel.selectedIndex > 0 ? sel.options[sel.selectedIndex].text : 'All Campuses (Global)';
+  }
+  loadStats();
+  switchTab(activeTab);
+  showToast(`View updated: ${selectedCampusId ? 'Campus #' + selectedCampusId : 'All Campuses'}`, 'info');
+}
 
 /* ── Navigation & Tabs ──────────────────────────────────────────────── */
 function initNavigation() {
@@ -58,11 +82,13 @@ function switchTab(tabId) {
   // Update Topbar Titles
   const titles = {
     overview: { title: 'Dashboard', sub: 'Overview of campus reports, matches, and operations.' },
-    users: { title: 'User Accounts', sub: 'Directory of registered students and administrators.' },
+    users: { title: 'Student Accounts', sub: 'Directory of registered students with institutional scoping.' },
     lost: { title: 'Lost Reports', sub: 'Items reported missing across campus.' },
     found: { title: 'Found Items', sub: 'Items in custody awaiting claim verification.' },
     matches: { title: 'AI Matches', sub: 'Semantic and image similarity pairings.' },
     claims: { title: 'Ownership Claims', sub: 'Submitted proofs and handoff authorizations.' },
+    campuses: { title: 'Campuses Directory', sub: 'Manage institutions, short codes, and campus node statuses.' },
+    campus_admins: { title: 'Campus Administrators', sub: 'Institutional administrators with scoped access.' },
     logs: { title: 'Audit Logs', sub: 'System access and activity trail.' },
     system: { title: 'System Health', sub: 'Service latency and infrastructure status.' }
   };
@@ -80,6 +106,8 @@ function switchTab(tabId) {
     case 'found': loadFoundReports(); break;
     case 'matches': loadMatches(); break;
     case 'claims': loadClaims(); break;
+    case 'campuses': loadCampuses(); break;
+    case 'campus_admins': loadCampusAdmins(); break;
     case 'logs': loadLogs(); break;
     case 'system': loadSystemDiagnostics(); break;
   }
@@ -150,7 +178,7 @@ function initEventListeners() {
 /* ── 1. Load Overview Stats ─────────────────────────────────────────── */
 async function loadStats() {
   try {
-    const res = await fetch(`${API_ENDPOINT}?action=stats`);
+    const res = await fetch(`${API_ENDPOINT}?action=stats${getCampusParam()}`);
     const json = await res.json();
     if (json.success) {
       const d = json.data || json;
@@ -186,7 +214,7 @@ async function loadUsers() {
   tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; padding:30px; color:var(--muted);"><i class="fa-solid fa-spinner fa-spin"></i> Querying accounts...</td></tr>`;
 
   try {
-    const res = await fetch(`${API_ENDPOINT}?action=users&search=${search}&role=${role}&status=${status}`);
+    const res = await fetch(`${API_ENDPOINT}?action=users&search=${search}&role=${role}&status=${status}${getCampusParam()}`);
     const json = await res.json();
     const users = json.users || json.data?.users;
     if (json.success && Array.isArray(users)) {
@@ -364,7 +392,7 @@ async function loadLostReports() {
   tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding:30px; color:var(--muted);"><i class="fa-solid fa-spinner fa-spin"></i> Loading lost records...</td></tr>`;
 
   try {
-    const res = await fetch(`${API_ENDPOINT}?action=lost_reports&search=${search}&category=${cat}&status=${stat}`);
+    const res = await fetch(`${API_ENDPOINT}?action=lost_reports&search=${search}&category=${cat}&status=${stat}${getCampusParam()}`);
     const json = await res.json();
     const reports = json.reports || json.data?.reports;
     if (json.success && Array.isArray(reports)) {
@@ -419,7 +447,7 @@ async function loadFoundReports() {
   tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding:30px; color:var(--muted);"><i class="fa-solid fa-spinner fa-spin"></i> Loading found records...</td></tr>`;
 
   try {
-    const res = await fetch(`${API_ENDPOINT}?action=found_reports&search=${search}&category=${cat}&status=${stat}`);
+    const res = await fetch(`${API_ENDPOINT}?action=found_reports&search=${search}&category=${cat}&status=${stat}${getCampusParam()}`);
     const json = await res.json();
     const reports = json.reports || json.data?.reports;
     if (json.success && Array.isArray(reports)) {
@@ -517,7 +545,7 @@ async function loadMatches() {
   tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding:30px; color:var(--muted);"><i class="fa-solid fa-spinner fa-spin"></i> Loading neural pairings...</td></tr>`;
 
   try {
-    const res = await fetch(`${API_ENDPOINT}?action=matches`);
+    const res = await fetch(`${API_ENDPOINT}?action=matches${getCampusParam()}`);
     const json = await res.json();
     const matches = json.matches || json.data?.matches;
     if (json.success && Array.isArray(matches)) {
@@ -605,7 +633,7 @@ async function loadClaims() {
   loadBannedClaimants();
 
   try {
-    const res = await fetch(`${API_ENDPOINT}?action=recovery_cases`);
+    const res = await fetch(`${API_ENDPOINT}?action=recovery_cases${getCampusParam()}`);
     const json = await res.json();
     const cases = json.cases || json.data?.cases;
     if (json.success && Array.isArray(cases)) {
@@ -708,7 +736,7 @@ async function loadBannedClaimants() {
   if (!tbody) return;
 
   try {
-    const res = await fetch(`${API_ENDPOINT}?action=get_banned_claimants`);
+    const res = await fetch(`${API_ENDPOINT}?action=get_banned_claimants${getCampusParam()}`);
     const json = await res.json();
     const banned = json.banned_claimants || [];
 
@@ -792,7 +820,7 @@ async function loadLogs() {
   tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding:30px; color:var(--muted);"><i class="fa-solid fa-spinner fa-spin"></i> Loading platform activity logs...</td></tr>`;
 
   try {
-    const res = await fetch(`${API_ENDPOINT}?action=logs&search=${search}&category=${cat}`);
+    const res = await fetch(`${API_ENDPOINT}?action=logs&search=${search}&category=${cat}${getCampusParam()}`);
     const json = await res.json();
     const logs = json.logs || json.data?.logs;
     if (json.success && Array.isArray(logs)) {
@@ -957,9 +985,366 @@ function applyDiagCard({ cardId, iconId, pulseId, badgeId, detailId, ok, badgeTe
   }
 }
 
+/* ── 8. Campuses Management (Master Admin Only) ─────────────────────── */
+async function loadCampusesForDropdown() {
+  try {
+    const res = await fetch(`${API_ENDPOINT}?action=manage_campuses`);
+    const json = await res.json();
+    if (json.success && Array.isArray(json.data?.campuses)) {
+      cachedCampuses = json.data.campuses;
+      
+      // Populate Topbar Filter
+      const sel = document.getElementById('globalCampusSelector');
+      if (sel) {
+        const curVal = sel.value;
+        sel.innerHTML = '<option value="">All Campuses (Global)</option>' + 
+          cachedCampuses.filter(c => c.is_active == 1).map(c => `
+            <option value="${c.id}" ${curVal == c.id ? 'selected' : ''}>${escapeHtml(c.name)} (${escapeHtml(c.code)})</option>
+          `).join('');
+      }
 
+      // Populate Admin Modal Campus Select
+      const adminCampSel = document.getElementById('adminModalCampusSelect');
+      if (adminCampSel) {
+        adminCampSel.innerHTML = '<option value="">Select Campus...</option>' + 
+          cachedCampuses.filter(c => c.is_active == 1).map(c => `
+            <option value="${c.id}">${escapeHtml(c.name)} (${escapeHtml(c.code)})</option>
+          `).join('');
+      }
+    }
+  } catch (err) {
+    console.error("Failed to populate campuses dropdown:", err);
+  }
+}
 
-/* ── Toast Helper ──────────────────────────────────────────────────── */
+async function loadCampuses() {
+  const tbody = document.getElementById('campusesTableBody');
+  if (!tbody) return;
+
+  tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding:30px; color:var(--muted);"><i class="fa-solid fa-spinner fa-spin"></i> Loading campuses...</td></tr>`;
+
+  try {
+    const res = await fetch(`${API_ENDPOINT}?action=manage_campuses`);
+    const json = await res.json();
+    const campuses = json.data?.campuses || [];
+
+    if (json.success && Array.isArray(campuses)) {
+      cachedCampuses = campuses;
+      loadCampusesForDropdown();
+
+      if (campuses.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding:30px; color:var(--muted);">No campuses found. Click "Add Campus" to provision one.</td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = campuses.map(c => `
+        <tr>
+          <td><strong style="color:var(--muted);">#${c.id}</strong></td>
+          <td>
+            <div style="font-weight:600; color:var(--ink);">${escapeHtml(c.name)}</div>
+          </td>
+          <td><code>${escapeHtml(c.code)}</code></td>
+          <td><div style="font-size:0.85rem; color:var(--muted);">${escapeHtml(c.address || 'Not specified')}</div></td>
+          <td>
+            <span class="status-pill ${c.is_active == 1 ? 'active' : 'blocked'}">
+              ${c.is_active == 1 ? 'Active' : 'Inactive'}
+            </span>
+          </td>
+          <td>${c.created_at ? c.created_at.substring(0, 10) : 'N/A'}</td>
+          <td>
+            <div class="action-btn-group">
+              <button class="btn-action-icon" title="Edit Campus" onclick="openEditCampusModal(${c.id})">
+                <i class="fa-solid fa-pen-to-square"></i>
+              </button>
+              <button class="btn-action-icon ${c.is_active == 1 ? 'danger' : 'success'}" title="${c.is_active == 1 ? 'Deactivate Campus' : 'Activate Campus'}" onclick="toggleCampusStatus(${c.id}, ${c.is_active == 1 ? 0 : 1})">
+                <i class="fa-solid ${c.is_active == 1 ? 'fa-ban' : 'fa-circle-check'}"></i>
+              </button>
+            </div>
+          </td>
+        </tr>
+      `).join('');
+    } else {
+      tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding:30px; color:var(--danger);">${json.message || 'Failed to load campuses.'}</td></tr>`;
+    }
+  } catch (err) {
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding:30px; color:var(--danger);">Error loading campuses.</td></tr>`;
+  }
+}
+
+function openAddCampusModal() {
+  document.getElementById('campusModalTitle').textContent = 'Add New Campus';
+  document.getElementById('campusFormId').value = '';
+  document.getElementById('campusFormName').value = '';
+  document.getElementById('campusFormCode').value = '';
+  document.getElementById('campusFormAddress').value = '';
+  document.getElementById('campusModal').classList.add('open');
+}
+
+function openEditCampusModal(campusId) {
+  const c = cachedCampuses.find(item => item.id == campusId);
+  if (!c) return;
+
+  document.getElementById('campusModalTitle').textContent = 'Edit Campus';
+  document.getElementById('campusFormId').value = c.id;
+  document.getElementById('campusFormName').value = c.name;
+  document.getElementById('campusFormCode').value = c.code;
+  document.getElementById('campusFormAddress').value = c.address || '';
+  document.getElementById('campusModal').classList.add('open');
+}
+
+async function handleSaveCampus(e) {
+  e.preventDefault();
+  const btn = document.getElementById('btnSaveCampus');
+  btn.disabled = true;
+  btn.textContent = 'Saving...';
+
+  const campusId = document.getElementById('campusFormId').value;
+  const isEdit = !!campusId;
+  const payload = {
+    subaction: isEdit ? 'update' : 'create',
+    id: campusId,
+    name: document.getElementById('campusFormName').value.trim(),
+    code: document.getElementById('campusFormCode').value.trim().toUpperCase(),
+    address: document.getElementById('campusFormAddress').value.trim()
+  };
+
+  try {
+    const res = await fetch(`${API_ENDPOINT}?action=manage_campuses`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const json = await res.json();
+    if (json.success) {
+      showToast(json.message || 'Campus saved successfully.', 'success');
+      closeModal('campusModal');
+      loadCampuses();
+    } else {
+      showToast(json.message || 'Failed to save campus.', 'error');
+    }
+  } catch (err) {
+    showToast('Network error saving campus.', 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Save Campus';
+  }
+}
+
+async function toggleCampusStatus(campusId, newStatus) {
+  const actionName = newStatus === 1 ? 'activate' : 'deactivate';
+  if (!confirm(`Are you sure you want to ${actionName} Campus #${campusId}?`)) return;
+
+  try {
+    const res = await fetch(`${API_ENDPOINT}?action=manage_campuses`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        subaction: 'toggle_status',
+        id: campusId,
+        is_active: newStatus
+      })
+    });
+    const json = await res.json();
+    if (json.success) {
+      showToast(`Campus status updated.`, 'success');
+      loadCampuses();
+    } else {
+      showToast(json.message || 'Action failed.', 'error');
+    }
+  } catch (err) {
+    showToast('Error updating campus status.', 'error');
+  }
+}
+
+/* ── 9. Campus Administrators Management (Master Admin Only) ────────── */
+async function loadCampusAdmins() {
+  const tbody = document.getElementById('campusAdminsTableBody');
+  if (!tbody) return;
+
+  tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; padding:30px; color:var(--muted);"><i class="fa-solid fa-spinner fa-spin"></i> Loading administrators...</td></tr>`;
+
+  try {
+    const res = await fetch(`${API_ENDPOINT}?action=manage_campus_admins`);
+    const json = await res.json();
+    const admins = json.data?.admins || [];
+
+    if (json.success && Array.isArray(admins)) {
+      cachedAdmins = admins;
+
+      if (admins.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; padding:30px; color:var(--muted);">No administrators found.</td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = admins.map(a => `
+        <tr>
+          <td><strong style="color:var(--muted);">#${a.admin_id}</strong></td>
+          <td>
+            <div style="font-weight:600; color:var(--ink);">${escapeHtml(a.full_name)}</div>
+          </td>
+          <td><code>${escapeHtml(a.username)}</code></td>
+          <td><div style="font-size:0.85rem; color:var(--muted);">${escapeHtml(a.email)}</div></td>
+          <td>
+            <div style="display:flex; align-items:center; gap:6px;">
+              <i class="fa-solid fa-building-columns" style="color:var(--accent); font-size:0.8rem;"></i>
+              <span style="font-weight:600; color:var(--ink); font-size:0.85rem;">${escapeHtml(a.campus_name || (a.role === 'master_admin' ? 'All Campuses (Global)' : 'Unassigned'))}</span>
+              ${a.campus_code ? `<span class="status-pill closed" style="font-size:0.68rem; padding:1px 5px;">${escapeHtml(a.campus_code)}</span>` : ''}
+            </div>
+          </td>
+          <td>
+            <span class="status-pill ${a.role === 'master_admin' ? 'active' : 'claimed'}" style="text-transform:uppercase;">
+              ${a.role === 'master_admin' ? 'Master Admin' : 'Campus Admin'}
+            </span>
+          </td>
+          <td>
+            <span class="status-pill ${a.status === 'active' ? 'active' : 'blocked'}">
+              ${escapeHtml(a.status || 'active')}
+            </span>
+          </td>
+          <td>${a.created_at ? a.created_at.substring(0, 10) : 'N/A'}</td>
+          <td>
+            <div class="action-btn-group">
+              <button class="btn-action-icon" title="Edit Admin" onclick="openEditAdminModal(${a.admin_id})">
+                <i class="fa-solid fa-pen-to-square"></i>
+              </button>
+              ${a.admin_id != 1 ? `
+                <button class="btn-action-icon ${a.status === 'active' ? 'danger' : 'success'}" title="${a.status === 'active' ? 'Suspend Admin' : 'Activate Admin'}" onclick="toggleAdminStatus(${a.admin_id}, '${a.status === 'active' ? 'suspended' : 'active'}')">
+                  <i class="fa-solid ${a.status === 'active' ? 'fa-ban' : 'fa-circle-check'}"></i>
+                </button>
+              ` : ''}
+            </div>
+          </td>
+        </tr>
+      `).join('');
+    } else {
+      tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; padding:30px; color:var(--danger);">${json.message || 'Failed to load administrators.'}</td></tr>`;
+    }
+  } catch (err) {
+    tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; padding:30px; color:var(--danger);">Error loading administrators.</td></tr>`;
+  }
+}
+
+function handleAdminRoleSelectChange(val) {
+  const campusGrp = document.getElementById('adminModalCampusGroup');
+  const campusSel = document.getElementById('adminModalCampusSelect');
+  if (val === 'master_admin') {
+    if (campusGrp) campusGrp.style.opacity = '0.4';
+    if (campusSel) campusSel.disabled = true;
+  } else {
+    if (campusGrp) campusGrp.style.opacity = '1';
+    if (campusSel) campusSel.disabled = false;
+  }
+}
+
+function openAddAdminModal() {
+  document.getElementById('adminModalTitle').textContent = 'Add Administrator';
+  document.getElementById('adminModalId').value = '';
+  document.getElementById('adminModalFullName').value = '';
+  document.getElementById('adminModalUsername').value = '';
+  document.getElementById('adminModalEmail').value = '';
+  document.getElementById('adminModalPassword').value = '';
+  document.getElementById('adminModalPassword').required = true;
+  document.getElementById('adminModalPasswordLabel').textContent = 'Password (Required, min 6 chars)';
+  document.getElementById('adminModalRole').value = 'campus_admin';
+  handleAdminRoleSelectChange('campus_admin');
+  document.getElementById('adminModalCampusSelect').value = '';
+  document.getElementById('campusAdminModal').classList.add('open');
+}
+
+function openEditAdminModal(adminId) {
+  const a = cachedAdmins.find(item => item.admin_id == adminId);
+  if (!a) return;
+
+  document.getElementById('adminModalTitle').textContent = 'Edit Administrator';
+  document.getElementById('adminModalId').value = a.admin_id;
+  document.getElementById('adminModalFullName').value = a.full_name;
+  document.getElementById('adminModalUsername').value = a.username;
+  document.getElementById('adminModalEmail').value = a.email;
+  document.getElementById('adminModalPassword').value = '';
+  document.getElementById('adminModalPassword').required = false;
+  document.getElementById('adminModalPasswordLabel').textContent = 'Password (leave blank to keep current)';
+  document.getElementById('adminModalRole').value = a.role === 'master_admin' ? 'master_admin' : 'campus_admin';
+  handleAdminRoleSelectChange(a.role);
+  document.getElementById('adminModalCampusSelect').value = a.campus_id || '';
+  document.getElementById('campusAdminModal').classList.add('open');
+}
+
+async function handleSaveCampusAdmin(e) {
+  e.preventDefault();
+  const btn = document.getElementById('btnSaveAdmin');
+  btn.disabled = true;
+  btn.textContent = 'Saving...';
+
+  const adminId = document.getElementById('adminModalId').value;
+  const isEdit = !!adminId;
+  const role = document.getElementById('adminModalRole').value;
+  const campusId = role === 'campus_admin' ? document.getElementById('adminModalCampusSelect').value : null;
+
+  if (role === 'campus_admin' && !campusId) {
+    showToast('Campus Admin must be assigned to an active campus.', 'error');
+    btn.disabled = false;
+    btn.textContent = 'Save Admin';
+    return;
+  }
+
+  const payload = {
+    subaction: isEdit ? 'update' : 'create',
+    admin_id: adminId,
+    full_name: document.getElementById('adminModalFullName').value.trim(),
+    username: document.getElementById('adminModalUsername').value.trim(),
+    email: document.getElementById('adminModalEmail').value.trim(),
+    role: role,
+    campus_id: campusId,
+    password: document.getElementById('adminModalPassword').value
+  };
+
+  try {
+    const res = await fetch(`${API_ENDPOINT}?action=manage_campus_admins`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const json = await res.json();
+    if (json.success) {
+      showToast(json.message || 'Administrator saved successfully.', 'success');
+      closeModal('campusAdminModal');
+      loadCampusAdmins();
+    } else {
+      showToast(json.message || 'Failed to save administrator.', 'error');
+    }
+  } catch (err) {
+    showToast('Network error saving administrator.', 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Save Admin';
+  }
+}
+
+async function toggleAdminStatus(adminId, newStatus) {
+  const actionName = newStatus === 'active' ? 'reactivate' : 'suspend';
+  if (!confirm(`Are you sure you want to ${actionName} Administrator #${adminId}?`)) return;
+
+  try {
+    const res = await fetch(`${API_ENDPOINT}?action=manage_campus_admins`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        subaction: 'toggle_status',
+        admin_id: adminId,
+        status: newStatus
+      })
+    });
+    const json = await res.json();
+    if (json.success) {
+      showToast(`Administrator marked as ${newStatus}.`, 'success');
+      loadCampusAdmins();
+    } else {
+      showToast(json.message || 'Action failed.', 'error');
+    }
+  } catch (err) {
+    showToast('Error updating administrator status.', 'error');
+  }
+}
 function showToast(message, type = 'success') {
   const container = document.getElementById('toastContainer');
   if (!container) return;

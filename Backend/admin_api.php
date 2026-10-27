@@ -10,6 +10,7 @@ header('X-Frame-Options: DENY');
 
 require_once __DIR__ . '/config/config.php';
 require_once __DIR__ . '/functions.php';
+require_once __DIR__ . '/admin_scope.php';
 
 if (!defined('ADMIN_MASTER_KEY')) {
     define('ADMIN_MASTER_KEY', get_config_val('ADMIN_MASTER_KEY', 'admin@reunite2024'));
@@ -60,11 +61,21 @@ if ($action === 'login') {
     if ($isMasterMatch) {
         $_SESSION['reunite_admin_auth'] = true;
         $_SESSION['admin_logged_in'] = true;
-        $_SESSION['role'] = 'admin';
+        $_SESSION['role'] = 'master_admin';
         $_SESSION['reunite_admin_name'] = 'System Administrator';
-        $_SESSION['reunite_admin_role'] = 'superadmin';
+        $_SESSION['reunite_admin_role'] = 'master_admin';
+        $_SESSION['admin_id'] = 1;
+        $_SESSION['admin_campus_id'] = null;
+        $_SESSION['admin_campus_name'] = 'All Campuses (Global)';
+        $_SESSION['admin_campus_code'] = 'ALL';
         
-        setcookie('reunite_admin_session', base64_encode(json_encode(['admin_id' => 1, 'username' => 'admin', 'ts' => time()])), [
+        setcookie('reunite_admin_session', base64_encode(json_encode([
+            'admin_id'  => 1,
+            'username'  => 'admin',
+            'role'      => 'master_admin',
+            'campus_id' => null,
+            'ts'        => time()
+        ])), [
             'expires'  => time() + 3600 * 8,
             'path'     => '/',
             'httponly' => true,
@@ -72,32 +83,76 @@ if ($action === 'login') {
         ]);
 
         logAccess(0, 'Admin Terminal Login (Master Key)', 'Authorization granted via Master Passcode');
-        echo json_encode(['success' => true, 'message' => 'Admin clearance granted. Welcome, System Administrator.', 'role' => 'superadmin']);
+        echo json_encode([
+            'success'     => true,
+            'message'     => 'Admin clearance granted. Welcome, System Administrator.',
+            'role'        => 'master_admin',
+            'campus_id'   => null,
+            'campus_name' => 'All Campuses (Global)'
+        ]);
         exit;
     }
 
     // Check Dedicated `admins` Table (charan_admin / charan_moderator)
     if (!empty($identifier) && !empty($password) && $conn) {
-        $stmt = $conn->prepare("SELECT admin_id, username, full_name, email, password_hash, role, status FROM admins WHERE (username = ? OR email = ?) AND status = 'active' LIMIT 1");
+        $cols = [];
+        $cr = @$conn->query("SHOW COLUMNS FROM admins");
+        if ($cr) while ($c = $cr->fetch_assoc()) $cols[] = strtolower($c['Field']);
+        $hasCampusCol = in_array('campus_id', $cols);
+
+        $sql = $hasCampusCol
+            ? "SELECT a.admin_id, a.username, a.full_name, a.email, a.password_hash, a.role, a.status, a.campus_id, c.name as campus_name, c.code as campus_code FROM admins a LEFT JOIN campuses c ON a.campus_id = c.id WHERE (a.username = ? OR a.email = ?) AND a.status = 'active' LIMIT 1"
+            : "SELECT admin_id, username, full_name, email, password_hash, role, status FROM admins WHERE (username = ? OR email = ?) AND status = 'active' LIMIT 1";
+
+        $stmt = $conn->prepare($sql);
         if ($stmt) {
             $stmt->bind_param("ss", $identifier, $identifier);
             $stmt->execute();
             $res = $stmt->get_result();
             if ($admin = $res->fetch_assoc()) {
                 if (password_verify($password, $admin['password_hash'])) {
+                    $rawRole = strtolower($admin['role'] ?? 'campus_admin');
+                    $campusId = !empty($admin['campus_id']) ? (int)$admin['campus_id'] : null;
+                    $isMaster = ($rawRole === 'master_admin' || $rawRole === 'superadmin' || ($campusId === null && in_array($rawRole, ['admin', 'superadmin', 'master_admin'])));
+                    $normalizedRole = $isMaster ? 'master_admin' : 'campus_admin';
+
                     $_SESSION['reunite_admin_auth'] = true;
-                    $_SESSION['reunite_admin_name'] = $admin['full_name'];
-                    $_SESSION['reunite_admin_role'] = strtolower($admin['role']);
-                    $_SESSION['admin_id'] = $admin['admin_id'];
+                    $_SESSION['admin_logged_in']   = true;
+                    $_SESSION['admin_id']          = (int)$admin['admin_id'];
+                    $_SESSION['reunite_admin_name']= $admin['full_name'];
+                    $_SESSION['full_name']         = $admin['full_name'];
+                    $_SESSION['username']          = $admin['username'];
+                    $_SESSION['email']             = $admin['email'];
+                    $_SESSION['role']              = $normalizedRole;
+                    $_SESSION['reunite_admin_role']= $normalizedRole;
+                    $_SESSION['admin_campus_id']   = $campusId;
+                    $_SESSION['admin_campus_name'] = $isMaster ? 'All Campuses (Global)' : ($admin['campus_name'] ?? 'Assigned Campus');
+                    $_SESSION['admin_campus_code'] = $isMaster ? 'ALL' : ($admin['campus_code'] ?? 'CAMPUS');
                     $stmt->close();
 
                     @$conn->query("UPDATE admins SET last_login = NOW() WHERE admin_id = " . (int)$admin['admin_id']);
-                    logAccess($admin['admin_id'], 'Admin Login (' . ucfirst($admin['role']) . ')', 'User: ' . $admin['username']);
+                    logAccess($admin['admin_id'], 'Admin Login (' . ucfirst($normalizedRole) . ')', 'User: ' . $admin['username'] . ', Campus: ' . $_SESSION['admin_campus_name']);
+                    
+                    setcookie('reunite_admin_session', base64_encode(json_encode([
+                        'admin_id'  => (int)$admin['admin_id'],
+                        'username'  => $admin['username'],
+                        'role'      => $normalizedRole,
+                        'campus_id' => $campusId,
+                        'ts'        => time()
+                    ])), [
+                        'expires'  => time() + 3600 * 8,
+                        'path'     => '/',
+                        'httponly' => true,
+                        'samesite' => 'Lax'
+                    ]);
+
                     echo json_encode([
-                        'success' => true,
-                        'message' => 'Admin clearance granted. Welcome, ' . $admin['full_name'],
-                        'admin_name' => $admin['full_name'],
-                        'role' => $admin['role']
+                        'success'     => true,
+                        'message'     => 'Admin clearance granted. Welcome, ' . $admin['full_name'],
+                        'admin_name'  => $admin['full_name'],
+                        'role'        => $normalizedRole,
+                        'campus_id'   => $campusId,
+                        'campus_name' => $_SESSION['admin_campus_name']
                     ]);
                     exit;
                 }
@@ -109,21 +164,23 @@ if ($action === 'login') {
     // Check Users Table where role is admin
     if (!empty($identifier) && !empty($password) && $conn) {
         $encEmail = encryptData($identifier);
-        $stmt = $conn->prepare("SELECT user_id, full_name, password_hash, role FROM users WHERE (email = ? OR email = ? OR pin = ?) LIMIT 1");
+        $stmt = $conn->prepare("SELECT user_id, full_name, password_hash, role, campus_id FROM users WHERE (email = ? OR email = ? OR pin = ?) LIMIT 1");
         if ($stmt) {
             $stmt->bind_param("sss", $encEmail, $identifier, $identifier);
             $stmt->execute();
             $res = $stmt->get_result();
             if ($user = $res->fetch_assoc()) {
-                if (in_array(strtolower($user['role']), ['admin', 'superadmin', 'moderator']) && password_verify($password, $user['password_hash'])) {
+                if (in_array(strtolower($user['role']), ['admin', 'superadmin', 'moderator', 'master_admin']) && password_verify($password, $user['password_hash'])) {
                     $_SESSION['reunite_admin_auth'] = true;
+                    $_SESSION['admin_logged_in'] = true;
                     $_SESSION['reunite_admin_name'] = $user['full_name'];
-                    $_SESSION['reunite_admin_role'] = strtolower($user['role']);
+                    $_SESSION['role'] = 'master_admin';
+                    $_SESSION['reunite_admin_role'] = 'master_admin';
                     $_SESSION['user_id'] = $user['user_id'];
                     $stmt->close();
                     
                     logAccess($user['user_id'], 'Admin Terminal Login (User Credential)', 'Role: ' . $user['role']);
-                    echo json_encode(['success' => true, 'message' => 'Admin clearance granted.', 'role' => $user['role']]);
+                    echo json_encode(['success' => true, 'message' => 'Admin clearance granted.', 'role' => 'master_admin']);
                     exit;
                 }
             }
@@ -139,11 +196,15 @@ if ($action === 'login') {
 
 // ── 2. Admin Authentication: Check Status ──────────────────
 if ($action === 'check_auth') {
+    $admin = get_admin_session();
     echo json_encode([
-        'success' => true,
-        'authenticated' => is_admin_authorized(),
-        'admin_name' => $_SESSION['reunite_admin_name'] ?? null,
-        'role' => $_SESSION['reunite_admin_role'] ?? null
+        'success'       => true,
+        'authenticated' => ($admin !== null),
+        'admin_name'    => $admin['full_name'] ?? null,
+        'role'          => $admin['role'] ?? null,
+        'campus_id'     => $admin['campus_id'] ?? null,
+        'campus_name'   => $admin['campus_name'] ?? null,
+        'is_master'     => $admin['is_master'] ?? false
     ]);
     exit;
 }
@@ -151,37 +212,49 @@ if ($action === 'check_auth') {
 // ── 3. Admin Authentication: Logout ────────────────────────
 if ($action === 'logout') {
     unset($_SESSION['reunite_admin_auth']);
+    unset($_SESSION['admin_logged_in']);
     unset($_SESSION['reunite_admin_name']);
     unset($_SESSION['reunite_admin_role']);
     unset($_SESSION['admin_id']);
+    unset($_SESSION['admin_campus_id']);
+    unset($_SESSION['admin_campus_name']);
+    setcookie('reunite_admin_session', '', ['expires' => time() - 3600, 'path' => '/']);
     echo json_encode(['success' => true, 'message' => 'Admin session terminated.']);
     exit;
 }
 
 // ── Enforcement: All subsequent endpoints require Admin Authorization ──
-if (!is_admin_authorized()) {
+$adminSession = get_admin_session();
+if (!$adminSession) {
     http_response_code(403);
-    echo json_encode(['success' => false, 'error' => 'Security clearance required. Please authenticate into Admin Terminal.']);
+    echo json_encode(['success' => false, 'code' => 'UNAUTHORIZED', 'error' => 'Security clearance required. Please authenticate into Admin Portal.']);
     exit;
 }
 
-// Role-based permission gate for Moderator
-$currentAdminRole = strtolower($_SESSION['reunite_admin_role'] ?? 'admin');
-$restrictedModeratorActions = [
+$isMasterAdmin = $adminSession['is_master'];
+$adminCampusId = $adminSession['campus_id'];
+
+// Strict Backend Gate: Master-Admin Only actions
+$masterOnlyActions = [
     'toggle_maintenance',
     'update_maintenance',
-    'purge_vectors',
-    'sync_vectors',
-    'block_user',
-    'update_trust_score',
-    'delete_report'
+    'sync_chroma',
+    'purge_chroma',
+    'scan_media_vault',
+    'purge_orphans',
+    'clear_logs',
+    'optimize_db',
+    'manage_campuses',
+    'manage_campus_admins',
+    'system_test'
 ];
 
-if ($currentAdminRole === 'moderator' && in_array($action, $restrictedModeratorActions)) {
+if (!$isMasterAdmin && in_array($action, $masterOnlyActions)) {
     http_response_code(403);
     echo json_encode([
         'success' => false,
-        'error' => 'Permission Denied: Moderator role cannot perform this privileged administrative action. Admin or SuperAdmin clearance required.'
+        'code'    => 'FORBIDDEN',
+        'error'   => 'Access Denied: Campus Administrators are strictly restricted from modifying system infrastructure, maintenance settings, and admin roles. Master Administrator clearance required.'
     ]);
     exit;
 }
@@ -418,6 +491,612 @@ if ($action === 'toggle_maintenance') {
     exit;
 }
 
+// ── 5B. Operational Command Center: Dashboard Statistics ──
+if ($action === 'stats') {
+    $scope = get_admin_campus_scope();
+    $stats = [
+        'total_users'      => 0,
+        'active_users'     => 0,
+        'total_lost'       => 0,
+        'active_lost'      => 0,
+        'total_found'      => 0,
+        'active_found'     => 0,
+        'total_matches'    => 0,
+        'verified_matches' => 0,
+        'pending_claims'   => 0,
+        'resolved_cases'   => 0,
+        'campus_id'        => $scope,
+        'campus_name'      => $adminSession['campus_name'] ?? 'All Campuses'
+    ];
+
+    if ($conn) {
+        $uWhere = ($scope !== null) ? " WHERE campus_id = $scope" : "";
+        $lWhere = ($scope !== null) ? " WHERE campus_id = $scope" : "";
+        $fWhere = ($scope !== null) ? " WHERE campus_id = $scope" : "";
+        $mWhere = ($scope !== null) ? " WHERE campus_id = $scope" : "";
+        $cWhere = ($scope !== null) ? " WHERE campus_id = $scope" : "";
+
+        // Users
+        $q = $conn->query("SELECT COUNT(*) as tot, SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as act FROM users$uWhere");
+        if ($q && $r = $q->fetch_assoc()) {
+            $stats['total_users'] = (int)($r['tot'] ?? 0);
+            $stats['active_users'] = (int)($r['act'] ?? 0);
+        }
+
+        // Lost
+        $q = $conn->query("SELECT COUNT(*) as tot, SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as act FROM lost_reports$lWhere");
+        if ($q && $r = $q->fetch_assoc()) {
+            $stats['total_lost'] = (int)($r['tot'] ?? 0);
+            $stats['active_lost'] = (int)($r['act'] ?? 0);
+        }
+
+        // Found
+        $q = $conn->query("SELECT COUNT(*) as tot, SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as act FROM found_reports$fWhere");
+        if ($q && $r = $q->fetch_assoc()) {
+            $stats['total_found'] = (int)($r['tot'] ?? 0);
+            $stats['active_found'] = (int)($r['act'] ?? 0);
+        }
+
+        // Matches
+        $q = $conn->query("SELECT COUNT(*) as tot, SUM(CASE WHEN status = 'verified' THEN 1 ELSE 0 END) as ver FROM matches$mWhere");
+        if ($q && $r = $q->fetch_assoc()) {
+            $stats['total_matches'] = (int)($r['tot'] ?? 0);
+            $stats['verified_matches'] = (int)($r['ver'] ?? 0);
+        }
+
+        // Recovery cases
+        $q = $conn->query("SELECT COUNT(*) as tot, 
+            SUM(CASE WHEN status IN ('pending_verification', 'in_progress', 'pending') THEN 1 ELSE 0 END) as pend,
+            SUM(CASE WHEN status IN ('Completed', 'resolved', 'handed_off') THEN 1 ELSE 0 END) as res
+            FROM recovery_cases$cWhere");
+        if ($q && $r = $q->fetch_assoc()) {
+            $stats['pending_claims'] = (int)($r['pend'] ?? 0);
+            $stats['resolved_cases'] = (int)($r['res'] ?? 0);
+        }
+    }
+
+    echo json_encode(['success' => true, 'data' => $stats]);
+    exit;
+}
+
+// ── 5C. Operational Command Center: User Management ─────────
+if ($action === 'users') {
+    $scope = get_admin_campus_scope();
+    $search = trim($_GET['search'] ?? '');
+    $role = trim($_GET['role'] ?? '');
+    $status = trim($_GET['status'] ?? '');
+
+    $where = [];
+    if ($scope !== null) {
+        $where[] = "u.campus_id = $scope";
+    }
+    if (!empty($role)) {
+        $safeRole = $conn->real_escape_string($role);
+        $where[] = "u.role = '$safeRole'";
+    }
+    if (!empty($status)) {
+        $safeStat = $conn->real_escape_string($status);
+        $where[] = "u.status = '$safeStat'";
+    }
+
+    $whereSql = !empty($where) ? ("WHERE " . implode(' AND ', $where)) : "";
+    $sql = "SELECT u.user_id, u.full_name, u.pin, u.email, u.phone, u.college, u.branch, u.trust_score, u.role, u.status, u.created_at, u.campus_id, c.name as campus_name
+            FROM users u
+            LEFT JOIN campuses c ON u.campus_id = c.id
+            $whereSql
+            ORDER BY u.user_id DESC LIMIT 150";
+
+    $users = [];
+    $res = $conn->query($sql);
+    if ($res) {
+        while ($r = $res->fetch_assoc()) {
+            $decEmail = !empty($r['email']) ? decryptData($r['email']) : '';
+            $decPhone = !empty($r['phone']) ? decryptData($r['phone']) : '';
+
+            if (!empty($search)) {
+                $s = strtolower($search);
+                $match = str_contains(strtolower($r['full_name'] ?? ''), $s) ||
+                         str_contains(strtolower($r['pin'] ?? ''), $s) ||
+                         str_contains(strtolower($decEmail), $s);
+                if (!$match) continue;
+            }
+
+            $users[] = [
+                'user_id'     => (int)$r['user_id'],
+                'full_name'   => $r['full_name'],
+                'pin'         => $r['pin'],
+                'email'       => $decEmail ?: $r['email'],
+                'phone'       => $decPhone ?: $r['phone'],
+                'college'     => $r['campus_name'] ?? ($r['college'] ?: 'SVGP'),
+                'branch'      => $r['branch'] ?: 'General',
+                'trust_score' => (int)($r['trust_score'] ?? 100),
+                'role'        => $r['role'] ?? 'user',
+                'status'      => $r['status'] ?? 'active',
+                'campus_id'   => $r['campus_id'],
+                'created_at'  => $r['created_at']
+            ];
+        }
+    }
+
+    echo json_encode(['success' => true, 'count' => count($users), 'users' => $users]);
+    exit;
+}
+
+// ── 5D. Update User Profile / Status / Password ─────────────
+if ($action === 'update_user') {
+    $req = getRequestData();
+    $userId = (int)($req['user_id'] ?? $_POST['user_id'] ?? 0);
+    $status = trim($req['status'] ?? $_POST['status'] ?? '');
+    $role = trim($req['role'] ?? $_POST['role'] ?? '');
+    $trust = isset($req['trust_score']) ? (int)$req['trust_score'] : (isset($_POST['trust_score']) ? (int)$_POST['trust_score'] : null);
+    $newPass = trim($req['password'] ?? $_POST['password'] ?? '');
+
+    $chk = $conn->query("SELECT user_id, campus_id, role FROM users WHERE user_id = $userId LIMIT 1")->fetch_assoc();
+    if (!$chk) {
+        echo json_encode(['success' => false, 'error' => 'User account not found.']);
+        exit;
+    }
+
+    // Anti-IDOR check
+    assert_campus_access($chk['campus_id'], 'user account');
+
+    // Campus admin cannot promote someone to admin or modify master admins
+    if (!$isMasterAdmin && ($role === 'admin' || $role === 'master_admin' || $chk['role'] === 'admin')) {
+        http_response_code(403);
+        echo json_encode(['success' => false, 'error' => 'Permission Denied: Campus Administrators cannot modify administrator accounts or change user roles to admin.']);
+        exit;
+    }
+
+    $updates = [];
+    if (!empty($status) && in_array($status, ['active', 'blocked'])) {
+        $updates[] = "status = '$status'";
+    }
+    if ($isMasterAdmin && !empty($role) && in_array($role, ['user', 'admin'])) {
+        $updates[] = "role = '$role'";
+    }
+    if ($trust !== null && $trust >= 0 && $trust <= 100) {
+        $updates[] = "trust_score = $trust";
+    }
+    if (!empty($newPass)) {
+        $hash = password_hash($newPass, PASSWORD_BCRYPT);
+        $updates[] = "password_hash = '$hash'";
+    }
+
+    if (!empty($updates)) {
+        $conn->query("UPDATE users SET " . implode(', ', $updates) . " WHERE user_id = $userId");
+        log_admin_action('Update User', 'user', $userId, "Updated fields: " . implode(', ', $updates));
+    }
+
+    echo json_encode(['success' => true, 'message' => "User #$userId updated successfully."]);
+    exit;
+}
+
+// ── 5E. Delete User Account ─────────────────────────────────
+if ($action === 'delete_user') {
+    $req = getRequestData();
+    $userId = (int)($req['user_id'] ?? $_POST['user_id'] ?? 0);
+
+    $chk = $conn->query("SELECT user_id, campus_id, role FROM users WHERE user_id = $userId LIMIT 1")->fetch_assoc();
+    if (!$chk) {
+        echo json_encode(['success' => false, 'error' => 'User account not found.']);
+        exit;
+    }
+
+    assert_campus_access($chk['campus_id'], 'user account');
+
+    if (!$isMasterAdmin && $chk['role'] === 'admin') {
+        http_response_code(403);
+        echo json_encode(['success' => false, 'error' => 'Permission Denied: Cannot delete an administrator account.']);
+        exit;
+    }
+
+    $conn->query("DELETE FROM users WHERE user_id = $userId");
+    log_admin_action('Delete User', 'user', $userId, "User account #$userId deleted");
+    echo json_encode(['success' => true, 'message' => "User #$userId deleted successfully."]);
+    exit;
+}
+
+// ── 5F. Lost Property Reports Query ────────────────────────
+if ($action === 'lost_reports') {
+    $scope = get_admin_campus_scope();
+    $search = trim($_GET['search'] ?? '');
+    $cat = trim($_GET['category'] ?? '');
+    $stat = trim($_GET['status'] ?? '');
+
+    $where = [];
+    if ($scope !== null) {
+        $where[] = "l.campus_id = $scope";
+    }
+    if (!empty($cat)) {
+        $safeCat = $conn->real_escape_string($cat);
+        $where[] = "l.category = '$safeCat'";
+    }
+    if (!empty($stat)) {
+        $safeStat = $conn->real_escape_string($stat);
+        $where[] = "l.status = '$safeStat'";
+    }
+
+    $whereSql = !empty($where) ? ("WHERE " . implode(' AND ', $where)) : "";
+    $sql = "SELECT l.*, u.full_name as user_name, u.email as user_email, u.phone as user_phone, c.name as campus_name
+            FROM lost_reports l
+            LEFT JOIN users u ON l.user_id = u.user_id
+            LEFT JOIN campuses c ON l.campus_id = c.id
+            $whereSql
+            ORDER BY l.id DESC LIMIT 150";
+
+    $reports = [];
+    $res = $conn->query($sql);
+    if ($res) {
+        while ($r = $res->fetch_assoc()) {
+            if (!empty($search)) {
+                $s = strtolower($search);
+                $match = str_contains(strtolower($r['title'] ?? ''), $s) ||
+                         str_contains(strtolower($r['location'] ?? ''), $s) ||
+                         str_contains(strtolower($r['description'] ?? ''), $s);
+                if (!$match) continue;
+            }
+            $r['user_email_decrypted'] = !empty($r['user_email']) ? decryptData($r['user_email']) : '';
+            $reports[] = $r;
+        }
+    }
+    echo json_encode(['success' => true, 'reports' => $reports]);
+    exit;
+}
+
+// ── 5G. Found Property Reports Query ───────────────────────
+if ($action === 'found_reports') {
+    $scope = get_admin_campus_scope();
+    $search = trim($_GET['search'] ?? '');
+    $cat = trim($_GET['category'] ?? '');
+    $stat = trim($_GET['status'] ?? '');
+
+    $where = [];
+    if ($scope !== null) {
+        $where[] = "f.campus_id = $scope";
+    }
+    if (!empty($cat)) {
+        $safeCat = $conn->real_escape_string($cat);
+        $where[] = "f.category = '$safeCat'";
+    }
+    if (!empty($stat)) {
+        $safeStat = $conn->real_escape_string($stat);
+        $where[] = "f.status = '$safeStat'";
+    }
+
+    $whereSql = !empty($where) ? ("WHERE " . implode(' AND ', $where)) : "";
+    $sql = "SELECT f.*, u.full_name as user_name, u.email as user_email, u.phone as user_phone, c.name as campus_name
+            FROM found_reports f
+            LEFT JOIN users u ON f.user_id = u.user_id
+            LEFT JOIN campuses c ON f.campus_id = c.id
+            $whereSql
+            ORDER BY f.id DESC LIMIT 150";
+
+    $reports = [];
+    $res = $conn->query($sql);
+    if ($res) {
+        while ($r = $res->fetch_assoc()) {
+            if (!empty($search)) {
+                $s = strtolower($search);
+                $match = str_contains(strtolower($r['title'] ?? ''), $s) ||
+                         str_contains(strtolower($r['location'] ?? ''), $s) ||
+                         str_contains(strtolower($r['description'] ?? ''), $s);
+                if (!$match) continue;
+            }
+            $r['user_email_decrypted'] = !empty($r['user_email']) ? decryptData($r['user_email']) : '';
+            $reports[] = $r;
+        }
+    }
+    echo json_encode(['success' => true, 'reports' => $reports]);
+    exit;
+}
+
+// ── 5H. Update Report Status ────────────────────────────────
+if ($action === 'update_report_status') {
+    $req = getRequestData();
+    $type = strtolower(trim($req['type'] ?? $_POST['type'] ?? ''));
+    $id = (int)($req['id'] ?? $_POST['id'] ?? 0);
+    $status = trim($req['status'] ?? $_POST['status'] ?? '');
+
+    if (!in_array($type, ['lost', 'found']) || $id <= 0 || !in_array($status, ['active', 'matched', 'claimed', 'closed'])) {
+        echo json_encode(['success' => false, 'error' => 'Invalid parameters.']);
+        exit;
+    }
+
+    $tbl = ($type === 'lost') ? 'lost_reports' : 'found_reports';
+    $rRow = $conn->query("SELECT id, campus_id FROM $tbl WHERE id = $id LIMIT 1")->fetch_assoc();
+    if (!$rRow) {
+        echo json_encode(['success' => false, 'error' => 'Report not found.']);
+        exit;
+    }
+    assert_campus_access($rRow['campus_id'], "$type report");
+
+    $conn->query("UPDATE $tbl SET status = '$status' WHERE id = $id");
+    log_admin_action('Update Report Status', $type . '_report', $id, "Status set to $status");
+    echo json_encode(['success' => true, 'message' => "Report #$id status set to $status."]);
+    exit;
+}
+
+// ── 5I. AI Matches Query ────────────────────────────────────
+if ($action === 'matches') {
+    $scope = get_admin_campus_scope();
+    $where = ($scope !== null) ? "WHERE m.campus_id = $scope" : "";
+
+    $sql = "SELECT m.id, m.lost_report_id, m.found_report_id, m.similarity_score as confidence_score, 
+                   m.status, m.return_type, m.created_at, m.campus_id,
+                   lr.title as lost_title, lr.category as lost_cat, lr.location as lost_loc,
+                   fr.title as found_title, fr.category as found_cat, fr.image_path as found_image
+            FROM matches m
+            LEFT JOIN lost_reports lr ON m.lost_report_id = lr.id
+            LEFT JOIN found_reports fr ON m.found_report_id = fr.id
+            $where
+            ORDER BY m.id DESC LIMIT 100";
+
+    $matches = [];
+    $res = $conn->query($sql);
+    if ($res) {
+        while ($r = $res->fetch_assoc()) {
+            $matches[] = $r;
+        }
+    }
+    echo json_encode(['success' => true, 'matches' => $matches]);
+    exit;
+}
+
+// ── 5J. Update Match Status ─────────────────────────────────
+if ($action === 'update_match_status') {
+    $req = getRequestData();
+    $matchId = (int)($req['id'] ?? $_POST['id'] ?? 0);
+    $status = trim($req['status'] ?? $_POST['status'] ?? '');
+
+    if ($matchId <= 0 || !in_array($status, ['pending', 'verified', 'rejected'])) {
+        echo json_encode(['success' => false, 'error' => 'Invalid parameters.']);
+        exit;
+    }
+
+    $mRow = $conn->query("SELECT id, campus_id FROM matches WHERE id = $matchId LIMIT 1")->fetch_assoc();
+    if (!$mRow) {
+        echo json_encode(['success' => false, 'error' => 'Match not found.']);
+        exit;
+    }
+    assert_campus_access($mRow['campus_id'], 'match');
+
+    $conn->query("UPDATE matches SET status = '$status' WHERE id = $matchId");
+    log_admin_action('Update Match Status', 'match', $matchId, "Status set to: $status");
+    echo json_encode(['success' => true, 'message' => "Match #$matchId updated to $status."]);
+    exit;
+}
+
+// ── 5K. Activity & Access Audit Logs (Scoped) ───────────────
+if ($action === 'logs') {
+    $scope = get_admin_campus_scope();
+    $search = trim($_GET['search'] ?? '');
+    $cat = trim($_GET['category'] ?? '');
+
+    $where = [];
+    if (!empty($cat)) {
+        $safeCat = $conn->real_escape_string($cat);
+        $where[] = "l.category = '$safeCat'";
+    }
+
+    $whereSql = !empty($where) ? ("WHERE " . implode(' AND ', $where)) : "";
+    $sql = "SELECT l.* FROM logs l $whereSql ORDER BY l.id DESC LIMIT 150";
+
+    $logs = [];
+    $res = @$conn->query($sql);
+    if ($res) {
+        while ($r = $res->fetch_assoc()) {
+            if (!empty($search)) {
+                $s = strtolower($search);
+                $match = str_contains(strtolower($r['action'] ?? ''), $s) ||
+                         str_contains(strtolower($r['operator_name'] ?? ''), $s) ||
+                         str_contains(strtolower($r['details'] ?? ''), $s);
+                if (!$match) continue;
+            }
+            $logs[] = $r;
+        }
+    }
+
+    // Also fallback to access_logs if logs is empty
+    if (empty($logs)) {
+        $q = $conn->query("SELECT log_id as id, action, ip_address, device_info, log_time as created_at FROM access_logs ORDER BY log_id DESC LIMIT 100");
+        if ($q) {
+            while ($r = $q->fetch_assoc()) {
+                $r['operator_name'] = 'System';
+                $r['category'] = 'system_event';
+                $logs[] = $r;
+            }
+        }
+    }
+
+    echo json_encode(['success' => true, 'count' => count($logs), 'logs' => $logs]);
+    exit;
+}
+
+// ── 5L. Master Admin: Manage Campuses ───────────────────────
+if ($action === 'manage_campuses') {
+    if (!$isMasterAdmin) {
+        http_response_code(403);
+        echo json_encode(['success' => false, 'error' => 'Permission Denied: Only Master Admin can manage campuses.']);
+        exit;
+    }
+
+    if ($method === 'POST') {
+        $req = getRequestData();
+        $id = (int)($req['id'] ?? $_POST['id'] ?? 0);
+        $name = trim($req['name'] ?? $_POST['name'] ?? '');
+        $code = strtoupper(trim($req['code'] ?? $_POST['code'] ?? ''));
+        $status = in_array(trim($req['status'] ?? $_POST['status'] ?? ''), ['active', 'inactive']) ? trim($req['status'] ?? $_POST['status'] ?? '') : 'active';
+
+        if (empty($name) || empty($code)) {
+            echo json_encode(['success' => false, 'error' => 'Campus Name and Code are required.']);
+            exit;
+        }
+
+        if ($id > 0) {
+            $stmt = $conn->prepare("UPDATE campuses SET name = ?, code = ?, status = ? WHERE id = ?");
+            $stmt->bind_param("sssi", $name, $code, $status, $id);
+            $stmt->execute();
+            $stmt->close();
+            log_admin_action('Update Campus', 'campus', $id, "Updated: $name ($code)");
+            echo json_encode(['success' => true, 'message' => "Campus '$name' updated successfully."]);
+        } else {
+            $stmt = $conn->prepare("INSERT INTO campuses (name, code, status) VALUES (?, ?, ?)");
+            $stmt->bind_param("sss", $name, $code, $status);
+            $stmt->execute();
+            $newId = $stmt->insert_id;
+            $stmt->close();
+            log_admin_action('Create Campus', 'campus', $newId, "Created: $name ($code)");
+            echo json_encode(['success' => true, 'message' => "Campus '$name' created successfully."]);
+        }
+        exit;
+    }
+
+    // GET: List campuses with metrics
+    $campuses = [];
+    $res = $conn->query("
+        SELECT c.*,
+            (SELECT COUNT(*) FROM users u WHERE u.campus_id = c.id) as student_count,
+            (SELECT COUNT(*) FROM lost_reports l WHERE l.campus_id = c.id) as lost_count,
+            (SELECT COUNT(*) FROM found_reports f WHERE f.campus_id = c.id) as found_count,
+            (SELECT COUNT(*) FROM admins a WHERE a.campus_id = c.id) as admin_count
+        FROM campuses c
+        ORDER BY c.id ASC
+    ");
+    if ($res) {
+        while ($r = $res->fetch_assoc()) {
+            $campuses[] = $r;
+        }
+    }
+    echo json_encode(['success' => true, 'campuses' => $campuses]);
+    exit;
+}
+
+// ── 5M. Master Admin: Manage Campus Admins ───────────────────
+if ($action === 'manage_campus_admins') {
+    if (!$isMasterAdmin) {
+        http_response_code(403);
+        echo json_encode(['success' => false, 'error' => 'Permission Denied: Only Master Admin can manage administrators.']);
+        exit;
+    }
+
+    if ($method === 'POST') {
+        $req = getRequestData();
+        $adminId = (int)($req['admin_id'] ?? $_POST['admin_id'] ?? 0);
+        $username = trim($req['username'] ?? $_POST['username'] ?? '');
+        $fullName = trim($req['full_name'] ?? $_POST['full_name'] ?? '');
+        $email = trim($req['email'] ?? $_POST['email'] ?? '');
+        $password = trim($req['password'] ?? $_POST['password'] ?? '');
+        $campusId = !empty($req['campus_id'] ?? $_POST['campus_id'] ?? null) ? (int)($req['campus_id'] ?? $_POST['campus_id']) : null;
+        $role = trim($req['role'] ?? $_POST['role'] ?? 'campus_admin');
+        $status = in_array(trim($req['status'] ?? $_POST['status'] ?? ''), ['active', 'suspended']) ? trim($req['status'] ?? $_POST['status'] ?? '') : 'active';
+
+        if ($role === 'campus_admin' && empty($campusId)) {
+            echo json_encode(['success' => false, 'error' => 'A Campus Administrator must be assigned to exactly one campus.']);
+            exit;
+        }
+
+        if ($adminId > 0) {
+            // Update existing
+            $updates = ["full_name = '$fullName'", "email = '$email'", "status = '$status'"];
+            if ($role === 'master_admin') {
+                $updates[] = "role = 'master_admin'";
+                $updates[] = "campus_id = NULL";
+            } else {
+                $updates[] = "role = 'campus_admin'";
+                $updates[] = "campus_id = $campusId";
+            }
+            if (!empty($password)) {
+                $hash = password_hash($password, PASSWORD_BCRYPT);
+                $updates[] = "password_hash = '$hash'";
+            }
+            $conn->query("UPDATE admins SET " . implode(', ', $updates) . " WHERE admin_id = $adminId");
+            log_admin_action('Update Campus Admin', 'admin', $adminId, "Updated $username ($role)");
+            echo json_encode(['success' => true, 'message' => "Admin account '$username' updated successfully."]);
+        } else {
+            // Create new
+            if (empty($username) || empty($email) || empty($password)) {
+                echo json_encode(['success' => false, 'error' => 'Username, Email, and Password are required.']);
+                exit;
+            }
+            $hash = password_hash($password, PASSWORD_BCRYPT);
+            $stmt = $conn->prepare("INSERT INTO admins (username, full_name, email, password_hash, role, campus_id, status) VALUES (?, ?, ?, ?, ?, ?, ?)");
+            $stmt->bind_param("sssssis", $username, $fullName, $email, $hash, $role, $campusId, $status);
+            $stmt->execute();
+            $newAdminId = $stmt->insert_id;
+            $stmt->close();
+            log_admin_action('Create Campus Admin', 'admin', $newAdminId, "Created $username as $role for campus #$campusId");
+            echo json_encode(['success' => true, 'message' => "Campus Admin '$username' created successfully."]);
+        }
+        exit;
+    }
+
+    // GET: List all administrators
+    $admins = [];
+    $res = $conn->query("
+        SELECT a.admin_id, a.username, a.full_name, a.email, a.role, a.status, a.campus_id, a.last_login, a.created_at,
+               c.name as campus_name, c.code as campus_code
+        FROM admins a
+        LEFT JOIN campuses c ON a.campus_id = c.id
+        ORDER BY a.admin_id ASC
+    ");
+    if ($res) {
+        while ($r = $res->fetch_assoc()) {
+            $admins[] = $r;
+        }
+    }
+    echo json_encode(['success' => true, 'admins' => $admins]);
+    exit;
+}
+
+// ── 5N. Master Admin: Audit Logs Trail ──────────────────────
+if ($action === 'admin_audit_logs') {
+    $scope = get_admin_campus_scope();
+    $where = ($scope !== null) ? "WHERE a.campus_id = $scope" : "";
+
+    $logs = [];
+    $res = $conn->query("
+        SELECT a.*, c.name as campus_name
+        FROM admin_audit_logs a
+        LEFT JOIN campuses c ON a.campus_id = c.id
+        $where
+        ORDER BY a.id DESC LIMIT 200
+    ");
+    if ($res) {
+        while ($r = $res->fetch_assoc()) {
+            $logs[] = $r;
+        }
+    }
+    echo json_encode(['success' => true, 'audit_logs' => $logs]);
+    exit;
+}
+
+// ── 5O. Master Admin: System Diagnostics Ping ────────────────
+if ($action === 'system_test') {
+    $flaskUrl = (defined('FLASK_AI_URL') ? FLASK_AI_URL : 'https://reunite-ai-backend.onrender.com');
+    $dbOk = ($conn && $conn->ping());
+
+    $startT = microtime(true);
+    $ch = curl_init("$flaskUrl/status");
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 2);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 3);
+    $resp = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+    $aiLatencyMs = round((microtime(true) - $startT) * 1000);
+    $aiOk = ($httpCode === 200 && $resp);
+
+    echo json_encode([
+        'success'            => true,
+        'database'           => $dbOk ? 'Connected (MySQL)' : 'Disconnected',
+        'ai_backend_status'  => $aiOk ? 'Online' : 'Offline',
+        'ai_backend_url'     => $flaskUrl,
+        'ai_latency_ms'      => $aiLatencyMs,
+        'smtp_gateway_status'=> (defined('BREVO_API_KEY') && !empty(BREVO_API_KEY)) ? 'Configured (Brevo)' : 'Configured (Default SMTP)'
+    ]);
+    exit;
+}
+
 // ── 6. List Reports with Full Digital DNA Linkage ──────────
 if ($action === 'list_reports') {
     $type = strtolower(trim($_GET['type'] ?? 'all'));
@@ -439,11 +1118,16 @@ if ($action === 'list_reports') {
         $fPk = in_array('found_id', $fCols) ? 'found_id' : 'id';
         $fUserCol = in_array('finder_id', $fCols) ? 'finder_id' : (in_array('user_id', $fCols) ? 'user_id' : 'id');
 
+        $scope = get_admin_campus_scope();
+        $lCampusClause = ($scope !== null) ? " WHERE (l.campus_id = $scope OR u.campus_id = $scope)" : "";
+        $fCampusClause = ($scope !== null) ? " WHERE (f.campus_id = $scope OR u.campus_id = $scope)" : "";
+
         if ($type === 'all' || $type === 'lost') {
             $sql = "SELECT l.*, u.full_name as user_name, u.email as user_email, d.encrypted_dna as dna_json, d.dna_id 
                     FROM lost_reports l
                     LEFT JOIN users u ON l.`$lUserCol` = u.user_id
                     LEFT JOIN digital_dna d ON (d.report_id = l.`$lPk` AND UPPER(d.report_type) = 'LOST')
+                    $lCampusClause
                     ORDER BY l.`$lPk` DESC LIMIT ?";
             $stmt = $conn->prepare($sql);
             if ($stmt) {
@@ -468,6 +1152,7 @@ if ($action === 'list_reports') {
                     FROM found_reports f
                     LEFT JOIN users u ON f.`$fUserCol` = u.user_id
                     LEFT JOIN digital_dna d ON (d.report_id = f.`$fPk` AND UPPER(d.report_type) = 'FOUND')
+                    $fCampusClause
                     ORDER BY f.`$fPk` DESC LIMIT ?";
             $stmt = $conn->prepare($sql);
             if ($stmt) {
@@ -550,6 +1235,7 @@ if ($action === 'recovery_cases') {
         ensureRecoveryCasesSchema();
     }
 
+    $scope = get_admin_campus_scope();
     $rcCols = [];
     $rcRes = @$conn->query("SHOW COLUMNS FROM recovery_cases");
     if ($rcRes) while ($rc = $rcRes->fetch_assoc()) $rcCols[] = strtolower($rc['Field']);
@@ -557,9 +1243,12 @@ if ($action === 'recovery_cases') {
     $rcRepCol = in_array('report_id', $rcCols) ? 'report_id' : (in_array('found_id', $rcCols) ? 'found_id' : 'report_id');
 
     $cases = [];
-    $sql = "SELECT r.*, u.full_name as claimant_name, u.email as claimant_email, u.phone as claimant_phone
+    $rcWhere = ($scope !== null) ? " WHERE (r.campus_id = $scope OR u.campus_id = $scope)" : "";
+    $sql = "SELECT r.*, u.full_name as claimant_name, u.email as claimant_email, u.phone as claimant_phone, c.name as campus_name
             FROM recovery_cases r
             LEFT JOIN users u ON r.claimant_id = u.user_id
+            LEFT JOIN campuses c ON r.campus_id = c.id
+            $rcWhere
             ORDER BY r.`$rcPk` DESC LIMIT 100";
     $res = $conn->query($sql);
     if ($res) {
@@ -574,7 +1263,9 @@ if ($action === 'recovery_cases') {
                 'proof_description' => $row['proof_details'] ?? '',
                 'proof_image_path' => $row['proof_image_path'] ?? null,
                 'status' => $row['status'] ?? 'pending_verification',
-                'return_type' => $row['return_type'] ?? 'in_person',
+                'return_type' => $row['return_type'] ?? ($row['return_method'] ?? 'in_person'),
+                'campus_id' => $row['campus_id'] ?? null,
+                'campus_name' => $row['campus_name'] ?? null,
                 'created_at' => $row['created_at'] ?? date('Y-m-d')
             ];
         }
@@ -612,6 +1303,9 @@ if ($action === 'update_recovery_case') {
         exit;
     }
 
+    // Anti-IDOR check
+    assert_campus_access($cRow['campus_id'] ?? null, 'recovery case');
+
     $uStmt = $conn->prepare("UPDATE recovery_cases SET status = ? WHERE `$rcPk` = ?");
     $uStmt->bind_param("si", $newStatus, $caseId);
     $uStmt->execute();
@@ -630,7 +1324,7 @@ if ($action === 'update_recovery_case') {
         }
     }
 
-    logAccess(0, 'Recovery Case Status Updated', "Case ID: $caseId, Status: $newStatus");
+    log_admin_action('Update Recovery Case Status', 'recovery_case', $caseId, "Status updated to: $newStatus");
     echo json_encode(['success' => true, 'message' => "Recovery case #$caseId updated to $newStatus."]);
     exit;
 }
@@ -641,10 +1335,18 @@ if ($action === 'get_banned_claimants') {
         echo json_encode(['success' => false, 'error' => 'Unauthorized admin access.']);
         exit;
     }
+    $scope = get_admin_campus_scope();
     $banned = [];
     $bCheck = @$conn->query("SHOW COLUMNS FROM users LIKE 'claim_ban_until'");
     if ($bCheck && $bCheck->num_rows > 0) {
-        $res = $conn->query("SELECT id, name, email, pin, claim_ban_until, TIMESTAMPDIFF(SECOND, NOW(), claim_ban_until) as seconds_remaining FROM users WHERE claim_ban_until > NOW() ORDER BY claim_ban_until DESC");
+        $uCols = [];
+        $uc = @$conn->query("SHOW COLUMNS FROM users");
+        if ($uc) while ($c = $uc->fetch_assoc()) $uCols[] = strtolower($c['Field']);
+        $uNameCol = in_array('full_name', $uCols) ? 'full_name' : (in_array('name', $uCols) ? 'name' : 'user_id');
+        $uPk = in_array('user_id', $uCols) ? 'user_id' : 'id';
+
+        $bWhere = ($scope !== null) ? " AND campus_id = $scope" : "";
+        $res = $conn->query("SELECT `$uPk` as id, `$uNameCol` as name, email, pin, claim_ban_until, campus_id, TIMESTAMPDIFF(SECOND, NOW(), claim_ban_until) as seconds_remaining FROM users WHERE claim_ban_until > NOW()$bWhere ORDER BY claim_ban_until DESC");
         if ($res) {
             while ($r = $res->fetch_assoc()) {
                 $banned[] = [
@@ -653,6 +1355,7 @@ if ($action === 'get_banned_claimants') {
                     'email' => !empty($r['email']) ? decryptData($r['email']) : '',
                     'pin' => $r['pin'] ?? '',
                     'ban_until' => $r['claim_ban_until'],
+                    'campus_id' => $r['campus_id'] ?? null,
                     'seconds_remaining' => (int)$r['seconds_remaining']
                 ];
             }
@@ -674,9 +1377,16 @@ if ($action === 'lift_claim_ban') {
         echo json_encode(['success' => false, 'error' => 'Invalid user ID.']);
         exit;
     }
+
+    // Anti-IDOR check
+    $uRow = $conn->query("SELECT user_id, campus_id FROM users WHERE user_id = $targetUserId LIMIT 1")->fetch_assoc();
+    if ($uRow) {
+        assert_campus_access($uRow['campus_id'] ?? null, 'claimant ban');
+    }
+
     $lifted = liftClaimantBan($targetUserId);
     if ($lifted) {
-        logAccess(0, 'Claim Ban Lifted', "Admin lifted claim ban for User #$targetUserId");
+        log_admin_action('Lift Claim Ban', 'user', $targetUserId, "Lifted ban for student #$targetUserId");
         echo json_encode(['success' => true, 'message' => "Claim ban lifted for user #$targetUserId."]);
     } else {
         echo json_encode(['success' => false, 'error' => "Failed to lift ban for user #$targetUserId."]);
@@ -705,8 +1415,15 @@ if ($action === 'delete_report') {
         $stmt->execute();
         $row = $stmt->get_result()->fetch_assoc();
         $stmt->close();
-        if ($row && !empty($row['image_path'])) {
-            $imagePath = $row['image_path'];
+        if ($row) {
+            // Anti-IDOR check
+            assert_campus_access($row['campus_id'] ?? null, "$reportType report");
+            if (!empty($row['image_path'])) {
+                $imagePath = $row['image_path'];
+            }
+        } else {
+            echo json_encode(['success' => false, 'error' => 'Report record not found.']);
+            exit;
         }
     }
 

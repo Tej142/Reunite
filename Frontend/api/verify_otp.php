@@ -36,15 +36,18 @@ if (!isset($conn) || !$conn) {
 
 // 2. Validate User Authentication
 $rawUid = $_SESSION['user_id'] ?? ($_SESSION['user']['user_id'] ?? ($_SESSION['user']['id'] ?? null));
-$userId = filter_var($rawUid, FILTER_VALIDATE_INT, ["options" => ["min_range" => 1]]);
-if (!$userId) {
+$userId = filter_var($rawUid, FILTER_VALIDATE_INT, ["options" => ["min_range" => 1]]) ?: 0;
+$isAdmin = !empty($_SESSION['admin_logged_in']) || !empty($_SESSION['reunite_admin_auth']) || in_array(strtolower($_SESSION['role'] ?? ''), ['admin', 'superadmin', 'staff', 'moderator']);
+$adminId = filter_var($_SESSION['admin_id'] ?? null, FILTER_VALIDATE_INT, ["options" => ["min_range" => 1]]) ?: 0;
+
+if (!$userId && !$isAdmin) {
     http_response_code(401);
     echo json_encode(['success' => false, 'code' => 'UNAUTHORIZED', 'message' => 'Please login to verify the handover code.']);
     exit;
 }
 
 // 3. Feature Flag Enforcement
-if (!isClaimModuleActiveForUser($userId)) {
+if ($userId && !isClaimModuleActiveForUser($userId)) {
     http_response_code(503);
     echo json_encode(['success' => false, 'code' => 'MODULE_UPGRADE', 'message' => 'Claiming is currently being upgraded and will be available shortly.']);
     exit;
@@ -162,12 +165,34 @@ try {
     // 7. Authorization Check:
     // User must be the finder, OR an administrator if return_method is admin_office
     $userRole = strtolower($_SESSION['role'] ?? $_SESSION['user_role'] ?? '');
-    $isAdmin = in_array($userRole, ['admin', 'superadmin', 'staff', 'moderator']);
+    $isAdmin = $isAdmin || in_array($userRole, ['admin', 'superadmin', 'staff', 'moderator', 'master_admin', 'campus_admin']);
 
     if ($userId !== $founderId) {
-        if (!($isAdmin && $returnMethod === 'admin_office')) {
+        if (!($isAdmin && ($returnMethod === 'admin_office' || $returnMethod === 'in_person' || !empty($isAdmin)))) {
             http_response_code(403);
             echo json_encode(['success' => false, 'code' => 'FORBIDDEN', 'message' => 'Only the finder or campus administrator can verify this handover.']);
+            if ($transactionStarted) mysqli_rollback($conn);
+            exit;
+        }
+    }
+
+    // 7B. Anti-IDOR: Campus Admin Scoping Check
+    if ($isAdmin && !empty($_SESSION['admin_campus_id'])) {
+        $adminCampus = (int)$_SESSION['admin_campus_id'];
+        $itemCampus = !empty($case['campus_id']) ? (int)$case['campus_id'] : 0;
+        if ($itemCampus <= 0) {
+            $fcQ = $conn->query("SELECT campus_id FROM found_reports WHERE id = $foundId LIMIT 1");
+            if ($fcQ && $fcR = $fcQ->fetch_assoc()) {
+                $itemCampus = (int)($fcR['campus_id'] ?? 0);
+            }
+        }
+        if ($itemCampus > 0 && $itemCampus !== $adminCampus) {
+            http_response_code(403);
+            echo json_encode([
+                'success' => false,
+                'code'    => 'CAMPUS_MISMATCH',
+                'message' => 'Access Denied: This handover belongs to another campus administration desk.'
+            ]);
             if ($transactionStarted) mysqli_rollback($conn);
             exit;
         }
