@@ -9,6 +9,7 @@ if (is_admin()) {
 }
 
 $errorMsg = $_GET['error'] ?? '';
+$loggedOut = isset($_GET['logged_out']) && $_GET['logged_out'] == '1';
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -276,6 +277,12 @@ $errorMsg = $_GET['error'] ?? '';
       color: #F87171;
     }
 
+    .alert-success {
+      background: rgba(16, 185, 129, 0.12);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      color: #10B981;
+    }
+
     .security-notice {
       margin-top: 28px;
       padding-top: 20px;
@@ -323,6 +330,13 @@ $errorMsg = $_GET['error'] ?? '';
       </div>
       <p class="admin-sub">Platform Administration &amp; Intelligence Hub</p>
     </div>
+
+    <?php if ($loggedOut): ?>
+    <div id="logoutBanner" class="alert-banner alert-success">
+      <i class="fa-solid fa-circle-check"></i>
+      <span>Admin session successfully terminated.</span>
+    </div>
+    <?php endif; ?>
 
     <!-- Error Banner -->
     <div id="errorBanner" class="alert-banner alert-error" style="<?php echo empty($errorMsg) ? 'display: none;' : ''; ?>">

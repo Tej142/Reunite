@@ -17,11 +17,28 @@ $isApi = isApiRequest();
 if (isset($_GET['action']) && $_GET['action'] === 'logout') {
     $_SESSION['role'] = 'user';
     unset($_SESSION['admin_logged_in']);
-    setcookie('reunite_admin_session', '', ['expires' => time() - 3600, 'path' => '/']);
+    unset($_SESSION['reunite_admin_auth']);
+    unset($_SESSION['admin_id']);
+    unset($_SESSION['username']);
+    unset($_SESSION['full_name']);
+    unset($_SESSION['email']);
+    unset($_SESSION['admin_campus_id']);
+    unset($_SESSION['admin_campus_name']);
+    unset($_SESSION['admin_campus_code']);
+
+    // Clear fallback admin session cookie
+    setcookie('reunite_admin_session', '', [
+        'expires'  => time() - 86400,
+        'path'     => '/',
+        'httponly' => true,
+        'samesite' => 'Lax'
+    ]);
+    setcookie('reunite_admin_session', '', time() - 86400, '/');
+
     if ($isApi) {
-        sendJsonResponse(true, "Admin session terminated successfully.", ['redirect' => '../admin/login.php']);
+        sendJsonResponse(true, "Admin session terminated successfully.", ['redirect' => '../Frontend/admin/login.php?logged_out=1']);
     } else {
-        header("Location: ../../Frontend/admin/login.php");
+        header("Location: ../Frontend/admin/login.php?logged_out=1");
         exit();
     }
 }

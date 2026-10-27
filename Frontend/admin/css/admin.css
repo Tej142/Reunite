@@ -271,11 +271,11 @@ body {
 }
 
 .btn-sidebar-logout {
-  background: transparent;
-  border: 1px solid transparent;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
   color: var(--muted);
-  width: 30px;
-  height: 30px;
+  width: 32px;
+  height: 32px;
   border-radius: 6px;
   display: flex;
   align-items: center;
@@ -284,12 +284,14 @@ body {
   transition: all 0.15s ease;
   text-decoration: none;
   flex-shrink: 0;
+  font-size: 0.82rem;
 }
 
 .btn-sidebar-logout:hover {
-  background: rgba(239, 68, 68, 0.1);
+  background: rgba(239, 68, 68, 0.12);
   color: var(--danger);
-  border-color: rgba(239, 68, 68, 0.2);
+  border-color: rgba(239, 68, 68, 0.3);
+  transform: translateY(-1px);
 }
 
 /* ── Topbar ───────────────────────────────────────────────────────── */
@@ -423,9 +425,10 @@ body {
   opacity: 0.5;
 }
 
-/* ── Theme Toggle Button ──────────────────────────────────────────── */
+/* ── Theme Toggle & Control Buttons ──────────────────────────────── */
 .btn-theme-toggle,
-.btn-sidebar-theme {
+.btn-sidebar-theme,
+.btn-refresh {
   background: var(--bg-card);
   border: 1px solid var(--border-color);
   color: var(--muted);
@@ -441,7 +444,8 @@ body {
 }
 
 .btn-theme-toggle:hover,
-.btn-sidebar-theme:hover {
+.btn-sidebar-theme:hover,
+.btn-refresh:hover {
   border-color: var(--accent);
   color: var(--accent);
   background: var(--bg-surface);
