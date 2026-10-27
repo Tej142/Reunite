@@ -209,19 +209,12 @@ function login_admin($adminData) {
         $_SESSION['admin_campus_code'] = 'ALL';
     }
 
-    $payload = base64_encode(json_encode([
-        'admin_id'  => (int)$_SESSION['admin_id'],
-        'username'  => $_SESSION['username'],
-        'role'      => $normalizedRole,
-        'campus_id' => $campusId,
-        'ts'        => time()
-    ]));
-    setcookie('reunite_admin_session', $payload, [
-        'expires'  => time() + 3600 * 8,
-        'path'     => '/',
-        'httponly' => true,
-        'samesite' => 'Lax'
-    ]);
+    // SECURITY POLICY: No persistent authentication cookies are issued to administrators.
+    // Admin state is maintained strictly within server-side PHP $_SESSION.
+    if (isset($_COOKIE['reunite_admin_session'])) {
+        setcookie('reunite_admin_session', '', time() - 86400, '/');
+        unset($_COOKIE['reunite_admin_session']);
+    }
     return true;
 }
 
@@ -276,76 +269,7 @@ function is_admin() {
     if (!empty($_SESSION['role']) && in_array(strtolower($_SESSION['role']), ['admin', 'superadmin', 'moderator', 'master_admin', 'campus_admin'])) {
         return true;
     }
-    // Shared hosting fallback: verify admin session cookie against database
-    if (!empty($_COOKIE['reunite_admin_session'])) {
-        try {
-            $adminCookie = json_decode(base64_decode($_COOKIE['reunite_admin_session']), true);
-            if (is_array($adminCookie) && !empty($adminCookie['ts']) && (time() - $adminCookie['ts'] < 86400 * 7)) {
-                $cAdminId = (int)($adminCookie['admin_id'] ?? 0);
-                $cUsername = trim($adminCookie['username'] ?? '');
-                
-                global $conn;
-                if ($conn && $cAdminId > 0 && !empty($cUsername)) {
-                    $cStmt = $conn->prepare("SELECT admin_id, username, full_name, email, role, campus_id, status FROM admins WHERE admin_id = ? AND username = ? LIMIT 1");
-                    if ($cStmt) {
-                        $cStmt->bind_param("is", $cAdminId, $cUsername);
-                        $cStmt->execute();
-                        $cRes = $cStmt->get_result();
-                        if ($cRes && $row = $cRes->fetch_assoc()) {
-                            if (strtolower($row['status'] ?? '') !== 'suspended') {
-                                $rawRole = strtolower($row['role'] ?? 'admin');
-                                $campusId = !empty($row['campus_id']) ? (int)$row['campus_id'] : null;
-                                $isMaster = ($rawRole === 'master_admin' || $rawRole === 'superadmin' || ($campusId === null && in_array($rawRole, ['admin', 'superadmin', 'master_admin'])));
-                                $normalizedRole = $isMaster ? 'master_admin' : 'campus_admin';
-
-                                $_SESSION['reunite_admin_auth'] = true;
-                                $_SESSION['admin_logged_in'] = true;
-                                $_SESSION['admin_id'] = $row['admin_id'];
-                                $_SESSION['username'] = $row['username'];
-                                $_SESSION['full_name'] = $row['full_name'];
-                                $_SESSION['email'] = $row['email'];
-                                $_SESSION['role'] = $normalizedRole;
-                                $_SESSION['admin_campus_id'] = $campusId;
-
-                                if ($campusId) {
-                                    $cpStmt = $conn->prepare("SELECT name, code FROM campuses WHERE id = ? LIMIT 1");
-                                    if ($cpStmt) {
-                                        $cpStmt->bind_param("i", $campusId);
-                                        $cpStmt->execute();
-                                        if ($cpRow = $cpStmt->get_result()->fetch_assoc()) {
-                                            $_SESSION['admin_campus_name'] = $cpRow['name'];
-                                            $_SESSION['admin_campus_code'] = $cpRow['code'];
-                                        }
-                                        $cpStmt->close();
-                                    }
-                                } else {
-                                    $_SESSION['admin_campus_name'] = 'All Campuses (Global)';
-                                    $_SESSION['admin_campus_code'] = 'ALL';
-                                }
-
-                                $cStmt->close();
-                                return true;
-                            }
-                        }
-                        $cStmt->close();
-                    }
-                } elseif ($cAdminId === 1 && $cUsername === 'admin') {
-                    // Fallback for master administrator when DB is connecting
-                    $_SESSION['reunite_admin_auth'] = true;
-                    $_SESSION['admin_logged_in'] = true;
-                    $_SESSION['admin_id'] = 1;
-                    $_SESSION['username'] = 'admin';
-                    $_SESSION['role'] = 'master_admin';
-                    $_SESSION['admin_campus_id'] = null;
-                    $_SESSION['admin_campus_name'] = 'All Campuses (Global)';
-                    $_SESSION['admin_campus_code'] = 'ALL';
-                    return true;
-                }
-            }
-        } catch (Exception $e) {
-            // Malformed cookie ignored
-        }
-    }
+    // Security policy: Admin authorization is strictly session-based. No cookie fallback.
     return false;
 }
 

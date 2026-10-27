@@ -27,15 +27,7 @@ function get_admin_session() {
     $adminId = $_SESSION['admin_id'] ?? null;
     $rawRole = strtolower($_SESSION['role'] ?? $_SESSION['reunite_admin_role'] ?? '');
 
-    // 2. Cookie fallback check (validated against database)
-    if (!$adminId && !empty($_COOKIE['reunite_admin_session'])) {
-        try {
-            $cookieData = json_decode(base64_decode($_COOKIE['reunite_admin_session']), true);
-            if (is_array($cookieData) && !empty($cookieData['admin_id'])) {
-                $adminId = (int)$cookieData['admin_id'];
-            }
-        } catch (Exception $e) {}
-    }
+
 
     if (!$adminId) {
         // Check if master key clearance active in session

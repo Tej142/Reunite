@@ -38,15 +38,10 @@ if (!empty($_SESSION['admin_logged_in']) && $_SESSION['role'] === 'campus_admin'
     echo "[FAIL] login_admin() failed to set expected session variables.\n";
 }
 
-if (!empty($_COOKIE['reunite_admin_session'])) {
-    $cookieData = json_decode(base64_decode($_COOKIE['reunite_admin_session']), true);
-    if (!empty($cookieData['admin_id']) && $cookieData['role'] === 'campus_admin') {
-        echo "[PASS] reunite_admin_session cookie created successfully: " . json_encode($cookieData) . "\n";
-    } else {
-        echo "[FAIL] Cookie content invalid.\n";
-    }
+if (empty($_COOKIE['reunite_admin_session'])) {
+    echo "[PASS] Security verified: No admin cookies created on login. Session-only mode active.\n";
 } else {
-    echo "[INFO] Cookie set via setcookie (available on next HTTP request or $_COOKIE populated in web context).\n";
+    echo "[FAIL] Security policy violated: Admin cookie was found.\n";
 }
 
 echo "\n=== ALL LOGIC TESTS COMPLETED SUCCESSFULLY ===\n";

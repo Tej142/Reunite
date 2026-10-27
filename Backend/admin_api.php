@@ -69,18 +69,11 @@ if ($action === 'login') {
         $_SESSION['admin_campus_name'] = 'All Campuses (Global)';
         $_SESSION['admin_campus_code'] = 'ALL';
         
-        setcookie('reunite_admin_session', base64_encode(json_encode([
-            'admin_id'  => 1,
-            'username'  => 'admin',
-            'role'      => 'master_admin',
-            'campus_id' => null,
-            'ts'        => time()
-        ])), [
-            'expires'  => time() + 3600 * 8,
-            'path'     => '/',
-            'httponly' => true,
-            'samesite' => 'Lax'
-        ]);
+        // SECURITY POLICY: Admin state stored strictly in server-side PHP $_SESSION. No cookies issued.
+        if (isset($_COOKIE['reunite_admin_session'])) {
+            setcookie('reunite_admin_session', '', time() - 86400, '/');
+            unset($_COOKIE['reunite_admin_session']);
+        }
 
         logAccess(0, 'Admin Terminal Login (Master Key)', 'Authorization granted via Master Passcode');
         echo json_encode([
@@ -133,18 +126,11 @@ if ($action === 'login') {
                     @$conn->query("UPDATE admins SET last_login = NOW() WHERE admin_id = " . (int)$admin['admin_id']);
                     logAccess($admin['admin_id'], 'Admin Login (' . ucfirst($normalizedRole) . ')', 'User: ' . $admin['username'] . ', Campus: ' . $_SESSION['admin_campus_name']);
                     
-                    setcookie('reunite_admin_session', base64_encode(json_encode([
-                        'admin_id'  => (int)$admin['admin_id'],
-                        'username'  => $admin['username'],
-                        'role'      => $normalizedRole,
-                        'campus_id' => $campusId,
-                        'ts'        => time()
-                    ])), [
-                        'expires'  => time() + 3600 * 8,
-                        'path'     => '/',
-                        'httponly' => true,
-                        'samesite' => 'Lax'
-                    ]);
+                    // SECURITY POLICY: Admin state stored strictly in server-side PHP $_SESSION. No cookies issued.
+                    if (isset($_COOKIE['reunite_admin_session'])) {
+                        setcookie('reunite_admin_session', '', time() - 86400, '/');
+                        unset($_COOKIE['reunite_admin_session']);
+                    }
 
                     echo json_encode([
                         'success'     => true,

@@ -106,21 +106,13 @@ function adminLoginSuccess($adminData, $isApi) {
         $_SESSION['admin_campus_code'] = 'ALL';
     }
 
-    // Fallback admin cookie — ensures auth survives across AJAX-to-page-load
-    // on shared hosting environments where sessions can be unreliable.
-    $payload = base64_encode(json_encode([
-        'admin_id'  => (int)$adminData['admin_id'],
-        'username'  => $adminData['username'],
-        'role'      => $normalizedRole,
-        'campus_id' => $campusId,
-        'ts'        => time()
-    ]));
-    setcookie('reunite_admin_session', $payload, [
-        'expires'  => time() + 3600 * 8,
-        'path'     => '/',
-        'httponly' => true,
-        'samesite' => 'Lax'
-    ]);
+    // SECURITY POLICY: No persistent authentication cookies are issued to administrators.
+    // Admin clearance is maintained strictly within the server-side PHP $_SESSION.
+    // Explicitly expire and unset any existing admin cookies from the client.
+    if (isset($_COOKIE['reunite_admin_session'])) {
+        setcookie('reunite_admin_session', '', time() - 86400, '/');
+        unset($_COOKIE['reunite_admin_session']);
+    }
 
     if ($isApi) {
         sendJsonResponse(true, "Admin authentication successful!", [
