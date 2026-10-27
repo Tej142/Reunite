@@ -281,25 +281,199 @@ body {
   gap: 8px;
 }
 
-.live-health-pill {
+.live-realtime-pill {
+  position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 4px 10px;
+  gap: 7px;
+  padding: 5px 11px;
   background: rgba(16, 185, 129, 0.08);
-  border: 1px solid rgba(16, 185, 129, 0.2);
+  border: 1px solid rgba(16, 185, 129, 0.28);
   border-radius: 999px;
   color: var(--success);
   font-size: 0.74rem;
-  font-weight: 500;
+  font-weight: 600;
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.pulse-beacon {
-  width: 5px;
-  height: 5px;
+.live-realtime-pill:hover {
+  background: rgba(16, 185, 129, 0.15);
+  border-color: rgba(16, 185, 129, 0.45);
+  transform: translateY(-1px);
+}
+
+.live-realtime-pill.paused {
+  background: rgba(245, 158, 11, 0.08);
+  border-color: rgba(245, 158, 11, 0.3);
+  color: var(--warning);
+}
+
+.live-realtime-pill.paused:hover {
+  background: rgba(245, 158, 11, 0.15);
+}
+
+.live-pulse-ring {
+  position: absolute;
+  left: 9px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: rgba(16, 185, 129, 0.4);
+  animation: realtimePulse 2s infinite ease-out;
+  pointer-events: none;
+}
+
+.live-realtime-pill.paused .live-pulse-ring {
+  display: none;
+}
+
+.live-pulse-dot {
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
   background: var(--success);
   display: inline-block;
+  position: relative;
+  z-index: 1;
+}
+
+.live-realtime-pill.paused .live-pulse-dot {
+  background: var(--warning);
+}
+
+.live-sync-timer {
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: rgba(16, 185, 129, 0.15);
+  color: var(--success);
+  font-family: monospace;
+}
+
+.live-realtime-pill.paused .live-sync-timer {
+  background: rgba(245, 158, 11, 0.15);
+  color: var(--warning);
+}
+
+.btn-live-toggle {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  color: var(--muted);
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-size: 0.82rem;
+}
+
+.btn-live-toggle:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.btn-live-toggle.muted {
+  color: var(--muted);
+  opacity: 0.5;
+}
+
+/* ── Live Telemetry Feed Banner ───────────────────────────────────── */
+.live-telemetry-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: linear-gradient(135deg, rgba(30, 41, 59, 0.85) 0%, rgba(15, 23, 42, 0.95) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  padding: 10px 16px;
+  margin-bottom: 20px;
+  gap: 14px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+  backdrop-filter: blur(8px);
+  position: relative;
+  overflow: hidden;
+}
+
+.live-banner-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  background: rgba(59, 130, 246, 0.16);
+  border: 1px solid rgba(59, 130, 246, 0.35);
+  padding: 4px 9px;
+  border-radius: 6px;
+  color: #60A5FA;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.live-tag-pulse {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #3B82F6;
+  animation: tagPulse 1.8s infinite ease-in-out;
+}
+
+.live-ticker-text {
+  font-size: 0.84rem;
+  color: #E2E8F0;
+  font-weight: 500;
+  flex-grow: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: all 0.3s ease;
+}
+
+.live-banner-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.74rem;
+  color: #94A3B8;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.meta-dot {
+  opacity: 0.4;
+}
+
+@keyframes realtimePulse {
+  0% { transform: scale(0.9); opacity: 0.8; }
+  50% { transform: scale(2.4); opacity: 0; }
+  100% { transform: scale(2.4); opacity: 0; }
+}
+
+@keyframes tagPulse {
+  0%, 100% { opacity: 0.4; transform: scale(0.9); }
+  50% { opacity: 1; transform: scale(1.2); }
+}
+
+/* ── Real-Time Stat Card Pulse Animation ──────────────────────────── */
+.stat-card.stat-updated {
+  animation: statPulseHighlight 1.5s ease-out;
+}
+
+@keyframes statPulseHighlight {
+  0% {
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.5), 0 6px 20px rgba(59, 130, 246, 0.25);
+    border-color: #3B82F6;
+  }
+  100% {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+    border-color: var(--border-color);
+  }
 }
 
 .btn-refresh {

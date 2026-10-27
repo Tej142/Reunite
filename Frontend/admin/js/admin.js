@@ -20,6 +20,7 @@ document.addEventListener('DOMContentLoaded', () => {
   if (window.REUNITE_ADMIN?.isMasterAdmin) {
     loadSystemDiagnostics();
   }
+  initRealtimeEngine();
 });
 
 function getCampusParam() {
@@ -34,6 +35,9 @@ function handleCampusFilterChange(campusId) {
     nodeEl.textContent = sel && sel.selectedIndex > 0 ? sel.options[sel.selectedIndex].text : 'All Campuses (Global)';
   }
   loadStats();
+  if (typeof updateLiveTelemetry === 'function') {
+    updateLiveTelemetry(true);
+  }
   switchTab(activeTab);
   showToast(`View updated: ${selectedCampusId ? 'Campus #' + selectedCampusId : 'All Campuses'}`, 'info');
 }
@@ -121,11 +125,27 @@ function switchTab(tabId) {
 
 /* ── Event Listeners ───────────────────────────────────────────────── */
 function initEventListeners() {
-  document.getElementById('btnGlobalRefresh').addEventListener('click', () => {
-    loadStats();
-    switchTab(activeTab);
-    showToast('Platform data refreshed.', 'success');
-  });
+  const btnRefresh = document.getElementById('btnGlobalRefresh');
+  if (btnRefresh) {
+    btnRefresh.addEventListener('click', () => {
+      loadStats();
+      if (typeof updateLiveTelemetry === 'function') {
+        updateLiveTelemetry(true);
+      }
+      switchTab(activeTab);
+      showToast('Platform data refreshed.', 'success');
+    });
+  }
+
+  const pill = document.getElementById('liveRealtimePill');
+  if (pill) {
+    pill.addEventListener('click', toggleRealtimeSync);
+  }
+
+  const soundBtn = document.getElementById('btnSoundAlertToggle');
+  if (soundBtn) {
+    soundBtn.addEventListener('click', toggleSoundAlerts);
+  }
 
   // Users Filters
   const searchUsers = document.getElementById('searchUsersInput');
@@ -173,6 +193,253 @@ function initEventListeners() {
       });
     });
   }
+}
+
+/* ── Real-Time Telemetry & Live Sync Engine ───────────────────────── */
+let realtimeTimer = null;
+let realtimeCountdown = 8;
+let isRealtimePaused = false;
+let soundAlertsEnabled = localStorage.getItem('reunite_admin_sound') !== 'false';
+let lastKnownStats = {};
+let lastKnownMaxIds = { lost: 0, found: 0, match: 0, claim: 0, log: 0 };
+let audioCtx = null;
+
+function initRealtimeEngine() {
+  updateSoundButtonUI();
+  updateLiveTelemetry();
+
+  // Run 1-second countdown clock
+  if (realtimeTimer) clearInterval(realtimeTimer);
+  realtimeTimer = setInterval(() => {
+    if (isRealtimePaused || document.hidden) return;
+
+    realtimeCountdown--;
+    const timerEl = document.getElementById('liveSyncTimer');
+    if (timerEl) timerEl.textContent = `${realtimeCountdown}s`;
+
+    if (realtimeCountdown <= 0) {
+      realtimeCountdown = 8;
+      updateLiveTelemetry();
+    }
+  }, 1000);
+
+  // Background tab visibility handling
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && !isRealtimePaused) {
+      realtimeCountdown = 8;
+      updateLiveTelemetry();
+    }
+  });
+}
+
+function toggleRealtimeSync() {
+  isRealtimePaused = !isRealtimePaused;
+  const pill = document.getElementById('liveRealtimePill');
+  const textEl = document.getElementById('liveSyncText');
+  const timerEl = document.getElementById('liveSyncTimer');
+
+  if (isRealtimePaused) {
+    if (pill) {
+      pill.classList.remove('active');
+      pill.classList.add('paused');
+      pill.title = 'Real-Time Sync is PAUSED. Click to Resume.';
+    }
+    if (textEl) textEl.textContent = 'PAUSED';
+    if (timerEl) timerEl.textContent = 'OFF';
+    showToast('Live auto-sync paused.', 'warning');
+  } else {
+    if (pill) {
+      pill.classList.add('active');
+      pill.classList.remove('paused');
+      pill.title = 'Real-Time Sync is ACTIVE. Click to Pause.';
+    }
+    if (textEl) textEl.textContent = 'LIVE SYNC';
+    realtimeCountdown = 8;
+    if (timerEl) timerEl.textContent = '8s';
+    updateLiveTelemetry();
+    showToast('Live auto-sync active.', 'success');
+  }
+}
+
+function updateSoundButtonUI() {
+  const btn = document.getElementById('btnSoundAlertToggle');
+  const icon = document.getElementById('soundAlertIcon');
+  if (!btn || !icon) return;
+
+  if (soundAlertsEnabled) {
+    btn.classList.remove('muted');
+    btn.title = 'Audio Alerts: ON (Click to Mute)';
+    icon.className = 'fa-solid fa-bell';
+  } else {
+    btn.classList.add('muted');
+    btn.title = 'Audio Alerts: MUTED (Click to Enable)';
+    icon.className = 'fa-solid fa-bell-slash';
+  }
+}
+
+function toggleSoundAlerts() {
+  soundAlertsEnabled = !soundAlertsEnabled;
+  localStorage.setItem('reunite_admin_sound', soundAlertsEnabled);
+  updateSoundButtonUI();
+  if (soundAlertsEnabled) {
+    playAlertTone();
+    showToast('Real-time audio alerts enabled.', 'success');
+  } else {
+    showToast('Real-time audio alerts muted.', 'info');
+  }
+}
+
+function playAlertTone() {
+  if (!soundAlertsEnabled) return;
+  try {
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtx) return;
+    if (!audioCtx) audioCtx = new AudioCtx();
+    if (audioCtx.state === 'suspended') {
+      audioCtx.resume();
+    }
+
+    const now = audioCtx.currentTime;
+    // Tone 1: 587.33 Hz (D5)
+    const osc1 = audioCtx.createOscillator();
+    const gain1 = audioCtx.createGain();
+    osc1.type = 'sine';
+    osc1.frequency.setValueAtTime(587.33, now);
+    gain1.gain.setValueAtTime(0.12, now);
+    gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+    osc1.connect(gain1);
+    gain1.connect(audioCtx.destination);
+    osc1.start(now);
+    osc1.stop(now + 0.12);
+
+    // Tone 2: 880 Hz (A5)
+    const osc2 = audioCtx.createOscillator();
+    const gain2 = audioCtx.createGain();
+    osc2.type = 'sine';
+    osc2.frequency.setValueAtTime(880, now + 0.08);
+    gain2.gain.setValueAtTime(0.15, now + 0.08);
+    gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
+    osc2.connect(gain2);
+    gain2.connect(audioCtx.destination);
+    osc2.start(now + 0.08);
+    osc2.stop(now + 0.25);
+  } catch (e) {
+    // AudioContext blocked by autoplay policy until user gesture
+  }
+}
+
+async function updateLiveTelemetry(manual = false) {
+  try {
+    const res = await fetch(`${API_ENDPOINT}?action=realtime_telemetry${getCampusParam()}`);
+    const json = await res.json();
+    if (!json.success) return;
+
+    const s = json.stats || {};
+    const max = json.max_ids || {};
+
+    // 1. Update KPI Values with visual highlight pulse on change
+    updateStatWithPulse('statTotalUsers', s.total_users);
+    updateStatWithPulse('statActiveUsers', s.active_users);
+    updateStatWithPulse('statTotalLost', s.total_lost);
+    updateStatWithPulse('statActiveLost', s.active_lost);
+    updateStatWithPulse('statTotalFound', s.total_found);
+    updateStatWithPulse('statActiveFound', s.active_found);
+    updateStatWithPulse('statTotalMatches', s.total_matches);
+    updateStatWithPulse('statVerifiedMatches', s.verified_matches);
+    updateStatWithPulse('statPendingClaims', s.pending_claims);
+    updateStatWithPulse('statResolvedCases', s.resolved_cases);
+
+    // 2. Update Sidebar Badges
+    const bLost = document.getElementById('badgeLostCount');
+    const bFound = document.getElementById('badgeFoundCount');
+    const bMatch = document.getElementById('badgeMatchCount');
+    const bClaim = document.getElementById('badgeClaimCount');
+    if (bLost) bLost.textContent = s.active_lost ?? 0;
+    if (bFound) bFound.textContent = s.active_found ?? 0;
+    if (bMatch) bMatch.textContent = s.total_matches ?? 0;
+    if (bClaim) bClaim.textContent = s.pending_claims ?? 0;
+
+    // 3. Detect Real-Time Delta Events (skip initial boot)
+    if (lastKnownMaxIds.lost > 0 && max.lost > lastKnownMaxIds.lost) {
+      const diff = max.lost - lastKnownMaxIds.lost;
+      showToast(`⚡ Real-time alert: ${diff} new Lost Report${diff > 1 ? 's' : ''} submitted!`, 'info');
+      playAlertTone();
+      if (activeTab === 'lost') loadLostReports();
+    }
+
+    if (lastKnownMaxIds.found > 0 && max.found > lastKnownMaxIds.found) {
+      const diff = max.found - lastKnownMaxIds.found;
+      showToast(`⚡ Real-time alert: ${diff} new Found Item${diff > 1 ? 's' : ''} reported into custody!`, 'success');
+      playAlertTone();
+      if (activeTab === 'found') loadFoundReports();
+    }
+
+    if (lastKnownMaxIds.match > 0 && max.match > lastKnownMaxIds.match) {
+      const diff = max.match - lastKnownMaxIds.match;
+      showToast(`⚡ Real-time alert: Neural engine generated ${diff} new AI Match${diff > 1 ? 'es' : ''}!`, 'success');
+      playAlertTone();
+      if (activeTab === 'matches') loadMatches();
+    }
+
+    if (lastKnownMaxIds.claim > 0 && max.claim > lastKnownMaxIds.claim) {
+      const diff = max.claim - lastKnownMaxIds.claim;
+      showToast(`⚡ Real-time alert: ${diff} new Ownership Claim${diff > 1 ? 's' : ''} submitted for verification!`, 'info');
+      playAlertTone();
+      if (activeTab === 'claims') loadClaims();
+    }
+
+    // 4. Update Ticker Feed
+    const tickerText = document.getElementById('liveTickerText');
+    const tickerMeta = document.getElementById('liveMetaTime');
+    const dbMeta = document.getElementById('liveMetaDb');
+
+    if (json.latest_events && json.latest_events.length > 0 && tickerText) {
+      const topEvt = json.latest_events[0];
+      const typeIcons = {
+        found: '<i class="fa-solid fa-hand-holding-heart" style="color:var(--success);"></i>',
+        lost: '<i class="fa-solid fa-compass" style="color:var(--accent);"></i>',
+        claim: '<i class="fa-solid fa-shield-halved" style="color:var(--warning);"></i>'
+      };
+      const icon = typeIcons[topEvt.event_type] || '<i class="fa-solid fa-circle-dot"></i>';
+      tickerText.innerHTML = `${icon} <strong>${escapeHtml(topEvt.title || 'Platform Event')}</strong> <span style="color:var(--muted); font-size:0.75rem; margin-left:6px;">(${topEvt.created_at ? topEvt.created_at.substring(11, 16) : 'Just now'})</span>`;
+    } else if (tickerText) {
+      tickerText.innerHTML = '<span style="color:var(--muted);">All clear · Real-time telemetry pipeline connected and monitoring.</span>';
+    }
+
+    if (tickerMeta) {
+      tickerMeta.textContent = json.server_time ? `Updated at ${json.server_time}` : 'Updated just now';
+    }
+    if (dbMeta) {
+      dbMeta.innerHTML = `<i class="fa-solid fa-database" style="color:var(--success);"></i> DB: Online`;
+    }
+
+    // 5. Store current state
+    lastKnownStats = s;
+    lastKnownMaxIds = max;
+
+  } catch (err) {
+    console.warn('Real-time telemetry poll failed:', err);
+    const dbMeta = document.getElementById('liveMetaDb');
+    if (dbMeta) {
+      dbMeta.innerHTML = `<i class="fa-solid fa-circle-exclamation" style="color:var(--warning);"></i> Reconnecting...`;
+    }
+  }
+}
+
+function updateStatWithPulse(elementId, newVal) {
+  const el = document.getElementById(elementId);
+  if (!el || newVal === undefined || newVal === null) return;
+
+  const currentVal = parseInt(el.textContent.replace(/[^0-9]/g, ''), 10);
+  if (!isNaN(currentVal) && currentVal !== parseInt(newVal, 10)) {
+    const card = el.closest('.stat-card');
+    if (card) {
+      card.classList.remove('stat-updated');
+      void card.offsetWidth; // Trigger reflow for animation restart
+      card.classList.add('stat-updated');
+    }
+  }
+  el.textContent = newVal;
 }
 
 /* ── 1. Load Overview Stats ─────────────────────────────────────────── */

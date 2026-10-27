@@ -202,11 +202,18 @@ $adminInitials = strtoupper(substr($adminName, 0, 1) . (strpos($adminName, ' ') 
           <span class="badge-master-admin"><i class="fa-solid fa-shield-halved"></i> Master Admin</span>
         <?php endif; ?>
 
-        <div class="live-health-pill">
-          <span class="pulse-beacon"></span>
-          <span>Operational</span>
+        <div class="live-realtime-pill active" id="liveRealtimePill" title="Real-Time Telemetry is LIVE. Click to Pause/Resume auto-sync.">
+          <span class="live-pulse-ring"></span>
+          <span class="live-pulse-dot"></span>
+          <span class="live-sync-text" id="liveSyncText">LIVE SYNC</span>
+          <span class="live-sync-timer" id="liveSyncTimer">8s</span>
         </div>
-        <button type="button" class="btn-refresh" id="btnGlobalRefresh" title="Refresh Live Data">
+
+        <button type="button" class="btn-live-toggle" id="btnSoundAlertToggle" title="Audio Alerts: ON (Click to toggle sound on new items/claims)">
+          <i class="fa-solid fa-bell" id="soundAlertIcon"></i>
+        </button>
+
+        <button type="button" class="btn-refresh" id="btnGlobalRefresh" title="Refresh Live Data Now">
           <i class="fa-solid fa-rotate"></i>
         </button>
       </div>
@@ -216,6 +223,23 @@ $adminInitials = strtoupper(substr($adminName, 0, 1) . (strpos($adminName, ' ') 
     <!-- TAB 1: DASHBOARD OVERVIEW                                          -->
     <!-- ══════════════════════════════════════════════════════════════════ -->
     <section class="admin-tab-pane" id="pane-overview">
+      <!-- Real-Time Telemetry Feed Banner -->
+      <div class="live-telemetry-banner" id="liveTelemetryBanner">
+        <div class="live-banner-tag">
+          <span class="live-tag-pulse"></span>
+          <i class="fa-solid fa-bolt"></i>
+          <span>REAL-TIME STREAM</span>
+        </div>
+        <div class="live-ticker-text" id="liveTickerText">
+          <span style="color:var(--muted);"><i class="fa-solid fa-satellite-dish fa-spin"></i> Establishing real-time event pipeline...</span>
+        </div>
+        <div class="live-banner-meta" id="liveBannerMeta">
+          <span id="liveMetaDb"><i class="fa-solid fa-database"></i> DB: Online</span>
+          <span class="meta-dot">·</span>
+          <span id="liveMetaTime">Syncing...</span>
+        </div>
+      </div>
+
       <!-- KPI Stats Grid -->
       <div class="stats-grid">
         <div class="stat-card">

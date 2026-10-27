@@ -559,6 +559,154 @@ if ($action === 'stats') {
     exit;
 }
 
+// ── 5B-2. Real-Time Telemetry & Event Stream ───────────────────
+if ($action === 'realtime_telemetry') {
+    $scope = get_admin_campus_scope();
+    $uWhere = ($scope !== null) ? " WHERE campus_id = $scope" : "";
+    $lWhere = ($scope !== null) ? " WHERE campus_id = $scope" : "";
+    $fWhere = ($scope !== null) ? " WHERE campus_id = $scope" : "";
+    $mWhere = ($scope !== null) ? " WHERE campus_id = $scope" : "";
+    $cWhere = ($scope !== null) ? " WHERE campus_id = $scope" : "";
+
+    $stats = [
+        'total_users'      => 0,
+        'active_users'     => 0,
+        'total_lost'       => 0,
+        'active_lost'      => 0,
+        'total_found'      => 0,
+        'active_found'     => 0,
+        'total_matches'    => 0,
+        'verified_matches' => 0,
+        'pending_claims'   => 0,
+        'resolved_cases'   => 0,
+    ];
+
+    $maxIds = [
+        'lost'  => 0,
+        'found' => 0,
+        'match' => 0,
+        'claim' => 0,
+        'log'   => 0,
+    ];
+
+    $latestEvents = [];
+
+    if ($conn) {
+        // Users
+        $q = $conn->query("SELECT COUNT(*) as tot, SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as act FROM users$uWhere");
+        if ($q && $r = $q->fetch_assoc()) {
+            $stats['total_users'] = (int)($r['tot'] ?? 0);
+            $stats['active_users'] = (int)($r['act'] ?? 0);
+        }
+
+        // Lost
+        $q = $conn->query("SELECT COUNT(*) as tot, SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as act, MAX(id) as max_id FROM lost_reports$lWhere");
+        if ($q && $r = $q->fetch_assoc()) {
+            $stats['total_lost'] = (int)($r['tot'] ?? 0);
+            $stats['active_lost'] = (int)($r['act'] ?? 0);
+            $maxIds['lost'] = (int)($r['max_id'] ?? 0);
+        }
+
+        // Found
+        $q = $conn->query("SELECT COUNT(*) as tot, SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as act, MAX(id) as max_id FROM found_reports$fWhere");
+        if ($q && $r = $q->fetch_assoc()) {
+            $stats['total_found'] = (int)($r['tot'] ?? 0);
+            $stats['active_found'] = (int)($r['act'] ?? 0);
+            $maxIds['found'] = (int)($r['max_id'] ?? 0);
+        }
+
+        // Matches
+        $q = $conn->query("SELECT COUNT(*) as tot, SUM(CASE WHEN status = 'verified' THEN 1 ELSE 0 END) as ver, MAX(id) as max_id FROM matches$mWhere");
+        if ($q && $r = $q->fetch_assoc()) {
+            $stats['total_matches'] = (int)($r['tot'] ?? 0);
+            $stats['verified_matches'] = (int)($r['ver'] ?? 0);
+            $maxIds['match'] = (int)($r['max_id'] ?? 0);
+        }
+
+        // Claims / Recovery
+        $q = $conn->query("SELECT COUNT(*) as tot, 
+            SUM(CASE WHEN status IN ('pending_verification', 'in_progress', 'pending') THEN 1 ELSE 0 END) as pend,
+            SUM(CASE WHEN status IN ('Completed', 'resolved', 'handed_off') THEN 1 ELSE 0 END) as res,
+            MAX(case_id) as max_id
+            FROM recovery_cases$cWhere");
+        if ($q && $r = $q->fetch_assoc()) {
+            $stats['pending_claims'] = (int)($r['pend'] ?? 0);
+            $stats['resolved_cases'] = (int)($r['res'] ?? 0);
+            $maxIds['claim'] = (int)($r['max_id'] ?? 0);
+        }
+
+        // Recent audit log id
+        $q = $conn->query("SELECT MAX(log_id) as max_id FROM access_logs");
+        if ($q && $r = $q->fetch_assoc()) {
+            $maxIds['log'] = (int)($r['max_id'] ?? 0);
+        }
+
+        // Fetch last 3 recent platform events across the board for the live ticker
+        $recentSql = "
+            (SELECT 'found' as event_type, item_name as title, campus_id, created_at FROM found_reports " . ($scope ? "WHERE campus_id = $scope" : "") . " ORDER BY id DESC LIMIT 2)
+            UNION ALL
+            (SELECT 'lost' as event_type, item_name as title, campus_id, created_at FROM lost_reports " . ($scope ? "WHERE campus_id = $scope" : "") . " ORDER BY id DESC LIMIT 2)
+            UNION ALL
+            (SELECT 'claim' as event_type, CONCAT('Claim on Case #', case_id) as title, campus_id, created_at FROM recovery_cases " . ($scope ? "WHERE campus_id = $scope" : "") . " ORDER BY case_id DESC LIMIT 2)
+            ORDER BY created_at DESC LIMIT 3
+        ";
+        $rq = @$conn->query($recentSql);
+        if ($rq) {
+            while ($row = $rq->fetch_assoc()) {
+                $latestEvents[] = $row;
+            }
+        }
+    }
+
+    echo json_encode([
+        'success'       => true,
+        'timestamp'     => time(),
+        'server_time'   => date('H:i:s'),
+        'stats'         => $stats,
+        'max_ids'       => $maxIds,
+        'latest_events' => $latestEvents,
+        'db_status'     => ($conn && $conn->ping()) ? 'online' : 'offline'
+    ]);
+    exit;
+}
+
+// ── 5B-3. System Health & Infrastructure Diagnostics ──────────
+if ($action === 'system_test') {
+    $dbOk = ($conn && $conn->ping());
+
+    $flaskUrl = (defined('FLASK_AI_URL') ? FLASK_AI_URL : 'https://reunite-ai-backend.onrender.com');
+    $startT = microtime(true);
+    $aiOk = false;
+    $aiLatency = 0;
+
+    $ch = @curl_init("$flaskUrl/status");
+    if ($ch) {
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 2);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 3);
+        $resp = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+        $aiLatency = round((microtime(true) - $startT) * 1000);
+        if ($httpCode === 200 && $resp) {
+            $aiOk = true;
+        }
+    }
+
+    $smtpOk = defined('BREVO_API_KEY') && !empty(BREVO_API_KEY);
+
+    echo json_encode([
+        'success'           => true,
+        'database'          => $dbOk ? 'MySQL Connected' : 'Disconnected',
+        'ai_backend_status' => $aiOk ? 'Online' : 'Offline',
+        'ai_backend_url'    => $flaskUrl,
+        'ai_latency_ms'     => $aiLatency,
+        'smtp_configured'   => $smtpOk ? 'Configured (Brevo)' : 'Not set',
+        'server_time'       => date('Y-m-d H:i:s T')
+    ]);
+    exit;
+}
+
 // ── 5C. Operational Command Center: User Management ─────────
 if ($action === 'users') {
     $scope = get_admin_campus_scope();

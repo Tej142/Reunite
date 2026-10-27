@@ -40,6 +40,7 @@ FILES_TO_DEPLOY = [
     "tests/test_unified_login.php",
     "tests/test_manage_campus_admins.php",
     "tests/provision_charan_admin.php",
+    "tests/test_realtime_setup.php",
 ]
 
 def ensure_remote_dir(ftp, remote_dir):
