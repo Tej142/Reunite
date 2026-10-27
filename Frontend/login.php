@@ -1,3 +1,4 @@
+<?php
 require_once __DIR__ . '/includes/auth.php';
 
 // If already authenticated as admin, go straight to Command Center
