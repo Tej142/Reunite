@@ -112,7 +112,7 @@ function initNavigation() {
 
 function switchTab(tabId) {
   activeTab = tabId;
-  
+
   // Update sidebar active buttons
   document.querySelectorAll('.nav-tab-btn[data-tab]').forEach(btn => {
     if (btn.getAttribute('data-tab') === tabId) {
@@ -994,22 +994,18 @@ async function loadClaims() {
           <td>${c.created_at ? c.created_at.substring(0, 10) : 'N/A'}</td>
           <td>
             <div class="action-btn-group">
-              ${!isCompleted && c.status !== 'rejected' && c.status !== 'archived' ? `
-                <button class="btn-action-icon success" style="width: auto; padding: 4px 10px; font-size: 0.75rem; gap: 4px; display: inline-flex; align-items: center;" title="Verify Owner Code & Complete Handover at Desk" onclick="verifyDeskOtp(${c.match_id || c.id})">
+              ${isDeskReturn && !isCompleted ? `
+                <button class="btn-action-icon success" style="width: auto; padding: 4px 10px; font-size: 0.75rem; gap: 4px; display: inline-flex; align-items: center;" title="Verify Owner Code & Complete Handover" onclick="verifyDeskOtp(${c.match_id || c.id})">
                   <i class="fa-solid fa-key"></i> Verify OTP
                 </button>
               ` : ''}
-              ${!isCompleted && c.status !== 'rejected' && c.status !== 'archived' ? `
+              ${!isCompleted ? `
                 <button class="btn-action-icon danger" title="Reject / Cancel Claim" onclick="updateClaimStatus(${c.id}, 'rejected')">
                   <i class="fa-solid fa-ban"></i>
                 </button>
-              ` : (c.status === 'rejected' ? `
-                <span style="font-size: 0.78rem; color: var(--danger); font-weight: 600;">✕ Rejected</span>
-              ` : (c.status === 'archived' ? `
-                <span style="font-size: 0.78rem; color: var(--muted); font-weight: 500;">Archived</span>
               ` : `
                 <span style="font-size: 0.78rem; color: var(--success); font-weight: 600;">✓ Reunited</span>
-              `))}
+              `}
             </div>
           </td>
         </tr>
@@ -1020,37 +1016,6 @@ async function loadClaims() {
     }
   } catch (err) {
     tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding:30px; color:var(--danger);">Error loading claims.</td></tr>`;
-  }
-}
-
-async function openWalkInDeskOtpModal() {
-  const code = prompt('Enter the 6-digit verification OTP presented by the student at the Campus Desk:');
-  if (!code) return;
-  const cleanCode = code.trim();
-  if (!/^\d{6}$/.test(cleanCode)) {
-    alert('Invalid code: Verification OTP must be exactly 6 numeric digits.');
-    return;
-  }
-
-  const matchInput = prompt('(Optional) Enter the Case # or Match # (or leave blank if unknown):');
-  const matchId = matchInput ? matchInput.trim().replace('#', '') : '';
-
-  try {
-    const res = await fetch(`../../Frontend/api/verify_otp.php`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: 'otp=' + encodeURIComponent(cleanCode) + (matchId ? '&match_id=' + encodeURIComponent(matchId) : '')
-    });
-    const data = await res.json();
-    if (res.ok && data.success) {
-      showToast('🎉 Handover verified successfully! Item marked Reunited.', 'success');
-      loadClaims();
-      loadStats();
-    } else {
-      showToast(data.message || 'OTP verification failed.', 'error');
-    }
-  } catch (err) {
-    showToast('Network error verifying code.', 'error');
   }
 }
 
@@ -1225,17 +1190,17 @@ async function loadSystemDiagnostics(callback) {
   if (btn) { btn.disabled = true; }
 
   // Reset to checking state
-  ['Db','Ai','Smtp'].forEach(key => {
+  ['Db', 'Ai', 'Smtp'].forEach(key => {
     const badge = document.getElementById(`diag${key}Badge`);
     const pulse = document.getElementById(`diag${key}Pulse`);
-    const card  = document.getElementById(`diagCard${key}`);
+    const card = document.getElementById(`diagCard${key}`);
     if (badge) { badge.textContent = '…'; badge.className = 'diag-status-badge'; }
     if (pulse) { pulse.className = 'diag-pulse'; }
-    if (card)  { card.className = 'diag-service-card'; }
+    if (card) { card.className = 'diag-service-card'; }
   });
 
   try {
-    const res  = await fetch(`${API_ENDPOINT}?action=system_test`);
+    const res = await fetch(`${API_ENDPOINT}?action=system_test`);
     const json = await res.json();
 
     if (json.success) {
@@ -1244,38 +1209,38 @@ async function loadSystemDiagnostics(callback) {
       // ── Database ──────────────────────────────────────────────
       const dbOk = !!(d.database && d.database.toLowerCase().includes('connect'));
       applyDiagCard({
-        cardId:   'diagCardDb',
-        iconId:   'diagDbIcon',
-        pulseId:  'diagDbPulse',
-        badgeId:  'diagDbBadge',
+        cardId: 'diagCardDb',
+        iconId: 'diagDbIcon',
+        pulseId: 'diagDbPulse',
+        badgeId: 'diagDbBadge',
         detailId: 'diagDbDetail',
-        ok:       dbOk,
+        ok: dbOk,
         badgeText: dbOk ? 'Online' : 'Offline',
-        detail:   d.database || 'MySQL'
+        detail: d.database || 'MySQL'
       });
 
       // ── AI Microservice ────────────────────────────────────────
-      const aiOk    = !!(d.ai_backend_status && d.ai_backend_status.toLowerCase().includes('online'));
+      const aiOk = !!(d.ai_backend_status && d.ai_backend_status.toLowerCase().includes('online'));
       const latency = parseInt(d.ai_latency_ms || 0, 10);
       applyDiagCard({
-        cardId:   'diagCardAi',
-        iconId:   'diagAiIcon',
-        pulseId:  'diagAiPulse',
-        badgeId:  'diagAiBadge',
+        cardId: 'diagCardAi',
+        iconId: 'diagAiIcon',
+        pulseId: 'diagAiPulse',
+        badgeId: 'diagAiBadge',
         detailId: 'diagAiLatency',
-        ok:       aiOk,
+        ok: aiOk,
         badgeText: aiOk ? 'Online' : 'Offline',
-        detail:   aiOk ? (d.ai_backend_url || 'Render Cloud') : 'Unreachable'
+        detail: aiOk ? (d.ai_backend_url || 'Render Cloud') : 'Unreachable'
       });
       // Latency bar
       const barWrap = document.getElementById('diagLatencyBarWrap');
-      const fill    = document.getElementById('diagLatencyFill');
-      const label   = document.getElementById('diagLatencyLabel');
+      const fill = document.getElementById('diagLatencyFill');
+      const label = document.getElementById('diagLatencyLabel');
       if (barWrap && aiOk) {
         barWrap.style.display = 'flex';
-        const pct   = Math.min(latency / 800 * 100, 100);
+        const pct = Math.min(latency / 800 * 100, 100);
         const color = latency < 200 ? '#10B981' : latency < 500 ? '#F59E0B' : '#EF4444';
-        if (fill)  { fill.style.width = pct + '%'; fill.style.background = color; }
+        if (fill) { fill.style.width = pct + '%'; fill.style.background = color; }
         if (label) { label.textContent = latency + ' ms'; label.style.color = color; }
       } else if (barWrap) {
         barWrap.style.display = 'none';
@@ -1284,14 +1249,14 @@ async function loadSystemDiagnostics(callback) {
       // ── SMTP ──────────────────────────────────────────────────
       const smtpOk = !!(d.smtp_configured && d.smtp_configured.toLowerCase().includes('configured'));
       applyDiagCard({
-        cardId:   'diagCardSmtp',
-        iconId:   'diagSmtpIcon',
-        pulseId:  'diagSmtpPulse',
-        badgeId:  'diagSmtpBadge',
+        cardId: 'diagCardSmtp',
+        iconId: 'diagSmtpIcon',
+        pulseId: 'diagSmtpPulse',
+        badgeId: 'diagSmtpBadge',
         detailId: 'diagSmtpStatus',
-        ok:       smtpOk,
+        ok: smtpOk,
         badgeText: smtpOk ? 'Active' : 'Not set',
-        detail:   d.smtp_configured || 'Brevo API'
+        detail: d.smtp_configured || 'Brevo API'
       });
 
       // ── Last Checked ──────────────────────────────────────────
@@ -1310,8 +1275,8 @@ async function loadSystemDiagnostics(callback) {
 }
 
 function applyDiagCard({ cardId, iconId, pulseId, badgeId, detailId, ok, badgeText, detail }) {
-  const card  = document.getElementById(cardId);
-  const icon  = document.getElementById(iconId);
+  const card = document.getElementById(cardId);
+  const icon = document.getElementById(iconId);
   const pulse = document.getElementById(pulseId);
   const badge = document.getElementById(badgeId);
   const detailEl = document.getElementById(detailId);
@@ -1329,7 +1294,7 @@ function applyDiagCard({ cardId, iconId, pulseId, badgeId, detailId, ok, badgeTe
   }
   if (badge) {
     badge.textContent = badgeText;
-    badge.className   = 'diag-status-badge ' + (ok ? 'badge-online' : 'badge-offline');
+    badge.className = 'diag-status-badge ' + (ok ? 'badge-online' : 'badge-offline');
   }
   if (detailEl && detail) {
     detailEl.textContent = detail;
@@ -1344,14 +1309,14 @@ async function loadCampusesForDropdown() {
     const campuses = json.campuses || json.data?.campuses || [];
     if (json.success && Array.isArray(campuses)) {
       cachedCampuses = campuses;
-      
+
       const activeList = cachedCampuses.filter(c => c.status === 'active' || c.is_active == 1 || !c.status);
 
       // Populate Topbar Filter
       const sel = document.getElementById('globalCampusSelector');
       if (sel) {
         const curVal = sel.value;
-        sel.innerHTML = '<option value="">All Campuses (Global)</option>' + 
+        sel.innerHTML = '<option value="">All Campuses (Global)</option>' +
           activeList.map(c => `
             <option value="${c.id}" ${curVal == c.id ? 'selected' : ''}>${escapeHtml(c.name)} (${escapeHtml(c.code)})</option>
           `).join('');
@@ -1361,7 +1326,7 @@ async function loadCampusesForDropdown() {
       const adminCampSel = document.getElementById('adminModalCampusSelect');
       if (adminCampSel) {
         const curSel = adminCampSel.value;
-        adminCampSel.innerHTML = '<option value="">Select Campus...</option>' + 
+        adminCampSel.innerHTML = '<option value="">Select Campus...</option>' +
           activeList.map(c => `
             <option value="${c.id}" ${curSel == c.id ? 'selected' : ''}>${escapeHtml(c.name)} (${escapeHtml(c.code)})</option>
           `).join('');
@@ -1763,7 +1728,7 @@ function escapeHtml(str) {
 
 function debounce(fn, delay) {
   let timer;
-  return function(...args) {
+  return function (...args) {
     clearTimeout(timer);
     timer = setTimeout(() => fn.apply(this, args), delay);
   };

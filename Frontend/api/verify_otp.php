@@ -54,19 +54,42 @@ if ($userId && !isClaimModuleActiveForUser($userId)) {
 }
 
 // 4. Input Parsing & Validation
+$inputOtp = trim($_POST['otp'] ?? '');
 $matchId = filter_input(INPUT_POST, 'match_id', FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]])
            ?: filter_var($_POST['match_id'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
-$inputOtp = trim($_POST['otp'] ?? '');
-
-if (!$matchId) {
-    http_response_code(400);
-    echo json_encode(['success' => false, 'code' => 'INVALID_MATCH', 'message' => 'Valid match ID is required.']);
-    exit;
-}
 
 if (!preg_match('/^[0-9]{6}$/', $inputOtp)) {
     http_response_code(400);
     echo json_encode(['success' => false, 'code' => 'INVALID_OTP_FORMAT', 'message' => 'Verification code must be exactly 6 digits.']);
+    exit;
+}
+
+// If match_id was not explicitly supplied (e.g. walk-in desk OTP entry), auto-resolve via OTP hash
+if (!$matchId && $conn) {
+    $otpHashed = hashOtpCode($inputOtp);
+    $adminCampusId = !empty($_SESSION['admin_campus_id']) ? (int)$_SESSION['admin_campus_id'] : 0;
+    $campusClause = ($adminCampusId > 0) ? "AND (campus_id = $adminCampusId OR campus_id IS NULL OR campus_id = 0)" : "";
+    $cLookup = $conn->query("
+        SELECT id, match_id 
+        FROM recovery_cases 
+        WHERE otp_hash = '$otpHashed' 
+          AND LOWER(status) NOT IN ('completed', 'resolved', 'handed_off', 'rejected', 'archived')
+          AND (otp_expires_at IS NULL OR otp_expires_at > NOW())
+          $campusClause
+        ORDER BY id DESC LIMIT 1
+    ");
+    if ($cLookup && $cRow = $cLookup->fetch_assoc()) {
+        $matchId = (int)(!empty($cRow['match_id']) ? $cRow['match_id'] : $cRow['id']);
+    }
+}
+
+if (!$matchId) {
+    http_response_code(400);
+    echo json_encode([
+        'success' => false, 
+        'code' => 'INVALID_MATCH', 
+        'message' => 'No active recovery case found for this OTP code. Please enter the Case # or verify the code.'
+    ]);
     exit;
 }
 
@@ -127,6 +150,39 @@ try {
     $res = mysqli_stmt_get_result($stmt);
     $match = mysqli_fetch_assoc($res);
     mysqli_stmt_close($stmt);
+
+    // If match was not found, check if $matchId was actually a recovery_cases ID
+    if (!$match) {
+        $rcCheck = $conn->query("SELECT * FROM recovery_cases WHERE `$rcPk` = $matchId LIMIT 1 FOR UPDATE");
+        if ($rcCheck && $rcRow = $rcCheck->fetch_assoc()) {
+            $realMatchId = (int)($rcRow['match_id'] ?? 0);
+            if ($realMatchId > 0) {
+                $stmt2 = mysqli_prepare($conn, $selectSql);
+                mysqli_stmt_bind_param($stmt2, 'i', $realMatchId);
+                mysqli_stmt_execute($stmt2);
+                $match = mysqli_fetch_assoc(mysqli_stmt_get_result($stmt2));
+                mysqli_stmt_close($stmt2);
+                if ($match) {
+                    $matchId = $realMatchId;
+                }
+            }
+            if (!$match) {
+                $foundId = (int)($rcRow[$rcRepCol] ?? 0);
+                $ownerId = (int)($rcRow[$rcClaimantCol] ?? 0);
+                $lostId = (int)($rcRow['lost_id'] ?? 0);
+                $fQ = $conn->query("SELECT `$fUserCol` as founder_id FROM found_reports WHERE `$fPk` = $foundId LIMIT 1");
+                $founderId = ($fQ && $fr = $fQ->fetch_assoc()) ? (int)$fr['founder_id'] : 0;
+                $match = [
+                    'id'              => 0,
+                    'match_status'    => 'pending',
+                    'lost_report_id'  => $lostId,
+                    'found_report_id' => $foundId,
+                    'owner_id'        => $ownerId,
+                    'founder_id'      => $founderId
+                ];
+            }
+        }
+    }
 
     if (!$match) {
         http_response_code(404);

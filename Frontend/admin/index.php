@@ -545,21 +545,8 @@ $adminInitials = strtoupper(substr($adminName, 0, 1) . (strpos($adminName, ' ') 
     <!-- ══════════════════════════════════════════════════════════════════ -->
     <section class="admin-tab-pane" id="pane-claims" style="display:none;">
       <div class="admin-card">
-        <div class="card-header-bar" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
-          <div>
-            <h2 style="margin:0 0 4px 0;"><i class="fa-solid fa-building-columns" style="color:var(--accent); font-size:1.1rem; margin-right:6px;"></i> Campus Admin Claims Desk</h2>
-            <p style="font-size:0.8rem; color:var(--muted); margin:0;">
-              Verify walk-in students at the <strong>Campus Admin Desk</strong> and monitor institutional handovers.
-            </p>
-          </div>
-          <div style="display:flex; align-items:center; gap:8px;">
-            <button type="button" class="btn-primary" style="font-size:0.8rem; padding:7px 14px; gap:7px; display:inline-flex; align-items:center; border-radius:8px; cursor:pointer;" onclick="openWalkInDeskOtpModal()">
-              <i class="fa-solid fa-key"></i> Verify Walk-in Desk OTP
-            </button>
-            <button type="button" class="btn-refresh" onclick="loadClaims()" title="Refresh Claims Desk">
-              <i class="fa-solid fa-rotate"></i>
-            </button>
-          </div>
+        <div class="card-header-bar">
+          <h2>Ownership Recovery Cases</h2>
         </div>
 
         <div class="table-responsive">
