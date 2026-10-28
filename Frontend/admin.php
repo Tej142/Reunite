@@ -32,6 +32,7 @@ $isAdmin = !empty($_SESSION['reunite_admin_auth']) && $_SESSION['reunite_admin_a
       }
     })();
   </script>
+  <?php include __DIR__ . '/includes/head_icons.php'; ?>
 </head>
 <body class="admin-body admin-light">
 

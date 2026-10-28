@@ -36,6 +36,7 @@ $adminInitials = strtoupper(substr($adminName, 0, 1) . (strpos($adminName, ' ') 
   
   <!-- Admin Stylesheet -->
   <link rel="stylesheet" href="css/admin.css?v=<?= file_exists(__DIR__ . '/css/admin.css') ? filemtime(__DIR__ . '/css/admin.css') : time() ?>">
+  <?php include __DIR__ . '/../includes/head_icons.php'; ?>
   <script>
     (function(){
       var theme = localStorage.getItem('reunite_admin_theme') || 'light';
@@ -54,12 +55,12 @@ $adminInitials = strtoupper(substr($adminName, 0, 1) . (strpos($adminName, ' ') 
   <!-- ── Sidebar Navigation ─────────────────────────────────────────── -->
   <aside class="admin-sidebar" id="adminSidebar">
     <div>
-      <a href="index.php" class="sidebar-brand">
-        <svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <rect width="40" height="40" rx="10" fill="#1C1814" />
-          <path d="M12 28C12 21 16 15 24 13" stroke="#E06D38" stroke-width="3.5" stroke-linecap="round"/>
-          <path d="M28 12C28 19 24 25 16 27" stroke="#F7F3EE" stroke-width="3.5" stroke-linecap="round"/>
-          <circle cx="20" cy="20" r="3.5" fill="#E06D38"/>
+      <a href="index.php" class="sidebar-brand" aria-label="Reunite Admin Command Center">
+        <svg width="36" height="36" viewBox="0 0 512 512" fill="none" aria-hidden="true" style="border-radius: 9.4px; flex-shrink: 0;">
+          <rect width="512" height="512" rx="134.1" ry="134.1" fill="#C1592F"/>
+          <g transform="translate(117.03, 117.03) scale(11.581)">
+            <path d="M12 2L14 10L22 12L14 14L12 22L10 14L2 12L10 10L12 2Z" fill="#F5F1E7"/>
+          </g>
         </svg>
         <span class="sidebar-brand-name">Reunite</span>
         <span class="sidebar-badge"><?= $isMasterAdmin ? 'Master' : 'Campus' ?></span>

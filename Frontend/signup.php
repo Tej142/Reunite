@@ -41,6 +41,7 @@ if (empty($activeCampuses)) {
 </script>
 <link rel="stylesheet" href="css/variables.css?v=<?php echo time(); ?>" />
 <link rel="stylesheet" href="css/signup.css?v=<?php echo time(); ?>" />
+<?php include __DIR__ . '/includes/head_icons.php'; ?>
 </head>
 <body>
 

@@ -618,6 +618,7 @@ $etaHuman = $maintEta ? date('M j, Y · H:i T', strtotime($maintEta)) : null;
       .maint-footer { flex-direction: column; gap: 0.5rem; text-align: center; }
     }
   </style>
+  <?php include __DIR__ . '/includes/head_icons.php'; ?>
 </head>
 <body>
   <?php

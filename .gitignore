@@ -16,3 +16,4 @@ qa_audit/
 qa_screenshots/
 *.png
 !Frontend/img/*.png
+!Frontend/*.png

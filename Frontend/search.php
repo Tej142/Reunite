@@ -31,6 +31,7 @@ if (!empty($_GET['item']) || !empty($_GET['id']) || !empty($_GET['item_id']) || 
   </script>
   <link rel="stylesheet" href="css/variables.css?v=<?php echo time(); ?>" />
   <link rel="stylesheet" href="css/search.css?v=<?php echo time(); ?>" />
+  <?php include __DIR__ . '/includes/head_icons.php'; ?>
 </head>
 <body>
 

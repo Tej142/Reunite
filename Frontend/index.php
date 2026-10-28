@@ -56,17 +56,18 @@ if (isset($conn) && $conn) {
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,500&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/intro.css?v=<?php echo time(); ?>">
+<?php include __DIR__ . '/includes/head_icons.php'; ?>
 </head>
 <body>
 
 <header class="nav">
   <div class="nav-row">
-    <a class="brand" href="index.php">
-      <svg width="28" height="28" viewBox="0 0 28 28" fill="none" aria-hidden="true">
-        <circle cx="14" cy="14" r="14" fill="#C4622D"/>
-        <path d="M14 7c-3.866 0-7 3.134-7 7 0 2.21 1.03 4.183 2.645 5.474L8 21h12l-1.645-1.526C19.97 18.183 21 16.21 21 14c0-3.866-3.134-7-7-7z" fill="white" fill-opacity="0.25"/>
-        <circle cx="14" cy="14" r="3" fill="white"/>
-        <path d="M14 8v3M14 17v3M8 14H5M23 14h-3" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-opacity="0.5"/>
+    <a class="brand" href="index.php" aria-label="Reunite Home">
+      <svg width="28" height="28" viewBox="0 0 512 512" fill="none" aria-hidden="true" style="border-radius: 7.3px; flex-shrink: 0;">
+        <rect width="512" height="512" rx="134.1" ry="134.1" fill="#C1592F"/>
+        <g transform="translate(117.03, 117.03) scale(11.581)">
+          <path d="M12 2L14 10L22 12L14 14L12 22L10 14L2 12L10 10L12 2Z" fill="#F5F1E7"/>
+        </g>
       </svg>
       <span class="serif">Reunite</span>
     </a>

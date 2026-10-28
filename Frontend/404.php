@@ -89,6 +89,7 @@ require_once __DIR__ . '/includes/orbi.php';
       }
     }
   </style>
+  <?php include __DIR__ . '/includes/head_icons.php'; ?>
 </head>
 <body>
 

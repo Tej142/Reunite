@@ -29,6 +29,7 @@ $studentPin = $tokenData['pin'] ?? '';
   </script>
   <link rel="stylesheet" href="css/variables.css?v=<?php echo time(); ?>" />
   <link rel="stylesheet" href="css/login.css?v=<?php echo time(); ?>" />
+  <?php include __DIR__ . '/includes/head_icons.php'; ?>
 </head>
 <body>
 
