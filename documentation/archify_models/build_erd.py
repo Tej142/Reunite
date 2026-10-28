@@ -1,0 +1,323 @@
+import json
+import os
+import subprocess
+
+erd_data = {
+  "schema_version": 1,
+  "diagram_type": "erd",
+  "meta": {
+    "title": "Reunite - Production Database Schema & Entity Relationships",
+    "subtitle": "Multi-Tenant Campus Schema, AI Digital DNA, and Claim Desk Lifecycle",
+    "locale": "en",
+    "visual_preset": "blueprint",
+    "quality_profile": "showcase",
+    "views": [
+      {
+        "id": "multi_tenant",
+        "label": "Multi-Tenant Campuses",
+        "focus": ["campuses", "admins", "users"],
+        "note": "Campuses partition user accounts, reports, and administrative jurisdiction."
+      },
+      {
+        "id": "reports_dna",
+        "label": "Reports & Digital DNA",
+        "focus": ["lost_reports", "found_reports", "digital_dna"],
+        "note": "Lost and Found submissions generate multi-modal feature vectors."
+      },
+      {
+        "id": "claims_handover",
+        "label": "AI Matching & Claims",
+        "focus": ["matches", "recovery_cases", "notifications"],
+        "note": "AI matching triggers claim verification, OTP handshakes, and student alerts."
+      }
+    ]
+  },
+  "layout": {
+    "mode": "grid",
+    "gapY": 45,
+    "gapX": 65
+  },
+  "entities": [
+    {
+      "id": "campuses",
+      "label": "campuses",
+      "tag": "institution",
+      "row": 0,
+      "col": 0,
+      "width": 260,
+      "attributes": [
+        { "name": "id", "type": "int", "key": "pk" },
+        { "name": "code", "type": "varchar(50)", "key": "uk" },
+        { "name": "name", "type": "varchar(150)" },
+        { "name": "city", "type": "varchar(100)" },
+        { "name": "status", "type": "varchar(20)" },
+        { "name": "created_at", "type": "timestamp" }
+      ]
+    },
+    {
+      "id": "admins",
+      "label": "admins",
+      "tag": "governance",
+      "row": 0,
+      "col": 1,
+      "width": 260,
+      "attributes": [
+        { "name": "admin_id", "type": "int", "key": "pk" },
+        { "name": "username", "type": "varchar(50)", "key": "uk" },
+        { "name": "email", "type": "varchar(100)", "key": "uk" },
+        { "name": "campus_id", "type": "int", "key": "fk", "references": "campuses.id" },
+        { "name": "role", "type": "varchar(30)" },
+        { "name": "status", "type": "varchar(20)" },
+        { "name": "created_at", "type": "timestamp" }
+      ]
+    },
+    {
+      "id": "users",
+      "label": "users",
+      "tag": "accounts",
+      "row": 0,
+      "col": 2,
+      "width": 260,
+      "attributes": [
+        { "name": "user_id", "type": "int", "key": "pk" },
+        { "name": "pin", "type": "varchar(50)", "key": "uk" },
+        { "name": "email", "type": "varchar(100)", "key": "uk" },
+        { "name": "campus_id", "type": "int", "key": "fk", "references": "campuses.id" },
+        { "name": "full_name", "type": "varchar(100)" },
+        { "name": "trust_score", "type": "int" },
+        { "name": "status", "type": "varchar(20)" },
+        { "name": "created_at", "type": "timestamp" }
+      ]
+    },
+    {
+      "id": "digital_dna",
+      "label": "digital_dna",
+      "tag": "ai_features",
+      "row": 1,
+      "col": 0,
+      "width": 260,
+      "attributes": [
+        { "name": "dna_id", "type": "int", "key": "pk" },
+        { "name": "report_type", "type": "varchar(10)" },
+        { "name": "report_id", "type": "int" },
+        { "name": "category", "type": "varchar(50)" },
+        { "name": "encrypted_dna", "type": "longtext" },
+        { "name": "created_at", "type": "timestamp" }
+      ]
+    },
+    {
+      "id": "lost_reports",
+      "label": "lost_reports",
+      "tag": "reports",
+      "row": 1,
+      "col": 1,
+      "width": 260,
+      "attributes": [
+        { "name": "id", "type": "int", "key": "pk" },
+        { "name": "user_id", "type": "int", "key": "fk", "references": "users.user_id" },
+        { "name": "campus_id", "type": "int", "key": "fk", "references": "campuses.id" },
+        { "name": "title", "type": "varchar(150)" },
+        { "name": "category", "type": "varchar(50)" },
+        { "name": "status", "type": "varchar(20)" },
+        { "name": "date_lost", "type": "date" }
+      ]
+    },
+    {
+      "id": "found_reports",
+      "label": "found_reports",
+      "tag": "reports",
+      "row": 1,
+      "col": 2,
+      "width": 260,
+      "attributes": [
+        { "name": "id", "type": "int", "key": "pk" },
+        { "name": "user_id", "type": "int", "key": "fk", "references": "users.user_id" },
+        { "name": "campus_id", "type": "int", "key": "fk", "references": "campuses.id" },
+        { "name": "title", "type": "varchar(150)" },
+        { "name": "category", "type": "varchar(50)" },
+        { "name": "status", "type": "varchar(20)" },
+        { "name": "date_found", "type": "date" }
+      ]
+    },
+    {
+      "id": "notifications",
+      "label": "notifications",
+      "tag": "telemetry",
+      "row": 2,
+      "col": 0,
+      "width": 260,
+      "attributes": [
+        { "name": "notification_id", "type": "int", "key": "pk" },
+        { "name": "user_id", "type": "int", "key": "fk", "references": "users.user_id" },
+        { "name": "type", "type": "varchar(50)" },
+        { "name": "message", "type": "text" },
+        { "name": "is_read", "type": "tinyint(1)" },
+        { "name": "created_at", "type": "timestamp" }
+      ]
+    },
+    {
+      "id": "matches",
+      "label": "matches",
+      "tag": "ai_matching",
+      "row": 2,
+      "col": 1,
+      "width": 260,
+      "attributes": [
+        { "name": "id", "type": "int", "key": "pk" },
+        { "name": "lost_report_id", "type": "int", "key": "fk", "references": "lost_reports.id" },
+        { "name": "found_report_id", "type": "int", "key": "fk", "references": "found_reports.id" },
+        { "name": "similarity_score", "type": "decimal(5,2)" },
+        { "name": "status", "type": "varchar(40)" },
+        { "name": "return_type", "type": "varchar(20)" },
+        { "name": "otp", "type": "varchar(6)" }
+      ]
+    },
+    {
+      "id": "recovery_cases",
+      "label": "recovery_cases",
+      "tag": "claim_desk",
+      "row": 2,
+      "col": 2,
+      "width": 260,
+      "attributes": [
+        { "name": "id", "type": "int", "key": "pk" },
+        { "name": "match_id", "type": "int", "key": "fk", "references": "matches.id" },
+        { "name": "claimant_id", "type": "int", "key": "fk", "references": "users.user_id" },
+        { "name": "return_method", "type": "varchar(20)" },
+        { "name": "otp_hash", "type": "varchar(64)" },
+        { "name": "otp_attempts", "type": "tinyint(3)" },
+        { "name": "status", "type": "varchar(40)" }
+      ]
+    }
+  ],
+  "relationships": [
+    {
+      "id": "admins_campus",
+      "from": "admins",
+      "to": "campuses",
+      "label": "governs",
+      "fromCardinality": "many",
+      "fromOptional": True,
+      "toCardinality": "one",
+      "identifying": False
+    },
+    {
+      "id": "users_campus",
+      "from": "users",
+      "to": "campuses",
+      "label": "enrolled at",
+      "fromCardinality": "many",
+      "fromOptional": True,
+      "toCardinality": "one",
+      "identifying": False
+    },
+    {
+      "id": "lost_reports_user",
+      "from": "lost_reports",
+      "to": "users",
+      "label": "reported by",
+      "fromCardinality": "many",
+      "toCardinality": "one",
+      "identifying": True
+    },
+    {
+      "id": "found_reports_user",
+      "from": "found_reports",
+      "to": "users",
+      "label": "found by",
+      "fromCardinality": "many",
+      "toCardinality": "one",
+      "identifying": True
+    },
+    {
+      "id": "matches_lost",
+      "from": "matches",
+      "to": "lost_reports",
+      "label": "matches",
+      "fromCardinality": "many",
+      "toCardinality": "one",
+      "identifying": False
+    },
+    {
+      "id": "matches_found",
+      "from": "matches",
+      "to": "found_reports",
+      "label": "pairs with",
+      "fromCardinality": "many",
+      "toCardinality": "one",
+      "identifying": False
+    },
+    {
+      "id": "recovery_match",
+      "from": "recovery_cases",
+      "to": "matches",
+      "label": "claims",
+      "fromCardinality": "many",
+      "fromOptional": True,
+      "toCardinality": "one",
+      "identifying": False
+    },
+    {
+      "id": "recovery_user",
+      "from": "recovery_cases",
+      "to": "users",
+      "label": "claimed by",
+      "fromCardinality": "many",
+      "toCardinality": "one",
+      "identifying": False
+    },
+    {
+      "id": "notifs_user",
+      "from": "notifications",
+      "to": "users",
+      "label": "alerts",
+      "fromCardinality": "many",
+      "toCardinality": "one",
+      "identifying": True
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Campus Partitioning",
+      "items": [
+        "Multi-tenant isolation binds users, admins, and reports to a campus_id.",
+        "Master Admins oversee global telemetry; Campus Admins are strictly scoped.",
+        "Students authenticate via institution PIN and verified university email."
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "AI Match & Claim Desk Hub",
+      "items": [
+        "AI matches pair lost_reports and found_reports with cosine similarity scores.",
+        "Claim Desk triggers two-factor verification: founder approval or physical desk handover.",
+        "Cryptographic 6-digit OTPs use HMAC-SHA256 hashes with 5-minute expirations."
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Data Integrity & Audit",
+      "items": [
+        "All critical state transitions record immutable events in logs and access_logs.",
+        "Foreign key constraints enforce referential integrity across MySQL / MariaDB engines.",
+        "Privacy thumbnails and blur masks protect sensitive item identities until approved."
+      ]
+    }
+  ]
+}
+
+out_json = r"c:\xampp\htdocs\pw\Reunite\documentation\archify_models\reunite_database.erd.json"
+with open(out_json, "w", encoding="utf-8") as f:
+    json.dump(erd_data, f, indent=2)
+print("Saved JSON model:", out_json)
+
+# Validate and Render with Archify CLI
+archify_cli = r"c:\xampp\htdocs\pw\archify-main\archify\bin\archify.mjs"
+out_html = r"c:\xampp\htdocs\pw\Reunite\documentation\08_ARCHIFY_DATABASE_RELATIONSHIPS.html"
+
+res = subprocess.run(["node", archify_cli, "render", "erd", out_json, out_html, "--quality", "standard"], capture_output=True, text=True)
+print("Render output:", res.stdout)
+if res.stderr:
+    print("Render stderr:", res.stderr)
+print("Exit code:", res.returncode)
