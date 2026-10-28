@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Reunite Platform — Archify Architecture Hub (End-to-End)</title>
+  <style>
+    :root {
+      --bg: #0d0f12;
+      --card-bg: #16191f;
+      --card-border: #232936;
+      --card-hover: #2b3345;
+      --accent: #c25e30;
+      --accent-glow: rgba(194, 94, 48, 0.25);
+      --accent-light: #e67d4d;
+      --text-main: #f1f5f9;
+      --text-muted: #94a3b8;
+      --text-sub: #64748b;
+      --success: #10b981;
+      --info: #38bdf8;
+      --purple: #a855f7;
+      --amber: #f59e0b;
+      --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text-main);
+      font-family: var(--font-sans);
+      line-height: 1.6;
+      padding: 40px 24px 80px;
+      min-height: 100vh;
+    }
+
+    .container {
+      max-width: 1140px;
+      margin: 0 auto;
+    }
+
+    header {
+      margin-bottom: 48px;
+      padding-bottom: 32px;
+      border-bottom: 1px solid var(--card-border);
+      position: relative;
+    }
+
+    .badge-top {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(194, 94, 48, 0.15);
+      border: 1px solid var(--accent);
+      color: var(--accent-light);
+      padding: 6px 14px;
+      border-radius: 9999px;
+      font-size: 12px;
+      font-family: var(--font-mono);
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      margin-bottom: 16px;
+    }
+
+    .badge-top::before {
+      content: "";
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 10px var(--accent);
+    }
+
+    h1 {
+      font-size: 32px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      margin-bottom: 12px;
+      color: #ffffff;
+    }
+
+    .subtitle {
+      font-size: 16px;
+      color: var(--text-muted);
+      max-width: 760px;
+    }
+
+    .timeline-nav {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 40px;
+      overflow-x: auto;
+      padding-bottom: 8px;
+    }
+
+    .timeline-step {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      padding: 10px 16px;
+      border-radius: 10px;
+      font-family: var(--font-mono);
+      font-size: 13px;
+      color: var(--text-muted);
+      text-decoration: none;
+      white-space: nowrap;
+      transition: all 0.2s ease;
+    }
+
+    .timeline-step:hover {
+      border-color: var(--accent);
+      color: var(--text-main);
+      transform: translateY(-1px);
+    }
+
+    .step-num {
+      width: 22px;
+      height: 22px;
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.08);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--accent-light);
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 28px;
+    }
+
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 16px;
+      padding: 28px;
+      transition: all 0.25s ease;
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+
+    .card:hover {
+      border-color: var(--accent);
+      box-shadow: 0 12px 32px var(--accent-glow);
+    }
+
+    .card-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    .card-meta {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .step-tag {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      padding: 4px 10px;
+      border-radius: 6px;
+      background: rgba(194, 94, 48, 0.15);
+      color: var(--accent-light);
+      border: 1px solid rgba(194, 94, 48, 0.3);
+    }
+
+    .preset-tag {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      padding: 4px 8px;
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.06);
+      color: var(--text-muted);
+    }
+
+    .card-title {
+      font-size: 20px;
+      font-weight: 700;
+      color: #ffffff;
+      margin-top: 4px;
+    }
+
+    .card-desc {
+      font-size: 14px;
+      color: var(--text-muted);
+      line-height: 1.6;
+    }
+
+    .highlights {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 12px;
+      background: rgba(0, 0, 0, 0.25);
+      padding: 16px;
+      border-radius: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.04);
+    }
+
+    .highlight-item {
+      font-size: 13px;
+      color: var(--text-main);
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+    }
+
+    .highlight-item::before {
+      content: "▪";
+      color: var(--accent-light);
+      font-size: 16px;
+      line-height: 1;
+    }
+
+    .pills {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .pill {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      padding: 4px 10px;
+      border-radius: 9999px;
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--text-sub);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .actions {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-top: 6px;
+      flex-wrap: wrap;
+    }
+
+    .btn-launch {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--accent);
+      color: #ffffff;
+      padding: 10px 20px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      text-decoration: none;
+      transition: background 0.2s ease, transform 0.1s ease;
+    }
+
+    .btn-launch:hover {
+      background: var(--accent-light);
+      transform: translateY(-1px);
+    }
+
+    .btn-secondary {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: transparent;
+      color: var(--text-muted);
+      border: 1px solid var(--card-border);
+      padding: 10px 16px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-family: var(--font-mono);
+      text-decoration: none;
+      transition: all 0.2s ease;
+    }
+
+    .btn-secondary:hover {
+      border-color: var(--text-sub);
+      color: var(--text-main);
+    }
+
+    .hotkey-banner {
+      margin-top: 54px;
+      padding: 24px;
+      border-radius: 12px;
+      background: rgba(22, 25, 31, 0.7);
+      border: 1px solid var(--card-border);
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .hotkey-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-main);
+      font-family: var(--font-mono);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .hotkey-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+
+    .hotkey-item {
+      font-size: 12px;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-family: var(--font-mono);
+    }
+
+    kbd {
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 4px;
+      padding: 2px 6px;
+      color: #ffffff;
+      font-size: 11px;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <header>
+      <div class="badge-top">Archify 3.2.0 • End-to-End Suite</div>
+      <h1>Reunite Platform — Architecture &amp; Lifecycle Visualizer</h1>
+      <p class="subtitle">Complete visual model of the Reunite lost-and-found system from initial system entry to custody resolution. Browse the 4 interactive diagrams sequentially from starting to ending.</p>
+    </header>
+
+    <!-- Step Timeline Navigation -->
+    <nav class="timeline-nav">
+      <a href="#step-1" class="timeline-step">
+        <span class="step-num">01</span>
+        <span>System Cloud Architecture (Start)</span>
+      </a>
+      <a href="#step-2" class="timeline-step">
+        <span class="step-num">02</span>
+        <span>Database Schema &amp; ERD</span>
+      </a>
+      <a href="#step-3" class="timeline-step">
+        <span class="step-num">03</span>
+        <span>AI Vector Matching Dataflow</span>
+      </a>
+      <a href="#step-4" class="timeline-step">
+        <span class="step-num">04</span>
+        <span>Claim Desk &amp; Handover Lifecycle (End)</span>
+      </a>
+    </nav>
+
+    <!-- Main Grid of Outcomes -->
+    <main class="grid">
+
+      <!-- STEP 1: Starting / Cloud Infrastructure -->
+      <section id="step-1" class="card">
+        <div class="card-header">
+          <div>
+            <div class="card-meta">
+              <span class="step-tag">Step 01 • Starting Foundation</span>
+              <span class="preset-tag">type: architecture</span>
+              <span class="preset-tag">preset: blueprint</span>
+            </div>
+            <h2 class="card-title">Production Cloud &amp; AI Microservice Architecture</h2>
+          </div>
+        </div>
+        <p class="card-desc">The high-level production topology establishing client entry points (Web PWA, Android Capacitor APK), NGINX reverse proxy, stateless PHP API services, session guard, crypto engine, dedicated Flask AI GPU microservices, and persistent databases.</p>
+        
+        <div class="highlights">
+          <div class="highlight-item">Client Layer: Web Portal (Vanilla JS/CSS) + Android Shell</div>
+          <div class="highlight-item">API Gateway: PHP 8.1 REST endpoints with zero-cookie anti-IDOR guard</div>
+          <div class="highlight-item">AI Cluster: Flask Python service running CLIP ViT-B/32 &amp; DINOv2-Large</div>
+          <div class="highlight-item">Storage Tier: MySQL 8.0 relational cluster + ChromaDB vector index</div>
+        </div>
+
+        <div class="pills">
+          <span class="pill">PWA</span>
+          <span class="pill">Capacitor APK</span>
+          <span class="pill">PHP 8.1</span>
+          <span class="pill">Flask AI</span>
+          <span class="pill">CLIP ViT-B/32</span>
+          <span class="pill">DINOv2</span>
+          <span class="pill">MySQL 8.0</span>
+          <span class="pill">ChromaDB</span>
+        </div>
+
+        <div class="actions">
+          <a href="01_SYSTEM_CLOUD_ARCHITECTURE.html" target="_blank" class="btn-launch">
+            <span>Launch Interactive Diagram</span>
+            <span>↗</span>
+          </a>
+          <a href="../01_DATABASE_AND_CONFIG_CODE.md" class="btn-secondary">View Code Reference</a>
+        </div>
+      </section>
+
+      <!-- STEP 2: Database Schema & Entity Relationships -->
+      <section id="step-2" class="card">
+        <div class="card-header">
+          <div>
+            <div class="card-meta">
+              <span class="step-tag">Step 02 • Data Model</span>
+              <span class="preset-tag">type: erd</span>
+              <span class="preset-tag">preset: blueprint</span>
+            </div>
+            <h2 class="card-title">Relational Multi-Tenant Schema &amp; Entity Relationships (ERD)</h2>
+          </div>
+        </div>
+        <p class="card-desc">The foundational relational data layer mapping all 9 primary entities, foreign key constraints, and cardinality rules across multi-tenant campus boundaries. Includes specialized focus views for institutions, digital DNA vectors, and claims.</p>
+        
+        <div class="highlights">
+          <div class="highlight-item">Multi-Tenant Scoping: Campuses partition users, admins, and reports</div>
+          <div class="highlight-item">Digital DNA Table: Links multi-modal embeddings to lost &amp; found reports</div>
+          <div class="highlight-item">AI Matches: Records spatial similarity percentages and candidate status</div>
+          <div class="highlight-item">Recovery Cases: Gathers claimant proof, OTP attempts, and audit logs</div>
+        </div>
+
+        <div class="pills">
+          <span class="pill">campuses</span>
+          <span class="pill">admins</span>
+          <span class="pill">users</span>
+          <span class="pill">lost_reports</span>
+          <span class="pill">found_reports</span>
+          <span class="pill">digital_dna</span>
+          <span class="pill">matches</span>
+          <span class="pill">recovery_cases</span>
+          <span class="pill">notifications</span>
+        </div>
+
+        <div class="actions">
+          <a href="02_DATABASE_RELATIONSHIPS_ERD.html" target="_blank" class="btn-launch">
+            <span>Launch Interactive Diagram</span>
+            <span>↗</span>
+          </a>
+          <a href="specs/reunite_database.erd.json" class="btn-secondary">Raw JSON Model</a>
+          <a href="../8.5_DATABASE_STRUCTURE.md" class="btn-secondary">Thesis DB Report</a>
+        </div>
+      </section>
+
+      <!-- STEP 3: Operational Ingestion & AI Vector Pipeline -->
+      <section id="step-3" class="card">
+        <div class="card-header">
+          <div>
+            <div class="card-meta">
+              <span class="step-tag">Step 03 • Processing Pipeline</span>
+              <span class="preset-tag">type: dataflow</span>
+              <span class="preset-tag">preset: signal-flow</span>
+            </div>
+            <h2 class="card-title">Multi-Modal AI Matching &amp; Vector Dataflow Pipeline</h2>
+          </div>
+        </div>
+        <p class="card-desc">The dynamic processing pipeline from client photo capture to vector match alert. Follows image ingestion through EXIF sanitization, CLIP ViT-B/32 multimodal fusion (60% visual / 40% textual), ChromaDB HNSW indexing, and multi-tier heuristic filtering.</p>
+        
+        <div class="highlights">
+          <div class="highlight-item">Visual-Semantic Fusion: Combines dense visual tokens with 77-token prompt text</div>
+          <div class="highlight-item">Cosine Retrieval: ChromaDB HNSW nearest neighbor search across opposing collections</div>
+          <div class="highlight-item">Heuristic Filtering: Validates campus scope, category match, and &plusmn;14d timestamp window</div>
+          <div class="highlight-item">Automated Dispatch: Matches &ge;75% similarity trigger immediate push alerts</div>
+        </div>
+
+        <div class="pills">
+          <span class="pill">Capture Form</span>
+          <span class="pill">EXIF Stripping</span>
+          <span class="pill">ViT-B/32</span>
+          <span class="pill">512-dim Fusion</span>
+          <span class="pill">HNSW Index</span>
+          <span class="pill">Cosine &le;0.30</span>
+          <span class="pill">Push Alert</span>
+        </div>
+
+        <div class="actions">
+          <a href="03_AI_MATCHING_VECTOR_DATAFLOW.html" target="_blank" class="btn-launch">
+            <span>Launch Interactive Diagram</span>
+            <span>↗</span>
+          </a>
+          <a href="specs/reunite_ai_matching.dataflow.json" class="btn-secondary">Raw JSON Model</a>
+          <a href="../03_AI_MATCHING_AND_CHROMADB_CODE.md" class="btn-secondary">View AI Code</a>
+        </div>
+      </section>
+
+      <!-- STEP 4: Ending / Claim Desk Handover Lifecycle -->
+      <section id="step-4" class="card">
+        <div class="card-header">
+          <div>
+            <div class="card-meta">
+              <span class="step-tag">Step 04 • Ending &amp; Resolution</span>
+              <span class="preset-tag">type: lifecycle</span>
+              <span class="preset-tag">preset: classic</span>
+            </div>
+            <h2 class="card-title">Campus Desk Claim &amp; 2FA OTP Custody Lifecycle</h2>
+          </div>
+        </div>
+        <p class="card-desc">The terminal operational lifecycle governing item custody and handover. Spans candidate match alerts, claimant proof submission, campus desk verification, 6-digit HMAC-SHA256 OTP verification, and secure physical return (or terminal rejection/lockout).</p>
+        
+        <div class="highlights">
+          <div class="highlight-item">Entry State: Matched item generates automated alert and claim invitation</div>
+          <div class="highlight-item">Proof Submission: Claimant provides serial numbers, receipts, and photos</div>
+          <div class="highlight-item">Cryptographic 2FA: 6-digit HMAC-SHA256 OTP valid for 5 minutes with 5 max attempts</div>
+          <div class="highlight-item">Terminal States: Reunited (custody closed), Expired (retry), or Rejected (fraud)</div>
+        </div>
+
+        <div class="pills">
+          <span class="pill">Matched</span>
+          <span class="pill">Claim Filed</span>
+          <span class="pill">Desk Verify</span>
+          <span class="pill">HMAC-SHA256</span>
+          <span class="pill">5-min Window</span>
+          <span class="pill">Reunited</span>
+        </div>
+
+        <div class="actions">
+          <a href="04_CLAIM_DESK_HANDOVER_LIFECYCLE.html" target="_blank" class="btn-launch">
+            <span>Launch Interactive Diagram</span>
+            <span>↗</span>
+          </a>
+          <a href="../04_CLAIM_VERIFICATION_AND_OTP_CODE.md" class="btn-secondary">View Handover Code</a>
+        </div>
+      </section>
+
+    </main>
+
+    <!-- Viewer Hotkey Reference -->
+    <div class="hotkey-banner">
+      <div class="hotkey-title">⌨️ Archify Interactive Controls &amp; Hotkeys</div>
+      <div class="hotkey-grid">
+        <div class="hotkey-item"><kbd>+</kbd> / <kbd>-</kbd> Zoom In / Out</div>
+        <div class="hotkey-item"><kbd>0</kbd> Reset Viewport</div>
+        <div class="hotkey-item"><kbd>F</kbd> Presentation Mode</div>
+        <div class="hotkey-item"><kbd>M</kbd> Mini-map Radar</div>
+        <div class="hotkey-item"><kbd>L</kbd> Semantic Lens</div>
+        <div class="hotkey-item"><kbd>R</kbd> Route Probe</div>
+        <div class="hotkey-item"><kbd>Esc</kbd> Clear / Close</div>
+      </div>
+    </div>
+
+  </div>
+
+</body>
+</html>

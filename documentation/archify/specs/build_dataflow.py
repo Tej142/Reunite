@@ -1,4 +1,6 @@
 import json
+import os
+import subprocess
 
 dataflow_data = {
   "schema_version": 1,
@@ -77,8 +79,21 @@ dataflow_data = {
   ]
 }
 
-model_path = r"c:\xampp\htdocs\pw\Reunite\documentation\archify_models\reunite_ai_matching.dataflow.json"
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+ARCHIFY_DIR = os.path.dirname(BASE_DIR)
+DOCS_DIR = os.path.dirname(ARCHIFY_DIR)
+ARCHIFY_CLI = os.path.abspath(os.path.join(DOCS_DIR, "..", "..", "archify-main", "archify", "bin", "archify.mjs"))
+
+model_path = os.path.join(BASE_DIR, "reunite_ai_matching.dataflow.json")
 with open(model_path, "w", encoding="utf-8") as f:
     json.dump(dataflow_data, f, indent=2)
 
 print("Saved model to", model_path)
+
+out_html = os.path.join(ARCHIFY_DIR, "03_AI_MATCHING_VECTOR_DATAFLOW.html")
+res = subprocess.run(["node", ARCHIFY_CLI, "render", "dataflow", model_path, out_html, "--quality", "standard"], capture_output=True, text=True)
+print("Render output:", res.stdout)
+if res.stderr:
+    print("Render stderr:", res.stderr)
+print("Exit code:", res.returncode)
+

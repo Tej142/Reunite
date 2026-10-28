@@ -307,17 +307,22 @@ erd_data = {
   ]
 }
 
-out_json = r"c:\xampp\htdocs\pw\Reunite\documentation\archify_models\reunite_database.erd.json"
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+ARCHIFY_DIR = os.path.dirname(BASE_DIR)
+DOCS_DIR = os.path.dirname(ARCHIFY_DIR)
+ARCHIFY_CLI = os.path.abspath(os.path.join(DOCS_DIR, "..", "..", "archify-main", "archify", "bin", "archify.mjs"))
+
+out_json = os.path.join(BASE_DIR, "reunite_database.erd.json")
 with open(out_json, "w", encoding="utf-8") as f:
     json.dump(erd_data, f, indent=2)
 print("Saved JSON model:", out_json)
 
 # Validate and Render with Archify CLI
-archify_cli = r"c:\xampp\htdocs\pw\archify-main\archify\bin\archify.mjs"
-out_html = r"c:\xampp\htdocs\pw\Reunite\documentation\08_ARCHIFY_DATABASE_RELATIONSHIPS.html"
+out_html = os.path.join(ARCHIFY_DIR, "02_DATABASE_RELATIONSHIPS_ERD.html")
 
-res = subprocess.run(["node", archify_cli, "render", "erd", out_json, out_html, "--quality", "standard"], capture_output=True, text=True)
+res = subprocess.run(["node", ARCHIFY_CLI, "render", "erd", out_json, out_html, "--quality", "standard"], capture_output=True, text=True)
 print("Render output:", res.stdout)
 if res.stderr:
     print("Render stderr:", res.stderr)
 print("Exit code:", res.returncode)
+

@@ -1,6 +1,6 @@
-# Reunite Platform — Technical Documentation & Architectural Visualizations
+# Reunite Platform — Technical Documentation & Architectural Suite
 
-Welcome to the engineering documentation suite for the **Reunite Multi-Tenant Campus Lost & Found Platform**. This directory brings together production code excerpts, relational database schemas, academic thesis chapters, and standalone interactive **Archify 3.2.0** diagrams covering all facets of system design.
+Welcome to the engineering documentation suite for the **Reunite Multi-Tenant Campus Lost & Found Platform**. This directory brings together production code excerpts, relational database schemas, academic thesis chapters, and the dedicated [`archify/`](archify/) visualization suite covering all facets of system design **from starting to ending**.
 
 ---
 
@@ -8,11 +8,18 @@ Welcome to the engineering documentation suite for the **Reunite Multi-Tenant Ca
 
 ```
 documentation/
-├── 🌐 Interactive Architectural Visualizations (Archify 3.2.0)
-│   ├── 06_ARCHIFY_SYSTEM_ARCHITECTURE.html    # Production Cloud & AI Microservice Topology
-│   ├── 07_ARCHIFY_CLAIM_DESK_LIFECYCLE.html   # Campus Claim Desk Custody & 2FA OTP Lifecycle
-│   ├── 08_ARCHIFY_DATABASE_RELATIONSHIPS.html # Relational Database Schema & ERD
-│   └── 09_ARCHIFY_AI_MATCHING_DATAFLOW.html   # Multi-Modal CLIP + ChromaDB Vector Dataflow
+├── 🌐 archify/                                # Dedicated Archify Visualization Suite (Start to End)
+│   ├── index.html                             # Interactive Visual Hub & Architecture Tour
+│   ├── README.md                              # Archify Suite Documentation & Sequence Guide
+│   ├── 01_SYSTEM_CLOUD_ARCHITECTURE.html      # Step 1 (Start): Production Cloud & AI Microservice Topology
+│   ├── 02_DATABASE_RELATIONSHIPS_ERD.html     # Step 2: Relational Multi-Tenant Campus Schema (ERD)
+│   ├── 03_AI_MATCHING_VECTOR_DATAFLOW.html    # Step 3: Multi-Modal Ingestion & ChromaDB Vector Dataflow
+│   ├── 04_CLAIM_DESK_HANDOVER_LIFECYCLE.html  # Step 4 (End): Campus Desk Claim, 2FA OTP & Custody Closure
+│   └── specs/                                 # Declarative JSON Specifications & Generators
+│       ├── reunite_database.erd.json          # Database ERD JSON Model
+│       ├── reunite_ai_matching.dataflow.json  # AI Vector Dataflow JSON Model
+│       ├── build_erd.py                       # ERD Generator Script
+│       └── build_dataflow.py                  # Dataflow Generator Script
 │
 ├── 💻 Production Code Reference Modules
 │   ├── 01_DATABASE_AND_CONFIG_CODE.md         # Database Connection, Pool & Core Tables
@@ -21,39 +28,32 @@ documentation/
 │   ├── 04_CLAIM_VERIFICATION_AND_OTP_CODE.md  # Desk Approval, Ownership Proof & OTP Handshake
 │   └── 05_ADMIN_COMMAND_CENTER_AND_TELEMETRY_CODE.md # Real-Time Analytics & Ops Controls
 │
-├── 📋 Formal Thesis Database Chapter (Section 8.5)
-│   ├── 8.5_DATABASE_STRUCTURE.md              # Academic Thesis Report with Table Definitions
-│   └── 8.5_DATABASE_STRUCTURE.sql             # Executable DDL Schema Script
-│
-└── 🛠️ Archify Source Specifications & Generators
-    └── archify_models/
-        ├── reunite_database.erd.json          # Raw ERD JSON Model
-        ├── reunite_ai_matching.dataflow.json  # Raw Dataflow JSON Model
-        ├── build_erd.py                       # ERD Generator Script
-        └── build_dataflow.py                  # Dataflow Generator Script
+└── 📋 Formal Thesis Database Chapter (Section 8.5)
+    ├── 8.5_DATABASE_STRUCTURE.md              # Academic Thesis Report with Table Definitions
+    └── 8.5_DATABASE_STRUCTURE.sql             # Executable DDL Schema Script
 ```
 
 ---
 
-## 🌐 1. Interactive Architectural Visualizations (Archify 3.2.0)
+## 🌐 1. Archify Architecture & Lifecycle Suite ([`archify/`](archify/))
 
-All visual architecture diagrams are compiled with **Archify 3.2.0** as zero-dependency, self-contained HTML files with embedded vectors, dark/light theme switching, and real-time interaction. They can be double-clicked to open in any web browser or embedded directly into documentation portals via `<iframe>`.
+All Archify outcomes are housed strictly in the [`archify/`](archify/) subfolder. The suite is structured as a sequential journey through the system **from starting to ending**:
 
-| Document | Diagram Type | Visual Preset | Highlights & System Scope |
+```mermaid
+flowchart LR
+    A["01. System Architecture<br/>(Starting Foundation)"] --> B["02. Database ERD<br/>(Data Modeling)"]
+    B --> C["03. AI Vector Dataflow<br/>(Ingestion & Matching)"]
+    C --> D["04. Claim Lifecycle<br/>(Ending & Reunited)"]
+```
+
+| Step & Lifecycle Phase | File | Type & Preset | Architectural Scope |
 | :--- | :--- | :--- | :--- |
-| [**`06_ARCHIFY_SYSTEM_ARCHITECTURE.html`**](06_ARCHIFY_SYSTEM_ARCHITECTURE.html) | `architecture` | `blueprint` | Web PWA, Android native shell (Capacitor), NGINX reverse proxy, PHP REST API Gateway, Flask AI Microservice, CLIP ViT-B/32, DINOv2 visual backbone, and MySQL 8.0 cluster. |
-| [**`07_ARCHIFY_CLAIM_DESK_LIFECYCLE.html`**](07_ARCHIFY_CLAIM_DESK_LIFECYCLE.html) | `lifecycle` | `classic` | 8-phase state machine spanning item discovery, custody intake, multi-modal vector indexing, candidate match alert, claim submission, 2FA OTP handshake, and campus handover. |
-| [**`08_ARCHIFY_DATABASE_RELATIONSHIPS.html`**](08_ARCHIFY_DATABASE_RELATIONSHIPS.html) | `erd` | `blueprint` | Complete 9-entity relational schema with multi-tenant campus boundaries, foreign key references, cardinality constraints, and specialized views (`multi_tenant`, `reports_dna`, `claims_handover`). |
-| [**`09_ARCHIFY_AI_MATCHING_DATAFLOW.html`**](09_ARCHIFY_AI_MATCHING_DATAFLOW.html) | `dataflow` | `signal-flow` | End-to-end data pipelines from camera ingestion and EXIF stripping through CLIP multi-modal 512-dim fusion (60% image / 40% text) to ChromaDB HNSW cosine similarity search and push notifications. |
+| **Step 01: Starting Foundation** | [**`01_SYSTEM_CLOUD_ARCHITECTURE.html`**](archify/01_SYSTEM_CLOUD_ARCHITECTURE.html) | `architecture`<br>*(Blueprint)* | Production infrastructure topology connecting client applications (Web PWA, Android Capacitor APK), NGINX reverse proxy, PHP 8.1 API Gateway, session guard, Flask AI GPU microservices (CLIP ViT-B/32 & DINOv2), and MySQL/ChromaDB persistence. |
+| **Step 02: Relational Data Model** | [**`02_DATABASE_RELATIONSHIPS_ERD.html`**](archify/02_DATABASE_RELATIONSHIPS_ERD.html) | `erd`<br>*(Blueprint)* | 9-entity relational data layer with multi-tenant campus boundaries, foreign key cardinalities, and specialized focus views (`multi_tenant`, `reports_dna`, `claims_handover`). |
+| **Step 03: Processing Pipeline** | [**`03_AI_MATCHING_VECTOR_DATAFLOW.html`**](archify/03_AI_MATCHING_VECTOR_DATAFLOW.html) | `dataflow`<br>*(Signal-Flow)* | Runtime dataflow from camera ingestion and EXIF stripping through CLIP multi-modal 512-dim fusion (60% image / 40% text), ChromaDB HNSW nearest neighbor querying, and heuristic filtering. |
+| **Step 04: Ending & Custody Resolution** | [**`04_CLAIM_DESK_HANDOVER_LIFECYCLE.html`**](archify/04_CLAIM_DESK_HANDOVER_LIFECYCLE.html) | `lifecycle`<br>*(Classic)* | Complete terminal business workflow from candidate match notification to claimant proof submission, campus desk verification, 6-digit HMAC-SHA256 OTP handshake, and physical handover to **Reunited**. |
 
-### ⌨️ Archify Viewer Hotkeys & Navigation
-When viewing any Archify HTML diagram:
-- `+` / `-` / `0` — Zoom in, zoom out, or reset to 100% viewport fit.
-- `F` — Toggle full-screen presentation mode.
-- `M` — Toggle the radar mini-map navigator.
-- `L` — Activate the Semantic Lens focus probe.
-- `R` — Activate the Route Probe to inspect connection dependencies between nodes.
-- `Escape` — Clear active highlights and dismiss modals.
+> 💡 **Visual Hub:** Open [`archify/index.html`](archify/index.html) in your browser for an interactive visual portal featuring cards, component badges, and one-click launch links for all diagrams.
 
 ---
 
@@ -82,27 +82,14 @@ Formatted specifically for academic project reports, capstone thesis presentatio
 
 ---
 
-## 🛠️ 4. Archify Source Models & CLI Compilation
+## 🛠️ 4. Archify Models & CLI Compilation
 
-All interactive HTML diagrams are built deterministically from pure JSON declarative specifications located in [`archify_models/`](archify_models/).
-
-### Rebuilding Diagrams via Archify CLI
-If models are updated or customized, re-render them using the bundled Archify CLI:
+All diagrams are compiled from raw JSON declarations in [`archify/specs/`](archify/specs/):
 
 ```powershell
-# 1. Render Database Schema ERD
-node ../../archify-main/archify/bin/archify.mjs render erd `
-  archify_models/reunite_database.erd.json `
-  08_ARCHIFY_DATABASE_RELATIONSHIPS.html --quality standard
+# Rebuild Database Schema ERD
+python archify/specs/build_erd.py
 
-# 2. Render AI Matching & Vector Dataflow
-node ../../archify-main/archify/bin/archify.mjs render dataflow `
-  archify_models/reunite_ai_matching.dataflow.json `
-  09_ARCHIFY_AI_MATCHING_DATAFLOW.html --quality standard
-```
-
-Or execute the Python helper scripts:
-```powershell
-python archify_models/build_erd.py
-python archify_models/build_dataflow.py
+# Rebuild AI Matching Dataflow
+python archify/specs/build_dataflow.py
 ```
