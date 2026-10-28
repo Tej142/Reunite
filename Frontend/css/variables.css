@@ -55,7 +55,7 @@
   --radius-full: 9999px;
 
   /* ── Safe Area Inset Tokens (with 0px fallbacks) ── */
-  --sat: env(safe-area-inset-top, 0px);
+  --sat: 0px;
   --sar: env(safe-area-inset-right, 0px);
   --sab: env(safe-area-inset-bottom, 0px);
   --sal: env(safe-area-inset-left, 0px);
@@ -388,7 +388,7 @@ nav.reunite-main-nav {
   z-index: 5000;
   background: var(--bg);
   border-bottom: 1px solid var(--border);
-  padding-top: var(--sat);
+  padding-top: 0;
 }
 
 .nav-inner {

@@ -42,6 +42,7 @@ FILES_TO_DEPLOY = [
     "Frontend/js/signup.js",
     "Frontend/profile.php",
     "Frontend/login.php",
+    "Frontend/css/variables.css",
     "Frontend/css/login.css",
     "Frontend/js/login.js",
     "tests/test_unified_login.php",
