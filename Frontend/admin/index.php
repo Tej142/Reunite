@@ -186,10 +186,18 @@ $adminInitials = strtoupper(substr($adminName, 0, 1) . (strpos($adminName, ' ') 
     <!-- Topbar -->
     <!-- Top Header Bar -->
     <div class="admin-topbar">
-      <div style="display:flex; align-items:center; gap:16px;">
+      <div style="display:flex; align-items:center; gap:12px;">
         <button type="button" class="mobile-sidebar-toggle" id="mobileSidebarToggle" aria-label="Toggle Navigation">
           <i class="fa-solid fa-bars"></i>
         </button>
+        <div class="topbar-brand-mobile" style="display:none; align-items:center;">
+          <svg width="28" height="28" viewBox="0 0 512 512" fill="none" aria-hidden="true" style="border-radius: 7.3px; flex-shrink: 0; box-shadow: 0 2px 6px rgba(193, 89, 47, 0.25);">
+            <rect width="512" height="512" rx="134.1" ry="134.1" fill="#C1592F"/>
+            <g transform="translate(117.03, 117.03) scale(11.581)">
+              <path d="M12 2L14 10L22 12L14 14L12 22L10 14L2 12L10 10L12 2Z" fill="#F5F1E7"/>
+            </g>
+          </svg>
+        </div>
         <div class="page-title-wrap">
           <h1 id="viewTitle">Dashboard</h1>
           <p id="viewSubtitle">Overview of campus reports, matches, and operations.</p>

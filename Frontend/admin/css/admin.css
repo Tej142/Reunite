@@ -110,9 +110,11 @@ body {
 }
 
 .sidebar-brand svg {
-  width: 28px;
-  height: 28px;
+  width: 32px;
+  height: 32px;
+  border-radius: 8.4px;
   flex-shrink: 0;
+  box-shadow: 0 2px 8px rgba(193, 89, 47, 0.25);
 }
 
 .sidebar-brand-name {
@@ -1008,6 +1010,10 @@ body {
   }
 
   .mobile-sidebar-toggle {
+  display: flex !important;
+  }
+
+  .topbar-brand-mobile {
     display: flex !important;
   }
 }

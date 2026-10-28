@@ -65,10 +65,12 @@ $isAdmin = !empty($_SESSION['reunite_admin_auth']) && $_SESSION['reunite_admin_a
       </div>
 
       <div class="admin-auth-icon-wrap">
-        <div class="admin-auth-icon">
-          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-            <path d="M9 12l2 2 4-4"/>
+        <div class="admin-auth-icon" style="background:transparent; box-shadow:none;">
+          <svg width="56" height="56" viewBox="0 0 512 512" fill="none" aria-hidden="true" style="border-radius: 14.7px; flex-shrink: 0; box-shadow: 0 4px 14px rgba(193, 89, 47, 0.35);">
+            <rect width="512" height="512" rx="134.1" ry="134.1" fill="#C1592F"/>
+            <g transform="translate(117.03, 117.03) scale(11.581)">
+              <path d="M12 2L14 10L22 12L14 14L12 22L10 14L2 12L10 10L12 2Z" fill="#F5F1E7"/>
+            </g>
           </svg>
         </div>
       </div>
@@ -171,10 +173,13 @@ $isAdmin = !empty($_SESSION['reunite_admin_auth']) && $_SESSION['reunite_admin_a
     
     <!-- Top Header -->
     <header class="admin-header">
-      <div class="admin-brand">
-        <div class="admin-brand-icon">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-        </div>
+      <div class="admin-brand" style="display:flex; align-items:center; gap:12px;">
+        <svg width="32" height="32" viewBox="0 0 512 512" fill="none" aria-hidden="true" style="border-radius: 8.4px; flex-shrink: 0;">
+          <rect width="512" height="512" rx="134.1" ry="134.1" fill="#C1592F"/>
+          <g transform="translate(117.03, 117.03) scale(11.581)">
+            <path d="M12 2L14 10L22 12L14 14L12 22L10 14L2 12L10 10L12 2Z" fill="#F5F1E7"/>
+          </g>
+        </svg>
         <div>
           <span class="admin-brand-title">Reunite Core Ops</span>
           <span class="admin-brand-badge">Site Maintenance</span>
