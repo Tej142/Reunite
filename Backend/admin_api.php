@@ -1015,43 +1015,99 @@ if ($action === 'update_match_status') {
     exit;
 }
 
-// ── 5K. Activity & Access Audit Logs (Scoped) ───────────────
+// ── 5K. Activity & Access Audit Logs (Live & Scoped) ───────────────
 if ($action === 'logs') {
     $scope = get_admin_campus_scope();
     $search = trim($_GET['search'] ?? '');
     $cat = trim($_GET['category'] ?? '');
 
     $where = [];
-    if (!empty($cat)) {
-        $safeCat = $conn->real_escape_string($cat);
-        $where[] = "l.category = '$safeCat'";
+    if ($scope !== null) {
+        $where[] = "(u.campus_id = $scope OR u.campus_id IS NULL OR a.user_id IS NULL)";
     }
 
     $whereSql = !empty($where) ? ("WHERE " . implode(' AND ', $where)) : "";
-    $sql = "SELECT l.* FROM logs l $whereSql ORDER BY l.id DESC LIMIT 150";
+
+    $sql = "
+        SELECT 
+            a.log_id as id,
+            a.user_id,
+            a.action,
+            a.ip_address,
+            a.device_info,
+            a.log_time as created_at,
+            u.full_name as user_name,
+            u.pin as user_pin,
+            u.email as user_email,
+            u.role as user_role,
+            adm.full_name as admin_name,
+            adm.role as admin_role,
+            adm.username as admin_user
+        FROM access_logs a
+        LEFT JOIN users u ON a.user_id = u.user_id
+        LEFT JOIN admins adm ON a.user_id = adm.admin_id
+        $whereSql
+        ORDER BY a.log_id DESC LIMIT 150
+    ";
 
     $logs = [];
-    $res = @$conn->query($sql);
-    if ($res) {
+    $res = $conn ? $conn->query($sql) : null;
+    if ($res && $res->num_rows > 0) {
         while ($r = $res->fetch_assoc()) {
+            $actLower = strtolower($r['action'] ?? '');
+            
+            // Derive Category
+            if (str_contains($actLower, 'admin') || str_contains($actLower, 'terminal') || str_contains($actLower, 'clearance') || str_contains($actLower, 'maintenance')) {
+                $category = 'admin_access';
+            } elseif (str_contains($actLower, 'password') || str_contains($actLower, 'reset')) {
+                $category = 'password_reset';
+            } elseif (str_contains($actLower, 'report') || str_contains($actLower, 'lost') || str_contains($actLower, 'found')) {
+                $category = 'report_activity';
+            } elseif (str_contains($actLower, 'match') || str_contains($actLower, 'ai') || str_contains($actLower, 'chroma')) {
+                $category = 'match_verification';
+            } elseif (str_contains($actLower, 'claim') || str_contains($actLower, 'handover') || str_contains($actLower, 'otp')) {
+                $category = 'claim_activity';
+            } else {
+                $category = 'user_access';
+            }
+
+            // Derive Operator Name & Identifier
+            $opName = !empty($r['user_name']) ? $r['user_name'] : (!empty($r['admin_name']) ? $r['admin_name'] : 'System');
+            $opId = !empty($r['user_pin']) ? $r['user_pin'] : (!empty($r['admin_user']) ? $r['admin_user'] : (!empty($r['user_id']) ? "User #{$r['user_id']}" : 'system'));
+
+            $actionText = !empty(trim($r['action'] ?? '')) ? trim($r['action']) : 'User Access Activity';
+            $detailsText = $r['device_info'] ?? '';
+
+            if (!empty($cat) && $category !== $cat) {
+                continue;
+            }
+
             if (!empty($search)) {
                 $s = strtolower($search);
-                $match = str_contains(strtolower($r['action'] ?? ''), $s) ||
-                         str_contains(strtolower($r['operator_name'] ?? ''), $s) ||
-                         str_contains(strtolower($r['details'] ?? ''), $s);
+                $match = str_contains(strtolower($actionText), $s) ||
+                         str_contains(strtolower($opName), $s) ||
+                         str_contains(strtolower($opId), $s) ||
+                         str_contains(strtolower($detailsText), $s);
                 if (!$match) continue;
             }
-            $logs[] = $r;
-        }
-    }
 
-    // Also fallback to access_logs if logs is empty
-    if (empty($logs)) {
-        $q = $conn->query("SELECT log_id as id, action, ip_address, device_info, log_time as created_at FROM access_logs ORDER BY log_id DESC LIMIT 100");
-        if ($q) {
-            while ($r = $q->fetch_assoc()) {
-                $r['operator_name'] = 'System';
-                $r['category'] = 'system_event';
+            $logs[] = [
+                'id'                  => (int)$r['id'],
+                'operator_name'       => $opName,
+                'operator_identifier' => $opId,
+                'category'            => $category,
+                'action'              => $actionText,
+                'details'             => $detailsText,
+                'ip_address'          => $r['ip_address'] ?: '127.0.0.1',
+                'device_info'         => $detailsText,
+                'created_at'          => $r['created_at']
+            ];
+        }
+    } else {
+        // Fallback to legacy logs table if access_logs is somehow empty
+        $legRes = @$conn->query("SELECT * FROM logs ORDER BY id DESC LIMIT 100");
+        if ($legRes) {
+            while ($r = $legRes->fetch_assoc()) {
                 $logs[] = $r;
             }
         }

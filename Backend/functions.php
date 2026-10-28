@@ -473,13 +473,14 @@ function logAccess($userId, $action, $details = '') {
     try {
         $ip = $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1';
         $uId = (!empty($userId) && (int)$userId > 0) ? (int)$userId : null;
+        $cleanAction = !empty(trim((string)$action)) ? trim((string)$action) : 'User Access Activity';
         $device = substr($_SERVER['HTTP_USER_AGENT'] ?? '', 0, 80);
         $finalDetails = !empty($details) ? (substr($details, 0, 180) . ($device ? ' [' . $device . ']' : '')) : ($device ?: 'System');
         $finalDetails = substr($finalDetails, 0, 255);
 
         $stmt = $conn->prepare("INSERT INTO access_logs (user_id, action, ip_address, device_info) VALUES (?, ?, ?, ?)");
         if ($stmt) {
-            $stmt->bind_param("isss", $uId, $action, $ip, $finalDetails);
+            $stmt->bind_param("isss", $uId, $cleanAction, $ip, $finalDetails);
             $stmt->execute();
             $stmt->close();
         }
