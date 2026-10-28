@@ -49,6 +49,11 @@ FILES_TO_DEPLOY = [
     "tests/provision_charan_admin.php",
     "tests/test_realtime_setup.php",
     "tests/setup_test_desk_otp.php",
+    "Frontend/img/logo.svg",
+    "Frontend/img/logo.png",
+    "Frontend/img/logo-192.png",
+    "Frontend/img/favicon.png",
+    "Frontend/img/favicon.ico",
 ]
 
 def ensure_remote_dir(ftp, remote_dir):
