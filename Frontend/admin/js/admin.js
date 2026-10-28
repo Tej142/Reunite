@@ -994,18 +994,22 @@ async function loadClaims() {
           <td>${c.created_at ? c.created_at.substring(0, 10) : 'N/A'}</td>
           <td>
             <div class="action-btn-group">
-              ${isDeskReturn && !isCompleted ? `
-                <button class="btn-action-icon success" style="width: auto; padding: 4px 10px; font-size: 0.75rem; gap: 4px; display: inline-flex; align-items: center;" title="Verify Owner Code & Complete Handover" onclick="verifyDeskOtp(${c.match_id || c.id})">
+              ${!isCompleted && c.status !== 'rejected' && c.status !== 'archived' ? `
+                <button class="btn-action-icon success" style="width: auto; padding: 4px 10px; font-size: 0.75rem; gap: 4px; display: inline-flex; align-items: center;" title="Verify Owner Code & Complete Handover at Desk" onclick="verifyDeskOtp(${c.match_id || c.id})">
                   <i class="fa-solid fa-key"></i> Verify OTP
                 </button>
               ` : ''}
-              ${!isCompleted ? `
+              ${!isCompleted && c.status !== 'rejected' && c.status !== 'archived' ? `
                 <button class="btn-action-icon danger" title="Reject / Cancel Claim" onclick="updateClaimStatus(${c.id}, 'rejected')">
                   <i class="fa-solid fa-ban"></i>
                 </button>
+              ` : (c.status === 'rejected' ? `
+                <span style="font-size: 0.78rem; color: var(--danger); font-weight: 600;">✕ Rejected</span>
+              ` : (c.status === 'archived' ? `
+                <span style="font-size: 0.78rem; color: var(--muted); font-weight: 500;">Archived</span>
               ` : `
                 <span style="font-size: 0.78rem; color: var(--success); font-weight: 600;">✓ Reunited</span>
-              `}
+              `))}
             </div>
           </td>
         </tr>
@@ -1016,6 +1020,37 @@ async function loadClaims() {
     }
   } catch (err) {
     tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding:30px; color:var(--danger);">Error loading claims.</td></tr>`;
+  }
+}
+
+async function openWalkInDeskOtpModal() {
+  const code = prompt('Enter the 6-digit verification OTP presented by the student at the Campus Desk:');
+  if (!code) return;
+  const cleanCode = code.trim();
+  if (!/^\d{6}$/.test(cleanCode)) {
+    alert('Invalid code: Verification OTP must be exactly 6 numeric digits.');
+    return;
+  }
+
+  const matchInput = prompt('(Optional) Enter the Case # or Match # (or leave blank if unknown):');
+  const matchId = matchInput ? matchInput.trim().replace('#', '') : '';
+
+  try {
+    const res = await fetch(`../../Frontend/api/verify_otp.php`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: 'otp=' + encodeURIComponent(cleanCode) + (matchId ? '&match_id=' + encodeURIComponent(matchId) : '')
+    });
+    const data = await res.json();
+    if (res.ok && data.success) {
+      showToast('🎉 Handover verified successfully! Item marked Reunited.', 'success');
+      loadClaims();
+      loadStats();
+    } else {
+      showToast(data.message || 'OTP verification failed.', 'error');
+    }
+  } catch (err) {
+    showToast('Network error verifying code.', 'error');
   }
 }
 
