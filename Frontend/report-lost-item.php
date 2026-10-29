@@ -295,7 +295,7 @@
 
       <!-- Wizard Navigation Footer -->
       <div class="wizard-nav-footer">
-        <button type="button" class="btn-secondary" id="btnWizardPrev" style="visibility: hidden;">← Back</button>
+        <button type="button" class="btn-secondary" id="btnWizardPrev" style="visibility: hidden; display: none;">← Back</button>
         <button type="button" class="btn-submit" id="btnWizardNext">Next Step →</button>
       </div>
 
