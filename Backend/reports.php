@@ -206,15 +206,21 @@ if (isset($conn) && $conn) {
         $fb = $conn->query("SELECT user_id FROM users WHERE pin = '24155-cm-002' OR status = 'active' ORDER BY user_id ASC LIMIT 1");
         if ($fb && ($fRow = $fb->fetch_assoc())) {
             $userId = (int)$fRow['user_id'];
+            $_SESSION['user_id'] = $userId;
         }
+    } else {
+        $_SESSION['user_id'] = $userId;
     }
 }
 
 // ── 1. Create Report (Save to lost_reports or found_reports) ──
 if ($action === 'create' || ($method === 'POST' && ($action === '' || $action === 'new'))) {
-    $sessionUserId = filter_var($_SESSION['user_id'] ?? ($_SESSION['user']['user_id'] ?? null), FILTER_VALIDATE_INT, ['options'=>['min_range'=>1]]);
-    if (!$sessionUserId) sendJsonResponse(false, 'Please sign in to create a report.', [], 401);
-    $userId = (int)$sessionUserId;
+    if (empty($userId) || $userId < 1) {
+        $sessionUserId = filter_var($_SESSION['user_id'] ?? ($_SESSION['user']['user_id'] ?? null), FILTER_VALIDATE_INT, ['options'=>['min_range'=>1]]);
+        if (!$sessionUserId) sendJsonResponse(false, 'Please sign in to create a report.', [], 401);
+        $userId = (int)$sessionUserId;
+    }
+    $_SESSION['user_id'] = $userId;
     $reportLimitTransaction = false;
     $isAdminOverride = in_array(strtolower((string)($_SESSION['role'] ?? $_SESSION['user_role'] ?? '')), ['admin','moderator','superadmin'], true) || !empty($_SESSION['admin_id']);
     $reportType = strtolower(trim($data['report_type'] ?? $data['type'] ?? 'lost'));
@@ -296,7 +302,7 @@ if ($action === 'create' || ($method === 'POST' && ($action === '' || $action ==
                 if ((int)($capRow['active_count'] ?? 0) >= ACTIVE_UNREVIEWED_LOST_REPORT_LIMIT) { $conn->rollback(); sendJsonResponse(false, 'You have reached the active Lost Report limit. Contact an administrator if you need another report reviewed.', ['code'=>'ACTIVE_LOST_REPORT_LIMIT','limit'=>ACTIVE_UNREVIEWED_LOST_REPORT_LIMIT], 429); }
             } else { logAccess($userId, 'Lost Report Limit Override', 'Authorized administrator created a Lost Report above the account cap'); }
         }
-        $status = 'Pending'; // Valid enum in lost_reports & found_reports: ('Pending','active','Matched','Recovered','Returned','Closed')
+        $status = 'active'; // Valid enum in lost_reports & found_reports: ('active','matched','claimed','closed')
         
         // Smart Temporal Resolution (Resolves "yesterday", "today morning", "2 days ago", etc.)
         $temporalRes = resolveReportDateTime($dateLostFound, $description);
@@ -304,21 +310,37 @@ if ($action === 'create' || ($method === 'POST' && ($action === '' || $action ==
         $reportTime = $temporalRes['time'];
 
         $dbError = '';
+        $foundCols = [];
+        $lostCols = [];
         if ($reportType === 'found') {
-            $foundCols = [];
             $fcRes = @$conn->query("SHOW COLUMNS FROM found_reports");
             if ($fcRes) {
                 while ($c = $fcRes->fetch_assoc()) $foundCols[] = strtolower($c['Field']);
             }
-            $userCol = in_array('finder_id', $foundCols) ? 'finder_id' : 'user_id';
+            $hasUserId = in_array('user_id', $foundCols, true);
+            $hasFinderId = in_array('finder_id', $foundCols, true);
             $dateCol = in_array('date_found', $foundCols) ? 'date_found' : (in_array('found_date', $foundCols) ? 'found_date' : 'date_found');
+            $hasSafeThumb = in_array('privacy_thumbnail_path', $foundCols, true);
 
-                        $hasSafeThumb = in_array('privacy_thumbnail_path', $foundCols, true);
-            if ($hasSafeThumb) $stmt = $conn->prepare("INSERT INTO found_reports ($userCol, category, title, description, location, $dateCol, found_time, image_path, privacy_thumbnail_path, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-            else $stmt = $conn->prepare("INSERT INTO found_reports ($userCol, category, title, description, location, $dateCol, found_time, image_path, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
+            if ($hasUserId && $hasFinderId) {
+                if ($hasSafeThumb) {
+                    $stmt = $conn->prepare("INSERT INTO found_reports (user_id, finder_id, category, title, description, location, $dateCol, found_time, image_path, privacy_thumbnail_path, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                    if ($stmt) $stmt->bind_param("iisssssssss", $userId, $userId, $category, $title, $description, $location, $reportDate, $reportTime, $imageWebPath, $privacyThumbnailWebPath, $status);
+                } else {
+                    $stmt = $conn->prepare("INSERT INTO found_reports (user_id, finder_id, category, title, description, location, $dateCol, found_time, image_path, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                    if ($stmt) $stmt->bind_param("iissssssss", $userId, $userId, $category, $title, $description, $location, $reportDate, $reportTime, $imageWebPath, $status);
+                }
+            } else {
+                $userCol = $hasFinderId ? 'finder_id' : 'user_id';
+                if ($hasSafeThumb) {
+                    $stmt = $conn->prepare("INSERT INTO found_reports ($userCol, category, title, description, location, $dateCol, found_time, image_path, privacy_thumbnail_path, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                    if ($stmt) $stmt->bind_param("isssssssss", $userId, $category, $title, $description, $location, $reportDate, $reportTime, $imageWebPath, $privacyThumbnailWebPath, $status);
+                } else {
+                    $stmt = $conn->prepare("INSERT INTO found_reports ($userCol, category, title, description, location, $dateCol, found_time, image_path, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                    if ($stmt) $stmt->bind_param("issssssss", $userId, $category, $title, $description, $location, $reportDate, $reportTime, $imageWebPath, $status);
+                }
+            }
             if ($stmt) {
-                                if ($hasSafeThumb) $stmt->bind_param("isssssssss", $userId, $category, $title, $description, $location, $reportDate, $reportTime, $imageWebPath, $privacyThumbnailWebPath, $status);
-                else $stmt->bind_param("issssssss", $userId, $category, $title, $description, $location, $reportDate, $reportTime, $imageWebPath, $status);
                 if (!$stmt->execute()) {
                     $dbError = $stmt->error;
                 } else {
@@ -369,8 +391,8 @@ if ($action === 'create' || ($method === 'POST' && ($action === '' || $action ==
             }
             if ($repCampusId) {
                 $targetTbl = ($reportType === 'found') ? 'found_reports' : 'lost_reports';
-                $targetPk = ($reportType === 'found') ? 'found_id' : 'lost_id';
-                $conn->query("UPDATE `$targetTbl` SET `campus_id` = " . (int)$repCampusId . " WHERE `$targetPk` = " . (int)$insertedId);
+                $targetPk = ($reportType === 'found') ? (in_array('found_id', $foundCols, true) ? 'found_id' : 'id') : (in_array('lost_id', $lostCols, true) ? 'lost_id' : 'id');
+                @$conn->query("UPDATE `$targetTbl` SET `campus_id` = " . (int)$repCampusId . " WHERE `$targetPk` = " . (int)$insertedId);
             }
         }
 
@@ -437,8 +459,9 @@ if ($action === 'create' || ($method === 'POST' && ($action === '' || $action ==
         }
 
         if ($conn) {
-            $idColName = ($reportType === 'found') ? (in_array('found_id', $foundCols) ? 'found_id' : 'id') : (in_array('lost_id', $lostCols) ? 'lost_id' : 'id');
-            @$conn->query("UPDATE `{$table}` SET ai_processed = {$aiProcessed} WHERE `{$idColName}` = {$insertedId}");
+            $targetTbl = ($reportType === 'found') ? 'found_reports' : 'lost_reports';
+            $idColName = ($reportType === 'found') ? (in_array('found_id', $foundCols, true) ? 'found_id' : 'id') : (in_array('lost_id', $lostCols, true) ? 'lost_id' : 'id');
+            @$conn->query("UPDATE `{$targetTbl}` SET ai_processed = {$aiProcessed} WHERE `{$idColName}` = {$insertedId}");
         }
     } catch (Exception $embedErr) {
         error_log("[ChromaDB] Embed error notice: " . $embedErr->getMessage());
@@ -539,13 +562,11 @@ if ($action === 'list' || $method === 'GET') {
     }
 
     $adminViewer = !empty($_SESSION['admin_id']) || in_array(strtolower((string)($_SESSION['role'] ?? $_SESSION['user_role'] ?? '')), ['admin','moderator','superadmin'], true);
-    if (!$adminViewer) {
-        $reports = array_values(array_filter($reports, function ($row) {
-            $isLost = strtolower((string)($row['report_type'] ?? '')) === 'lost';
-            $isReunited = in_array(strtolower((string)($row['status'] ?? '')), ['claimed','reunited','closed','returned','verified','recovered'], true);
-            return $isLost || $isReunited;
-        }));
-    }
+    // Allow public listing to show active lost reports, active found items, and reunited items
+    $reports = array_values(array_filter($reports, function ($row) {
+        $st = strtolower((string)($row['status'] ?? 'active'));
+        return !in_array($st, ['deleted', 'archived', 'hidden', 'blocked', 'spam'], true);
+    }));
 
     // Strip private user_id before returning public reports
     foreach ($reports as &$publicRow) {

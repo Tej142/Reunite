@@ -9,7 +9,7 @@ let ITEMS_DATABASE = [];
 
 // Active State
 let currentSearchQuery = '';
-let currentTypeFilter = 'lost'; // Public community search never lists private Found reports
+let currentTypeFilter = 'all'; // Community search defaults to all items (lost, found, reunited)
 let currentCategory = 'all';
 let currentLocation = 'all';
 let currentSort = 'newest';
@@ -142,7 +142,7 @@ function initDomElements() {
   } else if (typeSelect && typeSelect.value) {
     currentTypeFilter = typeSelect.value;
   } else {
-    currentTypeFilter = 'lost';
+    currentTypeFilter = 'all';
   }
 
   const paramCategory = urlParams.get('category');

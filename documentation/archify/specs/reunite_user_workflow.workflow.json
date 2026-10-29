@@ -1,0 +1,236 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "Reunite - New User Interaction & Platform Journey (Start to End)",
+    "animation": "trace",
+    "visual_preset": "signal-flow",
+    "quality_profile": "showcase",
+    "output": "05_NEW_USER_INTERACTION_WORKFLOW.html"
+  },
+  "lanes": [
+    {
+      "id": "student_ui",
+      "label": "Student Surface (Web & App)"
+    },
+    {
+      "id": "auth_nav",
+      "label": "Auth & Navigation Guard"
+    },
+    {
+      "id": "intake_board",
+      "label": "Item Intake & Community Board"
+    },
+    {
+      "id": "ai_matching",
+      "label": "AI Matching Engine"
+    },
+    {
+      "id": "claim_desk",
+      "label": "Campus Claim Desk"
+    }
+  ],
+  "phases": [
+    {
+      "id": "p_onboarding",
+      "label": "Onboarding & Auth",
+      "fromCol": 0,
+      "toCol": 1
+    },
+    {
+      "id": "p_dashboard",
+      "label": "Dashboard & Browse",
+      "fromCol": 2,
+      "toCol": 2
+    },
+    {
+      "id": "p_report",
+      "label": "Multi-Modal Intake",
+      "fromCol": 3,
+      "toCol": 3
+    },
+    {
+      "id": "p_ai",
+      "label": "Vector Matching",
+      "fromCol": 4,
+      "toCol": 4
+    },
+    {
+      "id": "p_claim",
+      "label": "Handover & Custody",
+      "fromCol": 5,
+      "toCol": 5
+    }
+  ],
+  "mainPath": [
+    "landing",
+    "login_modal",
+    "home_dash",
+    "report_modal",
+    "vector_pipeline",
+    "match_alert",
+    "claim_verify"
+  ],
+  "nodes": [
+    {
+      "id": "landing",
+      "lane": "student_ui",
+      "col": 0,
+      "type": "frontend",
+      "label": "Landing Page",
+      "sublabel": "index.php / App Splash",
+      "tag": "Hero & Intro",
+      "width": 140
+    },
+    {
+      "id": "login_modal",
+      "lane": "auth_nav",
+      "col": 1,
+      "type": "security",
+      "label": "Student Auth",
+      "sublabel": "Roll No + PIN / Email",
+      "tag": "Campus Scoped",
+      "width": 140
+    },
+    {
+      "id": "home_dash",
+      "lane": "student_ui",
+      "col": 2,
+      "type": "frontend",
+      "label": "Home Dashboard",
+      "sublabel": "home.php Workspace",
+      "tag": "Active Session",
+      "width": 140
+    },
+    {
+      "id": "search_filter",
+      "lane": "intake_board",
+      "col": 2,
+      "type": "frontend",
+      "label": "Community Board",
+      "sublabel": "Search & Filter Grid",
+      "tag": "Live Feed",
+      "width": 140
+    },
+    {
+      "id": "report_modal",
+      "lane": "intake_board",
+      "col": 3,
+      "type": "frontend",
+      "label": "Report Lost / Found",
+      "sublabel": "Camera & Metadata Form",
+      "tag": "Form Intake",
+      "width": 140
+    },
+    {
+      "id": "vector_pipeline",
+      "lane": "ai_matching",
+      "col": 4,
+      "type": "backend",
+      "label": "CLIP AI Matcher",
+      "sublabel": "ViT-B/32 + ChromaDB",
+      "tag": "512-d Vector",
+      "width": 140
+    },
+    {
+      "id": "match_alert",
+      "lane": "student_ui",
+      "col": 4,
+      "type": "messagebus",
+      "label": "Match Notification",
+      "sublabel": "Navbar Bell & Push",
+      "tag": "Instant Alert",
+      "width": 140
+    },
+    {
+      "id": "claim_verify",
+      "lane": "claim_desk",
+      "col": 5,
+      "type": "security",
+      "label": "2FA Desk Handover",
+      "sublabel": "6-Digit OTP Gate",
+      "tag": "Reunited",
+      "width": 140
+    }
+  ],
+  "edges": [
+    {
+      "id": "e_visit",
+      "from": "landing",
+      "to": "login_modal",
+      "label": "sign in / register",
+      "variant": "emphasis"
+    },
+    {
+      "id": "e_auth_ok",
+      "from": "login_modal",
+      "to": "home_dash",
+      "label": "session active",
+      "variant": "emphasis"
+    },
+    {
+      "id": "e_browse",
+      "from": "home_dash",
+      "to": "search_filter",
+      "label": "browse board",
+      "variant": "default"
+    },
+    {
+      "id": "e_report",
+      "from": "home_dash",
+      "to": "report_modal",
+      "label": "click report",
+      "variant": "emphasis"
+    },
+    {
+      "id": "e_ingest",
+      "from": "report_modal",
+      "to": "vector_pipeline",
+      "label": "submit photo & text",
+      "variant": "emphasis"
+    },
+    {
+      "id": "e_notify",
+      "from": "vector_pipeline",
+      "to": "match_alert",
+      "label": "similarity >= 75%",
+      "variant": "emphasis"
+    },
+    {
+      "id": "e_claim",
+      "from": "match_alert",
+      "to": "claim_verify",
+      "label": "claim with OTP",
+      "variant": "security"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "emerald",
+      "title": "Frictionless Student Onboarding",
+      "items": [
+        "First-time visitors authenticate with student credentials scoped strictly to their campus jurisdiction.",
+        "Persistent session tokens maintain login state across desktop web and Android mobile app shells.",
+        "Personalized greeting and session badge display active roll number and campus enrollment status."
+      ]
+    },
+    {
+      "dot": "orange",
+      "title": "Interactive Search & Reporting",
+      "items": [
+        "Students explore reported items on the live community board with real-time text and category filters.",
+        "Report modal supports native mobile camera capture, desktop file uploads, and AI Talk-assisted descriptions.",
+        "CLIP ViT-B/32 immediately vectorizes each new submission and runs a cross-collection k-NN search."
+      ]
+    },
+    {
+      "dot": "cyan",
+      "title": "Automated Alerts & Secure Return",
+      "items": [
+        "Background AI engine continuously compares reports, alerting students immediately upon confident match.",
+        "Navbar notification badge updates dynamically without requiring any manual page refresh.",
+        "Secure 2FA OTP verification at the campus desk ensures physical custody only goes to the verified owner."
+      ]
+    }
+  ]
+}

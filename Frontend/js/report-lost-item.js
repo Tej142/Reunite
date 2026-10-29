@@ -163,7 +163,9 @@ document.addEventListener('DOMContentLoaded', () => {
               dna: confirmedDna
             });
 
-            const savedId = (result && result.data && result.data.report_id) ? result.data.report_id : ('RL-' + Math.random().toString(36).slice(2, 8).toUpperCase());
+            const savedId = (result && (result.report_id || result.id || (result.data && result.data.report_id)))
+              ? (result.report_id || ('RL-' + String(result.id).padStart(5, '0')))
+              : ('RL-' + Math.random().toString(36).slice(2, 8).toUpperCase());
 
             // Fire live vector similarity search with Orbi thinking state
             const successContainer = document.getElementById('successState');
@@ -194,12 +196,15 @@ document.addEventListener('DOMContentLoaded', () => {
             transitionToSuccess(savedId, confirmedDna, confirmedDna.location || rawData.where, confirmedDna.attributes?.['Date / Time'] || rawData.when);
           } catch (saveErr) {
             console.error('Error persisting report to backend:', saveErr);
-            const fallbackId = 'RL-' + Math.random().toString(36).slice(2, 8).toUpperCase();
-            if (window.ReuniteToast) {
-              window.ReuniteToast.info('Report Saved Locally', `Saved report ${fallbackId}. Database sync will complete shortly.`, 4000);
+            if (confirmBtn) {
+              confirmBtn.disabled = false;
+              confirmBtn.innerHTML = 'Confirm &amp; Publish Report';
             }
-            aiReviewContainer.style.display = 'none';
-            transitionToSuccess(fallbackId, confirmedDna, confirmedDna.location || rawData.where, confirmedDna.attributes?.['Date / Time'] || rawData.when);
+            if (window.ReuniteToast) {
+              window.ReuniteToast.error('Submission Failed', saveErr.message || 'Database failed to store report. Please try again.');
+            } else {
+              alert('Submission Failed: ' + (saveErr.message || 'Database failed to store report.'));
+            }
           }
         }
       });

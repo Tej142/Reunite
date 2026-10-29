@@ -164,20 +164,40 @@ if ($userId && isset($conn) && $conn) {
     }
 
     // 2. Fetch found reports
-    $fSql = "SELECT `$foundPk` AS id, 'found' AS report_type, title, description, category, location, image_path, status, $foundDate AS created_at FROM found_reports WHERE `$foundOwner` = ? ORDER BY `$foundPk` DESC";
-    $fStmt = $conn->prepare($fSql);
-    if ($fStmt) {
-        $fStmt->bind_param("i", $userId);
-        $fStmt->execute();
-        $res = $fStmt->get_result();
-        while ($row = $res->fetch_assoc()) {
-            $userReports[] = $row;
-            $userStats['found_count']++;
-            if (in_array(strtolower($row['status'] ?? ''), ['matched', 'returned', 'claimed', 'closed', 'reunited'])) {
-                $userStats['reunited_items']++;
+    $hasFinder = in_array('finder_id', $foundCols, true);
+    $hasUser = in_array('user_id', $foundCols, true);
+    if ($hasFinder && $hasUser) {
+        $fSql = "SELECT `$foundPk` AS id, 'found' AS report_type, title, description, category, location, image_path, status, $foundDate AS created_at FROM found_reports WHERE (`finder_id` = ? OR `user_id` = ?) ORDER BY `$foundPk` DESC";
+        $fStmt = $conn->prepare($fSql);
+        if ($fStmt) {
+            $fStmt->bind_param("ii", $userId, $userId);
+            $fStmt->execute();
+            $res = $fStmt->get_result();
+            while ($row = $res->fetch_assoc()) {
+                $userReports[] = $row;
+                $userStats['found_count']++;
+                if (in_array(strtolower($row['status'] ?? ''), ['matched', 'returned', 'claimed', 'closed', 'reunited'])) {
+                    $userStats['reunited_items']++;
+                }
             }
+            $fStmt->close();
         }
-        $fStmt->close();
+    } else {
+        $fSql = "SELECT `$foundPk` AS id, 'found' AS report_type, title, description, category, location, image_path, status, $foundDate AS created_at FROM found_reports WHERE `$foundOwner` = ? ORDER BY `$foundPk` DESC";
+        $fStmt = $conn->prepare($fSql);
+        if ($fStmt) {
+            $fStmt->bind_param("i", $userId);
+            $fStmt->execute();
+            $res = $fStmt->get_result();
+            while ($row = $res->fetch_assoc()) {
+                $userReports[] = $row;
+                $userStats['found_count']++;
+                if (in_array(strtolower($row['status'] ?? ''), ['matched', 'returned', 'claimed', 'closed', 'reunited'])) {
+                    $userStats['reunited_items']++;
+                }
+            }
+            $fStmt->close();
+        }
     }
 
     // Sort all combined reports by created_at DESC
