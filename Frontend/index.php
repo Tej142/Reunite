@@ -14,8 +14,8 @@ $realStories = [];
 if (isset($conn) && $conn) {
     // Count reunited, total and active reports
     $sRes = $conn->query("SELECT 
-        ((SELECT COUNT(*) FROM lost_reports WHERE status IN ('matched', 'claimed', 'closed')) +
-         (SELECT COUNT(*) FROM found_reports WHERE status IN ('matched', 'claimed', 'closed'))) as reunited_cnt,
+        ((SELECT COUNT(*) FROM lost_reports WHERE LOWER(TRIM(status)) IN ('matched', 'claimed', 'closed', 'reunited', 'recovered', 'returned')) +
+         (SELECT COUNT(*) FROM found_reports WHERE LOWER(TRIM(status)) IN ('matched', 'claimed', 'closed', 'reunited', 'recovered', 'returned'))) as reunited_cnt,
         ((SELECT COUNT(*) FROM lost_reports) + (SELECT COUNT(*) FROM found_reports)) as total_cnt,
         ((SELECT COUNT(*) FROM lost_reports WHERE status = 'active') + (SELECT COUNT(*) FROM found_reports WHERE status = 'active')) as active_cnt
     ");
@@ -26,10 +26,10 @@ if (isset($conn) && $conn) {
     }
     
     // Fetch real reunited cases for success stories if available
-    $stRes = $conn->query("SELECT f.id, f.title, f.location, f.description, f.image_path, f.created_at, u.full_name, u.branch 
+    $stRes = $conn->query("SELECT f.found_id as id, f.title, f.location, f.description, f.image_path, f.created_at, u.full_name, u.branch 
         FROM found_reports f 
-        LEFT JOIN users u ON f.user_id = u.user_id 
-        WHERE f.status IN ('matched', 'claimed', 'closed') 
+        LEFT JOIN users u ON f.finder_id = u.user_id 
+        WHERE LOWER(TRIM(f.status)) IN ('matched', 'claimed', 'closed', 'reunited', 'recovered', 'returned') 
         ORDER BY f.created_at DESC LIMIT 3");
     if ($stRes) {
         while ($stRow = $stRes->fetch_assoc()) {
