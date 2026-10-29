@@ -261,11 +261,15 @@ function logout_user() {
             $params["secure"], $params["httponly"]
         );
     }
-    // Delete permanent authentication cookie
-    setcookie('reunite_auth_token', '', [
-        'expires' => time() - 3600,
-        'path' => '/'
-    ]);
+    // Delete permanent authentication cookies and remembered PIN
+    $cookieNames = ['reunite_auth_token', 'reunite_remembered_pin', 'reunite_remember_me', 'reunite_user_pin', 'reunite_admin_session'];
+    foreach ($cookieNames as $cName) {
+        setcookie($cName, '', time() - 86400, '/');
+        if (!empty($_SERVER['HTTP_HOST'])) {
+            setcookie($cName, '', time() - 86400, '/', $_SERVER['HTTP_HOST']);
+        }
+        unset($_COOKIE[$cName]);
+    }
     session_destroy();
 }
 

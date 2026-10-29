@@ -20,11 +20,21 @@ if (ini_get("session.use_cookies")) {
         $params["secure"], $params["httponly"]
     );
 }
+
+// Clear persistent cookies
+foreach (['reunite_auth_token', 'reunite_remembered_pin', 'reunite_remember_me', 'reunite_user_pin', 'reunite_admin_session'] as $c) {
+    setcookie($c, '', time() - 86400, '/');
+    if (!empty($_SERVER['HTTP_HOST'])) {
+        setcookie($c, '', time() - 86400, '/', $_SERVER['HTTP_HOST']);
+    }
+    unset($_COOKIE[$c]);
+}
+
 session_destroy();
 
 if (isApiRequest()) {
-    sendJsonResponse(true, "Successfully logged out.", ['redirect' => FRONTEND_URL . "/login.php"]);
+    sendJsonResponse(true, "Successfully logged out.", ['redirect' => FRONTEND_URL . "/login.php?logged_out=1"]);
 } else {
-    header("Location: " . FRONTEND_URL . "/login.php?msg=" . urlencode("You have been signed out."));
+    header("Location: " . FRONTEND_URL . "/login.php?logged_out=1");
     exit();
 }
