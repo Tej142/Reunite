@@ -562,11 +562,19 @@ if ($action === 'list' || $method === 'GET') {
     }
 
     $adminViewer = !empty($_SESSION['admin_id']) || in_array(strtolower((string)($_SESSION['role'] ?? $_SESSION['user_role'] ?? '')), ['admin','moderator','superadmin'], true);
-    // Allow public listing to show active lost reports, active found items, and reunited items
-    $reports = array_values(array_filter($reports, function ($row) {
-        $st = strtolower((string)($row['status'] ?? 'active'));
-        return !in_array($st, ['deleted', 'archived', 'hidden', 'blocked', 'spam'], true);
-    }));
+    // Public community board strictly shows lost reports only (never unvetted found items)
+    if (!$adminViewer) {
+        $reports = array_values(array_filter($reports, function ($row) {
+            $isLost = strtolower((string)($row['report_type'] ?? '')) === 'lost';
+            $st = strtolower((string)($row['status'] ?? 'active'));
+            return $isLost && !in_array($st, ['deleted', 'archived', 'hidden', 'blocked', 'spam'], true);
+        }));
+    } else {
+        $reports = array_values(array_filter($reports, function ($row) {
+            $st = strtolower((string)($row['status'] ?? 'active'));
+            return !in_array($st, ['deleted', 'archived', 'hidden', 'blocked', 'spam'], true);
+        }));
+    }
 
     // Strip private user_id before returning public reports
     foreach ($reports as &$publicRow) {

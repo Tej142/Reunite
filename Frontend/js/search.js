@@ -45,7 +45,7 @@ async function fetchBackendReports() {
   }
 
   try {
-    const resp = await fetch('../Backend/reports.php?action=list&type=all&limit=200');
+    const resp = await fetch('../Backend/reports.php?action=list&type=lost&limit=200');
     if (!resp.ok) return;
     const json = await resp.json();
     const rows = (json.data && json.data.reports) ? json.data.reports : (json.reports || []);
@@ -338,6 +338,9 @@ function renderResults() {
   if (!resultsGrid) return;
 
   let filtered = ITEMS_DATABASE.filter(item => {
+    // Community board strictly shows lost reports only (never unvetted found items)
+    if (item.type === 'found') return false;
+
     const st = String(item.status || '').toLowerCase();
     const isReunited = (st === 'claimed' || st === 'reunited' || st === 'closed' || st === 'returned' || st === 'recovered');
 
@@ -345,8 +348,6 @@ function renderResults() {
       if (item.type !== 'lost' || isReunited) return false;
     } else if (currentTypeFilter === 'reunited') {
       if (!isReunited) return false;
-    } else if (currentTypeFilter === 'found') {
-      if (item.type !== 'found' || isReunited) return false;
     }
 
     if (currentCategory !== 'all' && item.category !== currentCategory) return false;
