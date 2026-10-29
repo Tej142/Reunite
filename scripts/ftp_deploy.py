@@ -22,6 +22,7 @@ FTP_PASS = env_vars.get("FTP_PASS", os.getenv("FTP_PASS", "reunitePVBVC123"))
 REMOTE_ROOT = "/htdocs"
 
 FILES_TO_DEPLOY = [
+    "Backend/config/config.php",
     "Backend/admin_api.php",
     "Backend/admin_auth.php",
     "Backend/admin_scope.php",
@@ -43,8 +44,15 @@ FILES_TO_DEPLOY = [
     "Frontend/profile.php",
     "Frontend/login.php",
     "Frontend/css/variables.css",
+    "Frontend/css/reporting-modes.css",
+    "Frontend/css/search.css",
     "Frontend/css/login.css",
     "Frontend/js/login.js",
+    "Frontend/js/search.js",
+    "Frontend/js/report-lost-item.js",
+    "Frontend/js/report-found-item.js",
+    "Frontend/js/reporting-modes.js",
+    "Frontend/js/flask-ai-service.js",
     "tests/test_unified_login.php",
     "tests/test_manage_campus_admins.php",
     "tests/provision_charan_admin.php",
