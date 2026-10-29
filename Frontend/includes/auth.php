@@ -103,6 +103,39 @@ function check_permanent_auth_cookie() {
             error_log("Permanent cookie authentication error: " . $e->getMessage());
         }
     }
+
+    if (!empty($_COOKIE['reunite_remembered_pin'])) {
+        global $conn;
+        $pin = trim($_COOKIE['reunite_remembered_pin']);
+        if ($conn) {
+            $stmt = $conn->prepare("SELECT user_id, full_name, pin, email, phone, trust_score, role, status, dob, college, branch FROM users WHERE pin = ? LIMIT 1");
+            if ($stmt) {
+                $stmt->bind_param("s", $pin);
+                $stmt->execute();
+                $res = $stmt->get_result();
+                if ($row = $res->fetch_assoc()) {
+                    $stmt->close();
+                    if (!isset($row['status']) || strtolower($row['status']) !== 'blocked') {
+                        login_user([
+                            'user_id' => $row['user_id'],
+                            'name' => $row['full_name'],
+                            'pin' => $row['pin'],
+                            'dob' => $row['dob'] ?? '',
+                            'email' => decryptData($row['email']),
+                            'phone' => decryptData($row['phone']),
+                            'college' => $row['college'],
+                            'branch' => $row['branch'],
+                            'trust_score' => $row['trust_score'] ?? 100,
+                            'role' => $row['role'] ?? 'user'
+                        ], false);
+                        return true;
+                    }
+                } else {
+                    $stmt->close();
+                }
+            }
+        }
+    }
     return false;
 }
 
