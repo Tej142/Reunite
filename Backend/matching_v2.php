@@ -26,10 +26,10 @@ function getMatchingRulesV2() {
         $rules = [
             'engine_version' => '2.0.0',
             'thresholds' => [
-                'notification_threshold' => 65.0,
+                'notification_threshold' => 40.0,
                 'email_threshold' => 90.0,
-                'min_possible_score' => 50.0,
-                'strong_tier_threshold' => 65.0
+                'min_possible_score' => 30.0,
+                'strong_tier_threshold' => 40.0
             ],
             'temporal' => ['max_prior_tolerance_hours' => 24, 'stale_time_days' => 45],
             'brands' => [],
@@ -46,6 +46,7 @@ function getMatchingRulesV2() {
 function extractCategoryStem($categoryText, $titleText = '') {
     $combined = strtolower(trim("$categoryText $titleText"));
     $stems = [
+        'storage' => ['pendrive', 'pen drive', 'usb', 'flash drive', 'thumb drive', 'hard disk', 'hard drive', 'ssd', 'hdd', 'memory card', 'sd card', 'sandisk', 'kingston', 'transcend', 'drive'],
         'laptop' => ['laptop', 'notebook', 'macbook', 'chromebook', 'thinkpad', 'latitude'],
         'smartphone' => ['phone', 'smartphone', 'iphone', 'android', 'mobile', 'galaxy s', 'pixel'],
         'tablet' => ['tablet', 'ipad', 'tab'],
@@ -281,20 +282,23 @@ function extractNormalizedAttributesV2($reportRow, $dnaRow = null) {
  * Checks category family incompatibilities (e.g. laptop vs phone)
  */
 function areCategoriesIncompatible($stemA, $stemB) {
+    if (empty($stemA) || empty($stemB)) return false;
     if ($stemA === 'general' || $stemB === 'general') return false;
     if ($stemA === $stemB) return false;
 
-    // Both are electronics, but incompatible sub-devices
-    $rules = getMatchingRulesV2();
-    $incompatPairs = $rules['category_incompatibilities'] ?? [];
-
-    foreach ($incompatPairs as $pair) {
-        if (($stemA === $pair[0] && $stemB === $pair[1]) || ($stemA === $pair[1] && $stemB === $pair[0])) {
-            return true;
+    // Synonyms / equivalent stems
+    $equivalents = [
+        ['smartphone', 'phone'],
+        ['smartwatch', 'watch']
+    ];
+    foreach ($equivalents as $eq) {
+        if (($stemA === $eq[0] && $stemB === $eq[1]) || ($stemA === $eq[1] && $stemB === $eq[0])) {
+            return false;
         }
     }
 
-    return false;
+    // Two distinct concrete physical stems are strictly incompatible (e.g. glasses vs storage, laptop vs glasses, storage vs phone)
+    return true;
 }
 
 /**
@@ -303,10 +307,10 @@ function areCategoriesIncompatible($stemA, $stemB) {
 function evaluateMatchV2($lostAttrs, $foundAttrs, $vectorSimilarity = null) {
     $rules = getMatchingRulesV2();
     $thresholds = $rules['thresholds'] ?? [
-        'notification_threshold' => 65.0,
+        'notification_threshold' => 40.0,
         'email_threshold' => 90.0,
-        'min_possible_score' => 50.0,
-        'strong_tier_threshold' => 75.0
+        'min_possible_score' => 30.0,
+        'strong_tier_threshold' => 40.0
     ];
 
     $ruleHits = [];

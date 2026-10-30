@@ -1,10 +1,10 @@
 {
   "engine_version": "2.0.0",
   "thresholds": {
-    "notification_threshold": 65.0,
+    "notification_threshold": 40.0,
     "email_threshold": 90.0,
-    "min_possible_score": 50.0,
-    "strong_tier_threshold": 65.0
+    "min_possible_score": 30.0,
+    "strong_tier_threshold": 40.0
   },
   "temporal": {
     "max_prior_tolerance_hours": 24,

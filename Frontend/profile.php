@@ -563,7 +563,7 @@ if ($userId && isset($conn) && $conn) {
           <div class="pref-toggle-item">
             <div>
               <div class="pref-title">Instant AI Match Notifications</div>
-              <div class="pref-desc">Receive instant alerts when a found item matches your lost report with &ge; 65% verified confidence (emails for &ge; 90%).</div>
+              <div class="pref-desc">Receive instant alerts when a found item matches your lost report with &ge; 40% verified confidence (emails for &ge; 90%).</div>
             </div>
             <label class="switch">
               <input type="checkbox" checked />

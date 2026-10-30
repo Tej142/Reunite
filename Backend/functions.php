@@ -1197,6 +1197,7 @@ if (!function_exists('calculateRealtimeSimilarityScore')) {
 
         // Category Stem Dictionary for accurate semantic domain matching
         $stems = [
+            'storage' => ['pendrive', 'pen drive', 'usb', 'flash drive', 'thumb drive', 'hard disk', 'hard drive', 'ssd', 'hdd', 'memory card', 'sd card', 'sandisk', 'kingston', 'transcend', 'drive'],
             'laptop' => ['laptop', 'notebook', 'macbook', 'chromebook', 'thinkpad', 'latitude', 'inspiron', 'pavilion', 'zenbook', 'vivobook', 'omen', 'legion'],
             'phone' => ['phone', 'smartphone', 'iphone', 'android', 'mobile', 'galaxy', 'pixel', 'oneplus', 'redmi', 'realme'],
             'tablet' => ['tablet', 'ipad', 'tab', 'kindle'],
@@ -1206,10 +1207,13 @@ if (!function_exists('calculateRealtimeSimilarityScore')) {
             'bag' => ['bag', 'backpack', 'duffel', 'tote', 'handbag', 'rucksack', 'kit', 'wildcraft', 'skybags', 'american tourister'],
             'keys' => ['key', 'keys', 'keychain', 'fob', 'ring'],
             'bottle' => ['bottle', 'flask', 'tumbler', 'sipper', 'thermosteel', 'milton'],
-            'glasses' => ['glasses', 'spectacles', 'sunglasses', 'shades', 'eyewear', 'lenskart', 'rayban'],
+            'glasses' => ['glasses', 'spectacles', 'sunglasses', 'shades', 'eyewear', 'specs', 'lenskart', 'rayban'],
             'id_card' => ['id card', 'id', 'college id', 'student id', 'license', 'aadhaar', 'pan card', 'debit card', 'credit card'],
             'book' => ['book', 'notebook', 'textbook', 'diary', 'journal', 'register'],
-            'charger' => ['charger', 'adapter', 'cable', 'power bank', 'wire', 'type-c', 'lightning']
+            'charger' => ['charger', 'adapter', 'cable', 'power bank', 'wire', 'type-c', 'lightning'],
+            'mouse' => ['mouse', 'pointer'],
+            'keyboard' => ['keyboard', 'keypad'],
+            'umbrella' => ['umbrella', 'parasol']
         ];
 
         $lostCombined = strtolower("$lostCat $lostTitle $lostDesc");
@@ -1235,20 +1239,33 @@ if (!function_exists('calculateRealtimeSimilarityScore')) {
             }
         }
 
+        // Hard Category Incompatibility Check:
+        // Two distinct known categories (e.g. Storage/Pendrive vs Glasses vs Laptop) CANNOT match.
+        $isSynonym = (
+            ($lostStem === 'phone' && $foundStem === 'smartphone') ||
+            ($lostStem === 'smartphone' && $foundStem === 'phone') ||
+            ($lostStem === 'watch' && $foundStem === 'smartwatch') ||
+            ($lostStem === 'smartwatch' && $foundStem === 'watch')
+        );
+
+        if ($lostStem !== 'general' && $foundStem !== 'general' && $lostStem !== $foundStem && !$isSynonym) {
+            return 0.0;
+        }
+
         // 1. Base Score from Category Match
-        $score = 52.0;
-        if ($lostStem !== 'general' && $lostStem === $foundStem) {
+        $score = 15.0; // Unclassified / general base
+        if ($lostStem !== 'general' && ($lostStem === $foundStem || $isSynonym)) {
             $score = 72.0;
         } elseif (!empty($lostCat) && !empty($foundCat) && strcasecmp($lostCat, $foundCat) === 0) {
             $score = 75.0;
         } elseif (strpos($lostCombined, 'electronic') !== false && strpos($foundCombined, 'electronic') !== false) {
-            $score = 64.0;
+            $score = 35.0;
         }
 
         // 2. String similarity on Title
         if (!empty($lostTitle) && !empty($foundTitle)) {
             similar_text(strtolower($lostTitle), strtolower($foundTitle), $titleSim);
-            $score += ($titleSim * 0.12);
+            $score += ($titleSim * 0.15);
         }
 
         // 3. Keyword / Token Overlap
@@ -1269,10 +1286,10 @@ if (!function_exists('calculateRealtimeSimilarityScore')) {
                 $wordMatches++;
             }
         }
-        $score += min(14.0, $wordMatches * 3.5);
+        $score += min(16.0, $wordMatches * 4.0);
 
         // 4. Brand Analysis
-        $knownBrands = ['apple', 'dell', 'lenovo', 'hp', 'asus', 'acer', 'samsung', 'sony', 'boat', 'noise', 'casio', 'titan', 'fastrack', 'oneplus', 'xiaomi', 'redmi', 'realme', 'wildcraft', 'nike', 'puma', 'adidas'];
+        $knownBrands = ['apple', 'dell', 'lenovo', 'hp', 'asus', 'acer', 'samsung', 'sony', 'boat', 'noise', 'casio', 'titan', 'fastrack', 'oneplus', 'xiaomi', 'redmi', 'realme', 'wildcraft', 'sandisk', 'kingston', 'transcend', 'crucial'];
         $lostBrand = null;
         $foundBrand = null;
         foreach ($knownBrands as $b) {
@@ -1282,9 +1299,9 @@ if (!function_exists('calculateRealtimeSimilarityScore')) {
 
         if ($lostBrand && $foundBrand) {
             if ($lostBrand === $foundBrand) {
-                $score += 12.0; // Confirmed matching brand
+                $score += 15.0; // Confirmed matching brand
             } else {
-                $score -= 14.0; // Adjust for divergent brand, but retain candidate score
+                $score -= 25.0; // Divergent brand penalty
             }
         }
 
@@ -1343,11 +1360,11 @@ if (!function_exists('calculateRealtimeSimilarityScore')) {
             $score = ($score * 0.4) + ($v * 0.6);
         }
 
-        // Clamp score to realistic range (68% to 95% for candidates in the same category)
-        if ($lostStem !== 'general' && $lostStem === $foundStem) {
-            $score = max(68.0, min(95.0, $score));
+        // Realistic score bounds:
+        if ($lostStem !== 'general' && ($lostStem === $foundStem || $isSynonym)) {
+            $score = max(40.0, min(95.0, $score));
         } else {
-            $score = max(50.0, min(95.0, $score));
+            $score = max(0.0, min(95.0, $score));
         }
 
         return round($score, 1);
@@ -1492,7 +1509,7 @@ function runRealtimeMatchmaking($insertedId, $reportType, $category, $title, $de
             $eval = evaluateMatchV2($lostAttrs, $foundAttrs, $vectorScore);
 
             // If vetoed or discarded, skip completely
-            if ($eval['confidence_tier'] === 'DISCARD' || $eval['veto_triggered'] !== null || $eval['final_score'] < 50.0) {
+            if ($eval['confidence_tier'] === 'DISCARD' || $eval['veto_triggered'] !== null || $eval['final_score'] < 40.0) {
                 continue;
             }
 
@@ -1506,7 +1523,7 @@ function runRealtimeMatchmaking($insertedId, $reportType, $category, $title, $de
                 $eval['engine_version']
             );
 
-            // Check Notification Policy: Only STRONG tier with score >= 65% triggers in-app notification
+            // Check Notification Policy: Only STRONG tier with score >= 40% triggers in-app notification
             $emojiRegex = '/[\x{1F300}-\x{1FAFF}\x{1F000}-\x{1F2FF}\x{2300}-\x{23FF}\x{2600}-\x{27BF}\x{2B00}-\x{2BFF}\x{FE00}-\x{FE0F}\x{200D}]/u';
             $lostTitle = trim(preg_replace('/\s+/', ' ', preg_replace($emojiRegex, '', $lostAttrs['title'] ?? '')));
             $foundTitle = trim(preg_replace('/\s+/', ' ', preg_replace($emojiRegex, '', $foundAttrs['title'] ?? '')));

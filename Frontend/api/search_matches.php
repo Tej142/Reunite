@@ -128,6 +128,12 @@ if ($stmt) {
             'thumbnail' => $row['thumbnail'] ?? ''
         ], $rawScore > 0 ? $rawScore : null);
 
+        // Filter: Dismiss incompatible categories or matches below 40% threshold
+        if ($realtimeScore < 40.0) {
+            @$conn->query("UPDATE matches SET status = 'dismissed', `$scoreCol` = " . (float)$realtimeScore . " WHERE `$matchPk` = " . (int)$row['match_id']);
+            continue;
+        }
+
         // Update database if match had 0% or was flagged rejected so live DB stays fresh & synced
         if ($rawScore <= 0 || strtolower($row['match_status']) === 'rejected') {
             @$conn->query("UPDATE matches SET `$scoreCol` = " . (float)$realtimeScore . ", status = 'pending' WHERE `$matchPk` = " . (int)$row['match_id']);
@@ -212,7 +218,7 @@ if (empty($matches)) {
                 'thumbnail' => $fRow['thumbnail'] ?? ''
             ]);
 
-            if ($catMatch || $wordHits >= 1 || $calcScore >= 60.0) {
+            if ($calcScore >= 40.0 && ($catMatch || $wordHits >= 1 || $calcScore >= 60.0)) {
                 $newMatchId = null;
                 if (function_exists('insertMatchRecord')) {
                     $newMatchId = insertMatchRecord($lostId, (int)$fRow['found_id'], $calcScore, 'STRONG', ['category_match' => $catMatch, 'word_matches' => $wordHits]);
