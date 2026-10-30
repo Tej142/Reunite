@@ -110,6 +110,18 @@ def ensure_remote_dir(ftp, remote_dir):
 def deploy():
     print(f"Connecting to FTP server {FTP_HOST} as {FTP_USER}...")
     ftp = ftplib.FTP(FTP_HOST, timeout=30)
+    
+    # Handle both 227 PASV and 229 EPSV responses from InfinityFree
+    def robust_makepasv():
+        resp = ftp.sendcmd('PASV')
+        if resp.startswith('229'):
+            import re
+            m = re.search(r'\(\|\|\|(\d+)\|\)', resp)
+            if m:
+                return ftp.host, int(m.group(1))
+        return ftplib.parse227(resp)
+    ftp.makepasv = robust_makepasv
+
     ftp.login(FTP_USER, FTP_PASS)
     print("Logged in successfully.")
 
