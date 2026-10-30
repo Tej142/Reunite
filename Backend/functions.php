@@ -1543,7 +1543,7 @@ function runRealtimeMatchmaking($insertedId, $reportType, $category, $title, $de
                 }
 
                 // Notification for Found Report Owner
-                if ($foundUserId > 0) {
+                if ($foundUserId > 0 && $foundUserId !== $lostUserId) {
                     $nTitle = "Potential Match: " . substr($lostTitle, 0, 40);
                     $nMsg = "Your reported found item '" . $foundTitle . "' has a {$scoreDisplay} match with a lost item ('" . $lostTitle . "')" . $reasonsSummary . ".";
                     $nLink = "item.php?type=found&id=" . $foundId . ($matchId ? "&match_id=" . $matchId : "");

@@ -142,6 +142,66 @@ $userNotifs = [];
 $unreadNotifCount = 0;
 if ($logged_in && isset($conn) && $conn) {
     $currUid = $user['user_id'] ?? ($_SESSION['user_id'] ?? 0);
+
+    // Auto-sync any high-confidence match notifications for this user
+    if ($currUid > 0 && function_exists('insertSystemNotification')) {
+        $mColsRes = @$conn->query("SHOW COLUMNS FROM matches");
+        $mCols = [];
+        if ($mColsRes) while ($mc = $mColsRes->fetch_assoc()) $mCols[] = strtolower($mc['Field']);
+        $mPk = in_array('id', $mCols) ? 'id' : (in_array('match_id', $mCols) ? 'match_id' : 'id');
+        $mLostCol = in_array('lost_report_id', $mCols) ? 'lost_report_id' : (in_array('lost_id', $mCols) ? 'lost_id' : 'lost_report_id');
+        $mFoundCol = in_array('found_report_id', $mCols) ? 'found_report_id' : (in_array('found_id', $mCols) ? 'found_id' : 'found_report_id');
+        $mScoreCol = in_array('similarity_score', $mCols) ? 'similarity_score' : (in_array('match_percentage', $mCols) ? 'match_percentage' : (in_array('score', $mCols) ? 'score' : 'similarity_score'));
+
+        $lColsRes = @$conn->query("SHOW COLUMNS FROM lost_reports");
+        $lCols = [];
+        if ($lColsRes) while ($lc = $lColsRes->fetch_assoc()) $lCols[] = strtolower($lc['Field']);
+        $lPk = in_array('id', $lCols) ? 'id' : (in_array('lost_id', $lCols) ? 'lost_id' : 'id');
+        $lUserCol = in_array('user_id', $lCols) ? 'user_id' : 'user_id';
+        $lTitleCol = in_array('title', $lCols) ? 'title' : "''";
+
+        $fColsRes = @$conn->query("SHOW COLUMNS FROM found_reports");
+        $fCols = [];
+        if ($fColsRes) while ($fc = $fColsRes->fetch_assoc()) $fCols[] = strtolower($fc['Field']);
+        $fPk = in_array('id', $fCols) ? 'id' : (in_array('found_id', $fCols) ? 'found_id' : 'id');
+        $fUserCol = in_array('user_id', $fCols) ? 'user_id' : (in_array('finder_id', $fCols) ? 'finder_id' : 'user_id');
+        $fTitleCol = in_array('title', $fCols) ? 'title' : "''";
+        $fCatCol = in_array('category', $fCols) ? 'category' : "''";
+
+        $navSyncSql = "SELECT m.`$mPk` AS match_id, m.`$mFoundCol` AS found_id, m.`$mScoreCol` AS score,
+                              f.`$fTitleCol` AS found_title, f.`$fCatCol` AS found_cat,
+                              l.`$lTitleCol` AS lost_title
+                       FROM matches m
+                       JOIN lost_reports l ON l.`$lPk` = m.`$mLostCol`
+                       JOIN found_reports f ON f.`$fPk` = m.`$mFoundCol`
+                       WHERE (l.`$lUserCol` = ? OR f.`$fUserCol` = ?)
+                         AND m.`$mScoreCol` >= 40.0
+                         AND LOWER(COALESCE(m.status, 'pending')) NOT IN ('dismissed', 'cancelled')
+                         AND NOT EXISTS (
+                             SELECT 1 FROM notifications n 
+                             WHERE n.user_id = ? 
+                               AND n.report_id = m.`$mFoundCol` 
+                               AND n.type = 'match'
+                         )
+                       LIMIT 5";
+
+        $navSyncStmt = @$conn->prepare($navSyncSql);
+        if ($navSyncStmt) {
+            $navSyncStmt->bind_param("iii", $currUid, $currUid, $currUid);
+            $navSyncStmt->execute();
+            $navSyncRes = $navSyncStmt->get_result();
+            while ($nsRow = $navSyncRes->fetch_assoc()) {
+                $fTitle = !empty($nsRow['found_title']) && $nsRow['found_title'] !== 'Found Item' ? $nsRow['found_title'] : (!empty($nsRow['found_cat']) ? $nsRow['found_cat'] : 'Found Belonging');
+                $scorePct = round((float)$nsRow['score']) . '%';
+                $nTitle = "Potential Match: " . substr($fTitle, 0, 40);
+                $nMsg = "A found item '" . $fTitle . "' matches your lost report with " . $scorePct . " similarity.";
+                $nLink = "item.php?type=found&id=" . (int)$nsRow['found_id'] . "&match_id=" . (int)$nsRow['match_id'];
+                insertSystemNotification($currUid, $nTitle, $nMsg, $nLink, 'FOUND', (int)$nsRow['found_id'], 'match');
+            }
+            $navSyncStmt->close();
+        }
+    }
+
     $nStmt = $conn->prepare("SELECT * FROM notifications WHERE user_id = ? OR user_id = 0 ORDER BY notification_id DESC LIMIT 8");
     if ($nStmt) {
         $nStmt->bind_param("i", $currUid);

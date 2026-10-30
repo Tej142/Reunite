@@ -59,9 +59,10 @@ $lostStatusCol = in_array('status', $lostCols, true) ? 'status' : "'active'";
 $lostImgCol = in_array('image_path', $lostCols, true) ? 'image_path' : "''";
 
 $lostDateCol = in_array('date_lost', $lostCols, true) ? 'date_lost' : (in_array('lost_date', $lostCols, true) ? 'lost_date' : "''");
+$lostUserCol = in_array('user_id', $lostCols, true) ? '`user_id`' : "0";
 
 // 1. Query the live database for this lost report
-$stmtLost = $conn->prepare("SELECT `$lostPk` AS id, $lostTitleCol AS title, $lostCatCol AS category, $lostDescCol AS description, $lostLocCol AS location, $lostStatusCol AS status, $lostImgCol AS image_path, $lostDateCol AS date_lost FROM lost_reports WHERE `$lostPk` = ? LIMIT 1");
+$stmtLost = $conn->prepare("SELECT `$lostPk` AS id, $lostUserCol AS user_id, $lostTitleCol AS title, $lostCatCol AS category, $lostDescCol AS description, $lostLocCol AS location, $lostStatusCol AS status, $lostImgCol AS image_path, $lostDateCol AS date_lost FROM lost_reports WHERE `$lostPk` = ? LIMIT 1");
 if (!$stmtLost) {
     searchMatchesReply(false, 'Database query error.', [], 500);
 }
@@ -75,6 +76,10 @@ if (!$lostReport) {
 }
 
 $lostStatus = ucfirst(strtolower($lostReport['status'] ?? 'active'));
+$lostOwnerId = (int)($lostReport['user_id'] ?? 0);
+if ($lostOwnerId === 0 && !empty($_SESSION['user_id'])) {
+    $lostOwnerId = (int)$_SESSION['user_id'];
+}
 
 // 2. Query matches table linked to this lost report
 $matchPk = in_array('id', $matchCols, true) ? 'id' : (in_array('match_id', $matchCols, true) ? 'match_id' : 'id');
@@ -137,6 +142,26 @@ if ($stmt) {
         // Update database if match had 0% or was flagged rejected so live DB stays fresh & synced
         if ($rawScore <= 0 || strtolower($row['match_status']) === 'rejected') {
             @$conn->query("UPDATE matches SET `$scoreCol` = " . (float)$realtimeScore . ", status = 'pending' WHERE `$matchPk` = " . (int)$row['match_id']);
+        }
+
+        // Auto-dispatch in-app notification to report owner if match is >= 40%
+        $notifTarget = $lostOwnerId > 0 ? $lostOwnerId : (int)($_SESSION['user_id'] ?? 0);
+        if ($notifTarget > 0 && function_exists('insertSystemNotification')) {
+            $foundReportId = (int)$row['found_id'];
+            $chkNotif = $conn->prepare("SELECT notification_id FROM notifications WHERE user_id = ? AND report_id = ? AND type = 'match' LIMIT 1");
+            if ($chkNotif) {
+                $chkNotif->bind_param("ii", $notifTarget, $foundReportId);
+                $chkNotif->execute();
+                $hasNotif = $chkNotif->get_result()->fetch_assoc();
+                $chkNotif->close();
+                if (!$hasNotif) {
+                    $itemTitle = (!empty($row['title']) && $row['title'] !== 'Found Item') ? $row['title'] : (!empty($row['category']) ? $row['category'] : 'Found Belonging');
+                    $nTitle = "Potential Match: " . substr($itemTitle, 0, 40);
+                    $nMsg = "A found item '" . $itemTitle . "' matches your lost report with " . round($realtimeScore) . "% similarity.";
+                    $nLink = "item.php?type=found&id=" . $foundReportId . "&match_id=" . (int)$row['match_id'];
+                    insertSystemNotification($notifTarget, $nTitle, $nMsg, $nLink, 'FOUND', $foundReportId, 'match');
+                }
+            }
         }
 
         $rawLoc = strtolower((string)($row['location'] ?? ''));
@@ -244,15 +269,35 @@ if (empty($matches)) {
                 $cand = trim((string)($fRow['thumbnail'] ?? ''));
                 if (!empty($cand)) $safeImage = ltrim($cand, '/\\');
 
+                $itemTitleClean = (!empty($fRow['title']) && $fRow['title'] !== 'Found Item') ? $fRow['title'] : (!empty($fRow['category']) ? $fRow['category'] : 'Found Belonging');
                 $matches[] = [
                     'match_id' => (int)$newMatchId,
                     'report_id' => 'RF-' . str_pad((string)$fRow['found_id'], 5, '0', STR_PAD_LEFT),
                     'score' => round($calcScore),
                     'thumbnail' => $safeImage,
                     'location' => $area,
-                    'title' => (!empty($fRow['title']) && $fRow['title'] !== 'Found Item') ? $fRow['title'] : (!empty($fRow['category']) ? $fRow['category'] : 'Found Belonging'),
+                    'title' => $itemTitleClean,
                     'status' => 'pending'
                 ];
+
+                // Auto-dispatch in-app notification in Step 3
+                $notifTarget = $lostOwnerId > 0 ? $lostOwnerId : (int)($_SESSION['user_id'] ?? 0);
+                if ($notifTarget > 0 && function_exists('insertSystemNotification')) {
+                    $fRepId = (int)$fRow['found_id'];
+                    $chkNotif = $conn->prepare("SELECT notification_id FROM notifications WHERE user_id = ? AND report_id = ? AND type = 'match' LIMIT 1");
+                    if ($chkNotif) {
+                        $chkNotif->bind_param("ii", $notifTarget, $fRepId);
+                        $chkNotif->execute();
+                        $hasNotif = $chkNotif->get_result()->fetch_assoc();
+                        $chkNotif->close();
+                        if (!$hasNotif) {
+                            $nTitle = "Potential Match: " . substr($itemTitleClean, 0, 40);
+                            $nMsg = "A found item '" . $itemTitleClean . "' matches your lost report with " . round($calcScore) . "% similarity.";
+                            $nLink = "item.php?type=found&id=" . $fRepId . "&match_id=" . (int)$newMatchId;
+                            insertSystemNotification($notifTarget, $nTitle, $nMsg, $nLink, 'FOUND', $fRepId, 'match');
+                        }
+                    }
+                }
             }
         }
     }

@@ -323,10 +323,11 @@ function evaluateMatchV2($lostAttrs, $foundAttrs, $vectorSimilarity = null) {
     // ==========================================
 
     // VETO 1: Self-Match (Same User)
+    // NOTE: Allowed during QA testing and college demonstrations so notifications can be verified.
     if ($lostAttrs['user_id'] > 0 && $foundAttrs['user_id'] > 0 && $lostAttrs['user_id'] === $foundAttrs['user_id']) {
-        $vetoTriggered = [
-            'rule' => 'VETO_SAME_USER',
-            'reason' => 'User cannot match against their own submitted report.'
+        $ruleHits[] = [
+            'rule' => 'NOTICE_SELF_MATCH',
+            'reason' => 'Self-match / test match by the same user account.'
         ];
     }
 
